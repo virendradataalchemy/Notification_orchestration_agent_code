@@ -193,6 +193,16 @@
             transform: translateX(5px);
         }
 
+        .action-btn.highlight {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: transparent;
+            color: white;
+        }
+
+        .action-btn.highlight .action-content p {
+            color: rgba(255,255,255,0.86);
+        }
+
         .action-icon {
             font-size: 32px;
         }
@@ -309,6 +319,156 @@
         .pipeline-stage.active .stage-icon {
             animation: pulse 1.5s ease-in-out infinite;
         }
+
+        .orchestration-shell {
+            background: rgba(255,255,255,0.16);
+            border-radius: 20px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.16);
+        }
+
+        .orchestration-help-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .orchestration-help-card {
+            background: rgba(255,255,255,0.92);
+            border: 1px solid rgba(255,255,255,0.4);
+            border-radius: 16px;
+            padding: 16px;
+            color: #334155;
+        }
+
+        .orchestration-help-card strong {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .orchestration-help-card p {
+            color: #64748b;
+            line-height: 1.5;
+            font-size: 13px;
+        }
+
+        .orchestration-input-section {
+            margin-bottom: 18px;
+        }
+
+        .orchestration-input-section label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: rgba(255,255,255,0.92);
+            margin-bottom: 10px;
+        }
+
+        .orchestration-input-section textarea,
+        .orchestration-input-section input {
+            width: 100%;
+            border-radius: 14px;
+            border: 2px solid rgba(255,255,255,0.24);
+            background: rgba(255,255,255,0.95);
+            color: #1f2937;
+            padding: 14px 15px;
+            font: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .orchestration-input-section textarea {
+            min-height: 150px;
+            resize: vertical;
+            line-height: 1.5;
+        }
+
+        .orchestration-input-section textarea:focus,
+        .orchestration-input-section input:focus {
+            outline: none;
+            border-color: #c7d2fe;
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.12);
+        }
+
+        .orchestration-controls {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            align-items: stretch;
+            margin-top: 6px;
+        }
+
+        .orchestration-user-wrap {
+            min-width: 240px;
+            flex: 1;
+        }
+
+        .pipeline-panel,
+        .result-panel {
+            background: rgba(255,255,255,0.2);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .orchestration-result-card {
+            background: rgba(255,255,255,0.95);
+            color: #334155;
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 14px;
+            border-left: 4px solid #667eea;
+        }
+
+        .orchestration-result-card h4 {
+            margin-bottom: 10px;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .orchestration-result-card p {
+            color: #475569;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .orchestration-status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 700;
+            margin-right: 8px;
+        }
+
+        .orchestration-status-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .orchestration-status-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .orchestration-channel-badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .orchestration-channel-badge {
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -321,6 +481,7 @@
                 </div>
                 <div class="navbar-links">
                     <a href="/app">Frontend Home</a>
+                    <a href="/portal/{{ client_id }}/orchestration">Orchestration</a>
                     <a href="/client-dashboard">Client Analytics</a>
                     <a href="/admin/dashboard">Admin</a>
                 </div>
@@ -365,41 +526,66 @@
             </h2>
             <p style="margin-bottom: 20px; opacity: 0.95;">Let AI analyze your message, select the best template, and deliver via optimal channels</p>
             
-            <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 25px; backdrop-filter: blur(10px);">
-                <textarea 
-                    id="orchestrationContent" 
-                    placeholder="Enter your message content here... (e.g., 'Server is down! Critical issue!' or 'Your order has shipped')"
-                    style="width: 100%; min-height: 120px; padding: 15px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.3); font-size: 14px; font-family: inherit; resize: vertical; background: rgba(255,255,255,0.95);"
-                ></textarea>
+            <div class="orchestration-shell">
+                <div class="orchestration-help-grid">
+                    <div class="orchestration-help-card">
+                        <strong>1. Message Input</strong>
+                        <p>Describe the outbound message or instruction you want the orchestration engine to process.</p>
+                    </div>
+                    <div class="orchestration-help-card">
+                        <strong>2. Candidate Target</strong>
+                        <p>Provide the user or candidate id so the pipeline knows exactly who should receive the communication.</p>
+                    </div>
+                    <div class="orchestration-help-card">
+                        <strong>3. AI Delivery</strong>
+                        <p>The system analyzes urgency, selects templates, determines channel order, and dispatches automatically.</p>
+                    </div>
+                </div>
+
+                <div class="orchestration-input-section">
+                    <label for="orchestrationContent">Message Content</label>
+                    <textarea 
+                        id="orchestrationContent" 
+                        placeholder="Enter your message content here...
+
+Examples:
+- Server is down! Critical issue!
+- Your order has shipped
+- Reminder: interview tomorrow at 10 AM
+- Flash sale: 50% off everything!"
+                    ></textarea>
+                </div>
                 
-                <div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
+                <div class="orchestration-controls">
                     <button 
+                        class="btn btn-primary"
                         id="runPipelineBtn" 
                         onclick="runOrchestrationPipeline()"
-                        style="background: white; color: #667eea; border: none; padding: 12px 30px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 15px; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.15);"
-                        onmouseover="this.style.transform='scale(1.05)'"
-                        onmouseout="this.style.transform='scale(1)'"
                     >
                         🚀 Run Pipeline
                     </button>
                     <button 
+                        class="btn btn-secondary"
                         onclick="clearOrchestration()"
-                        style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 15px;"
                     >
                         Clear
                     </button>
-                    <input 
-                        type="text" 
-                        id="orchestrationUserId" 
-                        placeholder="User ID (optional, defaults to test_user)"
-                        style="flex: 1; padding: 12px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.95); font-size: 14px;"
-                    />
+                    <div class="orchestration-user-wrap">
+                        <div class="orchestration-input-section" style="margin-bottom: 0;">
+                            <label for="orchestrationUserId">Candidate / User ID</label>
+                            <input 
+                                type="text" 
+                                id="orchestrationUserId" 
+                                placeholder="Optional, defaults to test_user"
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Pipeline Progress -->
                 <div id="pipelineProgress" style="display: none; margin-top: 25px;">
-                    <div style="background: rgba(255,255,255,0.2); border-radius: 8px; padding: 20px;">
-                        <h3 style="margin-bottom: 15px; font-size: 16px;">Pipeline Progress</h3>
+                    <div class="pipeline-panel">
+                        <h3 style="margin-bottom: 15px; font-size: 18px;">Pipeline Progress</h3>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <div id="stage1" class="pipeline-stage">
                                 <span class="stage-icon">⏳</span>
@@ -423,7 +609,7 @@
 
                 <!-- Results Display -->
                 <div id="orchestrationResults" style="display: none; margin-top: 25px;">
-                    <div style="background: rgba(255,255,255,0.95); color: #333; border-radius: 8px; padding: 20px;">
+                    <div class="result-panel">
                         <h3 style="margin-bottom: 15px; color: #667eea;">📊 Orchestration Results</h3>
                         <div id="resultsContent"></div>
                     </div>
@@ -538,11 +724,11 @@
                 '<div class="actions-section">' +
                     '<h2>Quick Actions</h2>' +
                     '<div class="action-buttons">' +
-                        '<a href="/api/v1/orchestrate/page/' + clientId + '" class="action-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-color: #667eea;">' +
+                        '<a href="/portal/' + clientId + '/orchestration" class="action-btn highlight">' +
                             '<div class="action-icon" style="font-size: 36px;">🤖</div>' +
                             '<div class="action-content">' +
                                 '<h3 style="color: white;">Run Automated Pipeline</h3>' +
-                                '<p style="color: rgba(255,255,255,0.95);">AI-powered message orchestration</p>' +
+                                '<p>Full orchestration workspace with pipeline progress and AI results</p>' +
                             '</div>' +
                         '</a>' +
                         '<a href="/portal/' + clientId + '/templates/create" class="action-btn">' +
@@ -813,9 +999,9 @@
                 
                 document.getElementById('orchestrationResults').style.display = 'block';
                 document.getElementById('resultsContent').innerHTML =
-                    '<div style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; border-radius: 6px;">' +
-                        '<strong style="color: #991b1b;">Error</strong>' +
-                        '<p style="margin-top: 8px; color: #7f1d1d;">' + error.message + '</p>' +
+                    '<div class="orchestration-result-card" style="border-left-color: #ef4444;">' +
+                        '<h4 style="color: #ef4444;">Error</h4>' +
+                        '<p>' + error.message + '</p>' +
                     '</div>';
             } finally {
                 document.getElementById('runPipelineBtn').disabled = false;
@@ -845,13 +1031,13 @@
             let html = '<div style="display: flex; flex-direction: column; gap: 15px;">';
 
             // Status
-            html += '<div style="background: ' + (result.delivery_status === 'sent' ? '#d1fae5' : '#fee2e2') + '; border-left: 4px solid ' + statusColor + '; padding: 15px; border-radius: 6px;">' +
+            html += '<div class="orchestration-result-card" style="border-left-color: ' + statusColor + ';">' +
                 '<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">' +
                     '<span style="font-size: 24px;">' + statusIcon + '</span>' +
-                    '<strong style="font-size: 18px; color: ' + statusColor + ';">Status: ' + result.delivery_status.toUpperCase() + '</strong>' +
+                    '<span class="orchestration-status-badge ' + (result.delivery_status === 'sent' ? 'orchestration-status-success' : 'orchestration-status-error') + '">Status: ' + result.delivery_status.toUpperCase() + '</span>' +
                 '</div>' +
-                '<p style="color: #555;">Channel used: <strong>' + (result.channel_used || 'N/A') + '</strong></p>' +
-                '<p style="color: #555;">Processing time: <strong>' + result.processing_time_ms + 'ms</strong></p>' +
+                '<p>Channel used: <strong>' + (result.channel_used || 'N/A') + '</strong></p>' +
+                '<p>Processing time: <strong>' + result.processing_time_ms + 'ms</strong></p>' +
             '</div>';
 
             // Urgency
@@ -864,7 +1050,7 @@
                 };
                 const urgencyColor = urgencyColors[result.urgency] || '#666';
 
-                html += '<div style="background: #f3f4f6; padding: 15px; border-radius: 6px;">' +
+                html += '<div class="orchestration-result-card">' +
                     '<strong>Urgency Level:</strong> ' +
                     '<span style="color: ' + urgencyColor + '; font-weight: 600; text-transform: uppercase;">' + result.urgency + '</span>' +
                 '</div>';
@@ -872,38 +1058,38 @@
 
             // Template Selection
             if (result.selected_template) {
-                html += '<div style="background: #eff6ff; padding: 15px; border-radius: 6px;">' +
-                    '<strong style="color: #1d4ed8;">🎯 Template Selection</strong>' +
-                    '<p style="margin-top: 8px; color: #555;">Template ID: <strong>' + (result.selected_template.template_id || 'None') + '</strong></p>' +
-                    '<p style="color: #555;">Confidence: <strong>' + ((result.selected_template.confidence_score || 0) * 100).toFixed(0) + '%</strong></p>' +
-                    '<p style="margin-top: 8px; font-style: italic; color: #666;">' + (result.selected_template.reasoning || '') + '</p>' +
+                html += '<div class="orchestration-result-card">' +
+                    '<h4>🎯 Template Selection</h4>' +
+                    '<p>Template ID: <strong>' + (result.selected_template.template_id || 'None') + '</strong></p>' +
+                    '<p>Confidence: <strong>' + ((result.selected_template.confidence_score || 0) * 100).toFixed(0) + '%</strong></p>' +
+                    '<p style="margin-top: 8px; font-style: italic;">' + (result.selected_template.reasoning || '') + '</p>' +
                 '</div>';
             }
 
             // Priority Order
             if (result.priority_order && result.priority_order.length > 0) {
-                html += '<div style="background: #fef3c7; padding: 15px; border-radius: 6px;">' +
-                    '<strong style="color: #92400e;">📋 Channel Priority Order</strong>' +
-                    '<div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">';
+                html += '<div class="orchestration-result-card">' +
+                    '<h4>📋 Channel Priority Order</h4>' +
+                    '<div class="orchestration-channel-badges">';
                 
                 result.priority_order.forEach((channel, index) => {
-                    html += '<span style="background: #fbbf24; color: #78350f; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 13px;">' +
+                    html += '<span class="orchestration-channel-badge">' +
                         (index + 1) + '. ' + channel.toUpperCase() +
                     '</span>';
                 });
                 
                 html += '</div>' +
-                    '<p style="margin-top: 10px; font-style: italic; color: #666;">' + (result.reasoning?.priority_determination || '') + '</p>' +
+                    '<p style="margin-top: 10px; font-style: italic;">' + (result.reasoning?.priority_determination || '') + '</p>' +
                 '</div>';
             }
 
             // Reasoning
             if (result.reasoning) {
-                html += '<div style="background: #f9fafb; padding: 15px; border-radius: 6px; border: 1px solid #e5e7eb;">' +
-                    '<strong>🤖 AI Reasoning</strong>';
+                html += '<div class="orchestration-result-card">' +
+                    '<h4>🤖 AI Reasoning</h4>';
                 
                 if (result.reasoning.delivery) {
-                    html += '<p style="margin-top: 8px; color: #555;"><strong>Delivery:</strong> ' + result.reasoning.delivery + '</p>';
+                    html += '<p><strong>Delivery:</strong> ' + result.reasoning.delivery + '</p>';
                 }
                 
                 html += '</div>';

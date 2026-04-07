@@ -40,6 +40,23 @@
             text-decoration: none;
         }
 
+        .navbar-links {
+            display: flex;
+            gap: 10px;
+            margin-left: 20px;
+        }
+
+        .navbar-links a {
+            text-decoration: none;
+            color: white;
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.25);
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
         .navbar-user {
             display: flex;
             align-items: center;
@@ -283,7 +300,14 @@
 <body>
     <nav class="navbar">
         <div class="navbar-content">
-            <a href="#" onclick="goToDashboard(); return false;" class="navbar-brand">🚀 Client Portal</a>
+            <div style="display:flex; align-items:center;">
+                <a href="#" onclick="goToDashboard(); return false;" class="navbar-brand">🚀 Client Portal</a>
+                <div class="navbar-links">
+                    <a href="#" onclick="goToDashboard(); return false;">Dashboard</a>
+                    <a href="#" onclick="goToOrchestration(); return false;">Orchestration</a>
+                    <a href="#" onclick="goToSendDemo(); return false;">Send Demo</a>
+                </div>
+            </div>
             <div style="display: flex; align-items: center; gap: 20px;">
                 <!-- Notification Bell -->
                 {% include 'components/notification_bell.html' %}
@@ -341,6 +365,14 @@
 
         function goToDashboard() {
             window.location.href = '/portal/' + clientId + '/dashboard';
+        }
+
+        function goToOrchestration() {
+            window.location.href = '/portal/' + clientId + '/orchestration';
+        }
+
+        function goToSendDemo() {
+            window.location.href = '/portal/' + clientId + '/send-demo';
         }
 
         function goToCreateTemplate() {

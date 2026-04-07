@@ -30,6 +30,11 @@ async def notification_demo_page(request: Request, client_id: str):
     return templates.TemplateResponse(request, "client_portal/send_demo.html", {"client_id": client_id})
 
 
+@router.get("/{client_id}/orchestration", response_class=HTMLResponse)
+async def orchestration_portal_page(request: Request, client_id: str):
+    return templates.TemplateResponse(request, "client_portal/orchestration.html", {"client_id": client_id})
+
+
 @router.get("/{client_id}/templates/edit/{template_id}", response_class=HTMLResponse)
 async def template_edit_page(request: Request, client_id: str, template_id: str):
     return templates.TemplateResponse(request, "client_portal/template_create.html",

@@ -1,337 +1,352 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
-export default function UnifiedClientDashboard({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const router = useRouter();
+import { ClientPortalShell } from "@/components/client-portal-shell";
+import { fetchJson } from "@/lib/client-portal";
 
-  // Overview / Analytics State
-  const [data, setData] = useState<any>(null);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [activeChannel, setActiveChannel] = useState<string>("");
-  const [loadingOverview, setLoadingOverview] = useState(true);
+type ChannelOverview = {
+  channel: string;
+  total: number;
+  sent: number;
+  delivered: number;
+  failed: number;
+  success_rate: number;
+};
 
-  // Notification Trigger State
-  const [contactInput, setContactInput] = useState("");
-  const [channelSelect, setChannelSelect] = useState("");
-  const [typeInput, setTypeInput] = useState("notification");
-  const [prioritySelect, setPrioritySelect] = useState("medium");
-  const [subjectInput, setSubjectInput] = useState("");
-  const [bodyInput, setBodyInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [alertInfo, setAlertInfo] = useState<{type: 'success'|'error', msg: string} | null>(null);
+type ClientOverview = {
+  client_name: string;
+  tier: string;
+  channels: ChannelOverview[];
+};
 
-  // Fetch Analytics & Logs Data
-  const fetchOverview = async () => {
-    try {
-      const res = await fetch(`/api/client-dashboard/client/${id}/overview`);
-      if (res.ok) {
-        const overview = await res.json();
-        setData(overview);
-        if (!activeChannel && overview.channels?.length > 0) {
-          handleLoadNotifications(overview.channels[0].channel);
-        } else if (activeChannel) {
-          handleLoadNotifications(activeChannel); // refresh active tab
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingOverview(false);
-    }
+type OrchestrationResult = {
+  delivery_status: string;
+  channel_used?: string | null;
+  processing_time_ms: number;
+  urgency?: string;
+  selected_template?: {
+    template_id?: string | number | null;
+    template_name?: string | null;
+    confidence_score?: number;
+    reasoning?: string;
   };
+  priority_order?: string[];
+  reasoning?: {
+    priority_determination?: string;
+    delivery?: string;
+  };
+};
+
+export default function ClientDashboardPage() {
+  const params = useParams<{ id: string }>();
+  const clientId = String(params.id);
+  const [overview, setOverview] = useState<ClientOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [messageContent, setMessageContent] = useState("");
+  const [userId, setUserId] = useState("");
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<OrchestrationResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [stage, setStage] = useState(0);
 
   useEffect(() => {
-    fetchOverview();
-    const interval = setInterval(fetchOverview, 30000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, activeChannel]);
-
-  const handleLoadNotifications = async (channel: string) => {
-    setActiveChannel(channel);
-    try {
-      const res = await fetch(`/api/client-dashboard/client/${id}/channel/${channel}`);
-      if (res.ok) {
-        const historyData = await res.json();
-        setNotifications(historyData.notifications || []);
+    let active = true;
+    const load = async () => {
+      try {
+        const data = await fetchJson<ClientOverview>(`/api/client-dashboard/client/${clientId}/overview`);
+        if (active) setOverview(data);
+      } catch (err) {
+        if (active) setError(err instanceof Error ? err.message : "Failed to load dashboard");
+      } finally {
+        if (active) setLoading(false);
       }
-    } catch {}
-  };
-
-  // Submit Notification form using exact legacy payload format
-  const handleSendNotification = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSending(true);
-    setAlertInfo(null);
-
-    const isEmail = contactInput.includes('@');
-    
-    // As per legacy dashboard.html
-    const payload = {
-        recipient: {
-            user_id: isEmail ? 0 : parseInt(contactInput) || 0,
-            email: isEmail ? contactInput : '',
-            phone: ''
-        },
-        notification: {
-            type: typeInput,
-            priority: prioritySelect,
-            channels: [channelSelect],
-            subject: subjectInput,
-            body: bodyInput,
-            data: {}
-        }
     };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [clientId]);
+
+  const runPipeline = async () => {
+    if (!messageContent.trim()) {
+      setError("Please enter message content");
+      return;
+    }
+
+    setRunning(true);
+    setError(null);
+    setResult(null);
+    setStage(1);
 
     try {
-      const response = await fetch("/api/v1/notifications/send", {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'X-Tenant-ID': id,
-              'X-Client-Id': id // Passing both to ensure compatibility
-          },
-          body: JSON.stringify(payload)
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      setStage(2);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      setStage(3);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      setStage(4);
+
+      const orchestrationResult = await fetchJson<OrchestrationResult>("/api/v1/orchestrate/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Client-Id": clientId,
+        },
+        body: JSON.stringify({
+          message_content: messageContent,
+          user_id: userId.trim() || "test_user",
+        }),
       });
-
-      if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to send notification');
-      }
-
-      const result = await response.json();
-      setAlertInfo({ type: 'success', msg: `Notification sent successfully! ID: ${result.notification_id}` });
-      
-      // Auto refresh ledger
-      fetchOverview();
-
-      // Clear specific form inputs
-      setContactInput("");
-      setSubjectInput("");
-      setBodyInput("");
-
-      // auto clear success message
-      setTimeout(() => setAlertInfo(null), 5000);
-    } catch (error: any) {
-      setAlertInfo({ type: 'error', msg: `Error: ${error.message}` });
+      setResult(orchestrationResult);
+      setStage(5);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Pipeline failed");
+      setStage(-1);
     } finally {
-      setSending(false);
+      setRunning(false);
     }
   };
 
-  const formatTimeAgo = (dateStr: string) => {
-    if (!dateStr) return 'N/A';
-    const s = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / 1000);
-    if (s < 60) return '< 1m';
-    if (s < 3600) return Math.floor(s/60) + 'm ago';
-    if (s < 86400) return Math.floor(s/3600) + 'h ago';
-    return Math.floor(s/86400) + 'd ago';
+  const clearPipeline = () => {
+    setMessageContent("");
+    setUserId("");
+    setStage(0);
+    setResult(null);
+    setError(null);
   };
 
-  if (loadingOverview || !data) {
-    return <div className="flex justify-center items-center h-[50vh]"><svg className="animate-spin h-6 w-6 border-2 border-indigo-600 border-t-transparent rounded-full"></svg></div>;
-  }
-
-  const totalNotifications = data.channels.reduce((s: number, c: any) => s + c.total, 0);
-  const totalDelivered = data.channels.reduce((s: number, c: any) => s + (c.sent + c.delivered), 0);
-  const totalFailed = data.channels.reduce((s: number, c: any) => s + c.failed, 0);
+  const channels = overview?.channels ?? [];
+  const totalNotifications = channels.reduce((sum, item) => sum + item.total, 0);
+  const delivered = channels.reduce((sum, item) => sum + item.sent + item.delivered, 0);
+  const failed = channels.reduce((sum, item) => sum + item.failed, 0);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-12">
-      {/* Navigation Bar */}
-      <nav className="bg-white border-b border-slate-100 flex items-center justify-between px-8 py-4 sticky top-0 z-50 shadow-sm rounded-b-lg">
-          <div className="flex items-center space-x-8">
-              <Link href="/" className="font-bold text-indigo-600">✦ Orchestrator</Link>
-              <div className="flex space-x-6 text-sm font-bold text-slate-500">
-                  <a href="#orchestration" className="hover:text-indigo-600 transition-colors">Intelligent Orchestration</a>
-                  <a href="#analytics" className="hover:text-indigo-600 transition-colors">Analytics</a>
-              </div>
+    <ClientPortalShell
+      clientId={clientId}
+      title={overview?.client_name || `Client ${clientId}`}
+      description="Manage your orchestration workspace from the frontend app. Use this dashboard for a quick operational view, then jump into templates, orchestration, and demo flows."
+      actions={
+        <>
+          <Link
+            href={`/client/${clientId}/orchestration`}
+            className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5"
+          >
+            Open Full Orchestration
+          </Link>
+          <Link
+            href={`/client/${clientId}/templates`}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+          >
+            Manage Templates
+          </Link>
+        </>
+      }
+    >
+      <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+        <section className="rounded-[28px] bg-gradient-to-br from-indigo-600 to-violet-700 p-6 text-white shadow-[0_18px_45px_rgba(79,70,229,0.35)]">
+          <div className="mb-6">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-indigo-100">Embedded Orchestration</p>
+            <h2 className="text-2xl font-bold tracking-tight">Intelligent Orchestration Pipeline</h2>
+            <p className="mt-2 max-w-2xl text-sm text-indigo-100">
+              A compact dashboard version of the orchestration flow. For deeper work, open the dedicated orchestration page.
+            </p>
           </div>
-          <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} className="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors">
-              Sign Out
-          </button>
-      </nav>
 
-      {/* Header matching dashboard.html */}
-      <div className="bg-white p-8 rounded-lg shadow-sm border border-slate-100 flex justify-between items-center">
-         <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 mb-2 tracking-tight">Notification Orchestration Dashboard</h1>
-            <p className="text-slate-500 font-medium text-sm">Send and track notifications across all channels • Client: {data.client_name}</p>
-         </div>
-         <span className="border border-indigo-200 bg-indigo-50 text-indigo-700 px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-md mt-4 md:mt-0">{data.tier} TIER</span>
+          <div className="mb-5 grid gap-3 md:grid-cols-3">
+            {[
+              ["1. Message Input", "Describe the outbound message or instruction you want processed."],
+              ["2. Recipient Target", "Provide a candidate or user id for the communication."],
+              ["3. AI Delivery", "Let the system choose urgency, template fit, and channel order."],
+            ].map(([title, body]) => (
+              <div key={title} className="rounded-2xl border border-white/20 bg-white/90 p-4 text-slate-800">
+                <p className="mb-2 text-sm font-bold">{title}</p>
+                <p className="text-sm leading-6 text-slate-500">{body}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-indigo-100">Message Content</label>
+              <textarea
+                value={messageContent}
+                onChange={(event) => setMessageContent(event.target.value)}
+                placeholder="Enter your message here..."
+                className="min-h-40 w-full rounded-2xl border-2 border-white/20 bg-white/95 px-4 py-4 text-sm text-slate-900 outline-none transition focus:border-white"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-indigo-100">Candidate / User ID</label>
+              <input
+                value={userId}
+                onChange={(event) => setUserId(event.target.value)}
+                placeholder="Optional, defaults to test_user"
+                className="w-full rounded-2xl border-2 border-white/20 bg-white/95 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-white"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={runPipeline}
+                disabled={running}
+                className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-indigo-700 transition hover:bg-slate-100 disabled:opacity-70"
+              >
+                {running ? "Processing..." : "Run Pipeline"}
+              </button>
+              <button
+                onClick={clearPipeline}
+                className="rounded-xl border border-white/25 bg-white/10 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/20"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {(stage > 0 || result || error) && (
+            <div className="mt-6 space-y-3">
+              {[
+                "Analyzing content...",
+                "Selecting template...",
+                "Determining priority...",
+                "Sending notification...",
+              ].map((label, index) => {
+                const stageIndex = index + 1;
+                const state =
+                  stage === -1 && stageIndex === 4
+                    ? "error"
+                    : stage >= 5 || stage > stageIndex
+                      ? "complete"
+                      : stage === stageIndex
+                        ? "active"
+                        : "idle";
+
+                return (
+                  <div
+                    key={label}
+                    className={`flex items-center gap-4 rounded-2xl border-l-4 px-4 py-4 ${
+                      state === "complete"
+                        ? "border-emerald-500 bg-emerald-100 text-emerald-900"
+                        : state === "active"
+                          ? "border-amber-400 bg-indigo-100/90 text-slate-900"
+                          : state === "error"
+                            ? "border-red-500 bg-red-100 text-red-900"
+                            : "border-white/20 bg-white/10 text-white"
+                    }`}
+                  >
+                    <span className="text-xl">
+                      {state === "complete" ? "✅" : state === "active" ? "🔄" : state === "error" ? "❌" : "⏳"}
+                    </span>
+                    <span className="text-sm font-semibold">{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {error ? (
+            <div className="mt-6 rounded-2xl border-l-4 border-red-500 bg-white/95 p-5 text-red-700">
+              <p className="mb-2 text-sm font-bold">Pipeline Error</p>
+              <p className="text-sm">{error}</p>
+            </div>
+          ) : null}
+
+          {result ? (
+            <div className="mt-6 space-y-4">
+              <div className="rounded-2xl border-l-4 border-indigo-400 bg-white/95 p-5 text-slate-800">
+                <p className="mb-2 text-sm font-bold text-indigo-700">Delivery Status</p>
+                <p className="text-sm">
+                  <strong>Status:</strong> {result.delivery_status}
+                </p>
+                <p className="text-sm">
+                  <strong>Channel:</strong> {result.channel_used || "N/A"}
+                </p>
+                <p className="text-sm">
+                  <strong>Processing Time:</strong> {result.processing_time_ms}ms
+                </p>
+              </div>
+
+              {result.priority_order?.length ? (
+                <div className="rounded-2xl border-l-4 border-indigo-400 bg-white/95 p-5 text-slate-800">
+                  <p className="mb-3 text-sm font-bold text-indigo-700">Channel Priority Order</p>
+                  <div className="flex flex-wrap gap-2">
+                    {result.priority_order.map((channel, index) => (
+                      <span key={channel} className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">
+                        {index + 1}. {channel.toUpperCase()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
+        <aside className="space-y-5">
+          {loading ? (
+            <div className="rounded-[28px] border border-slate-200 bg-white/80 p-6 shadow-sm">
+              <p className="text-sm text-slate-500">Loading dashboard...</p>
+            </div>
+          ) : (
+            <>
+              <StatCard label="Total Sent" value={String(totalNotifications)} tone="indigo" />
+              <StatCard label="Delivered" value={String(delivered)} tone="emerald" />
+              <StatCard label="Failed" value={String(failed)} tone="rose" />
+              <section className="rounded-[28px] border border-slate-200 bg-white/80 p-6 shadow-sm">
+                <p className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Channel Health</p>
+                <div className="space-y-4">
+                  {channels.map((channel) => (
+                    <div key={channel.channel}>
+                      <div className="mb-2 flex items-center justify-between text-sm">
+                        <span className="font-semibold capitalize text-slate-700">{channel.channel}</span>
+                        <span className="font-mono text-slate-500">{channel.success_rate}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100">
+                        <div
+                          className={`h-2 rounded-full ${
+                            channel.success_rate >= 80
+                              ? "bg-emerald-500"
+                              : channel.success_rate >= 50
+                                ? "bg-amber-500"
+                                : "bg-rose-500"
+                          }`}
+                          style={{ width: `${channel.success_rate}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+        </aside>
       </div>
+    </ClientPortalShell>
+  );
+}
 
-      {alertInfo && (
-        <div className={`p-4 rounded-md border flex items-center justify-between text-sm font-bold ${alertInfo.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
-           <div className="flex items-center space-x-2">
-             <span className="text-lg">{alertInfo.type === 'success' ? '✓' : '✕'}</span>
-             <span>{alertInfo.msg}</span>
-           </div>
-           {alertInfo.type === 'error' && <button onClick={() => setAlertInfo(null)} className="opacity-50 hover:opacity-100">×</button>}
-        </div>
-      )}
+function StatCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "indigo" | "emerald" | "rose";
+}) {
+  const toneMap = {
+    indigo: "text-indigo-700",
+    emerald: "text-emerald-700",
+    rose: "text-rose-700",
+  } as const;
 
-      {/* Main Grid: Form Left, Stats Right */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-         
-         {/* Send Notification Card (takes 2 cols on xl) */}
-         <div id="orchestration" className="xl:col-span-2 bg-gradient-to-br from-indigo-600 to-purple-700 rounded-xl p-8 shadow-md text-white relative overflow-hidden">
-             <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-white opacity-5 blur-3xl"></div>
-             
-             <h2 className="text-sm font-bold uppercase tracking-widest text-indigo-100 mb-6 border-b border-indigo-400/30 pb-3">Send Notification</h2>
-             
-             <form onSubmit={handleSendNotification} className="space-y-5 relative z-10">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                   <div>
-                      <label className="block text-xs font-semibold text-indigo-100 mb-2">Contact ID or Email</label>
-                      <input type="text" required value={contactInput} onChange={e => setContactInput(e.target.value)} className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:outline-none focus:border-white text-sm text-white placeholder-indigo-200/50" placeholder="e.g., 9 or email@example.com" />
-                   </div>
-                   <div>
-                      <label className="block text-xs font-semibold text-indigo-100 mb-2">Channel</label>
-                      <select required value={channelSelect} onChange={e => setChannelSelect(e.target.value)} className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:outline-none focus:border-white text-sm text-white [&>option]:text-slate-900">
-                          <option value="">Select Channel...</option>
-                          <option value="email">📧 Email</option>
-                          <option value="sms">💬 SMS</option>
-                          <option value="whatsapp">💚 WhatsApp</option>
-                          <option value="push">🔔 Push</option>
-                          <option value="inapp">📱 In-App</option>
-                          <option value="voice">☎️ Voice Call</option>
-                      </select>
-                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                   <div>
-                      <label className="block text-xs font-semibold text-indigo-100 mb-2">Type</label>
-                      <input type="text" required value={typeInput} onChange={e => setTypeInput(e.target.value)} className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:outline-none focus:border-white text-sm text-white placeholder-indigo-200/50" placeholder="notification, alert, info..." />
-                   </div>
-                   <div>
-                      <label className="block text-xs font-semibold text-indigo-100 mb-2">Priority</label>
-                      <select required value={prioritySelect} onChange={e => setPrioritySelect(e.target.value)} className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:outline-none focus:border-white text-sm text-white [&>option]:text-slate-900">
-                          <option value="low">Low</option>
-                          <option value="medium">Medium</option>
-                          <option value="high">High</option>
-                          <option value="critical">Critical</option>
-                      </select>
-                   </div>
-                </div>
-
-                <div>
-                   <label className="block text-xs font-semibold text-indigo-100 mb-2">Subject (Optional)</label>
-                   <input type="text" value={subjectInput} onChange={e => setSubjectInput(e.target.value)} className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:outline-none focus:border-white text-sm text-white placeholder-indigo-200/50" placeholder="Notification subject..." />
-                </div>
-
-                <div>
-                   <label className="block text-xs font-semibold text-indigo-100 mb-2">Message</label>
-                   <textarea required rows={3} value={bodyInput} onChange={e => setBodyInput(e.target.value)} className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:outline-none focus:border-white text-sm text-white placeholder-indigo-200/50 resize-y" placeholder="Enter your notification message..."></textarea>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                   <button type="submit" disabled={sending} className="flex-1 bg-white text-indigo-700 font-bold text-sm py-3 px-6 rounded-md shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-75 flex justify-center items-center h-12">
-                      {sending ? 'Sending...' : '✈️ Send Notification'}
-                   </button>
-                   <button type="button" onClick={() => {setContactInput("");setSubjectInput("");setBodyInput("");}} className="bg-white/10 text-white font-bold text-sm py-3 px-6 rounded-md hover:bg-white/20 border border-white/20 transition-colors">
-                      Clear
-                   </button>
-                </div>
-             </form>
-         </div>
-
-         {/* Stats Cards (takes 1 col on xl) */}
-         <div id="analytics" className="xl:col-span-1 flex flex-col gap-5">
-             <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 hover:-translate-y-1 transition-transform">
-                 <h3 className="text-xs font-bold uppercase tracking-widest text-indigo-600 mb-3">Total Sent</h3>
-                 <p className="text-4xl font-extrabold text-slate-900 mb-1">{totalNotifications.toLocaleString()}</p>
-                 <span className="text-xs font-medium text-slate-400">Last 24 hours</span>
-             </div>
-             
-             <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 hover:-translate-y-1 transition-transform">
-                 <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3">Delivered</h3>
-                 <p className="text-4xl font-extrabold text-slate-900 mb-1">{totalDelivered.toLocaleString()}</p>
-                 <span className="text-xs font-medium text-slate-400">Success rate metric</span>
-             </div>
-
-             <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 hover:-translate-y-1 transition-transform">
-                 <h3 className="text-xs font-bold uppercase tracking-widest text-red-500 mb-3">Failed</h3>
-                 <p className="text-4xl font-extrabold text-slate-900 mb-1">{totalFailed.toLocaleString()}</p>
-                 <span className="text-xs font-medium text-slate-400">Requires review</span>
-             </div>
-         </div>
-
-      </div>
-
-      {/* Logs Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">📋 Recent Notifications</h2>
-             <button onClick={fetchOverview} className="text-xs font-bold bg-white border border-slate-200 text-slate-600 px-4 py-2 hover:bg-slate-50 rounded-md shadow-sm transition-colors cursor-pointer">
-                🔄 Refresh
-             </button>
-         </div>
-         
-         {/* Inter-active channel tabs above table */}
-         {data.channels && data.channels.length > 0 && (
-           <div className="flex border-b border-slate-100 px-6 pt-4 space-x-6 overflow-x-auto">
-             {data.channels.map((ch: any) => (
-                <button 
-                   key={ch.channel} 
-                   onClick={() => handleLoadNotifications(ch.channel)}
-                   className={`pb-3 text-sm font-bold uppercase tracking-wider whitespace-nowrap transition-colors flex items-center gap-2 ${activeChannel === ch.channel ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                   {ch.channel}
-                   <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full">{ch.total}</span>
-                </button>
-             ))}
-           </div>
-         )}
-         
-         <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-                <thead>
-                    <tr className="bg-white border-b border-slate-100">
-                        <th className="py-4 px-6 text-[11px] font-bold uppercase tracking-widest text-slate-500">ID</th>
-                        <th className="py-4 px-6 text-[11px] font-bold uppercase tracking-widest text-slate-500">Channel</th>
-                        <th className="py-4 px-6 text-[11px] font-bold uppercase tracking-widest text-slate-500">Status</th>
-                        <th className="py-4 px-6 text-[11px] font-bold uppercase tracking-widest text-slate-500">Recipient</th>
-                        <th className="py-4 px-6 text-[11px] font-bold uppercase tracking-widest text-slate-500">Sent Time</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                    {notifications.length === 0 ? (
-                       <tr>
-                          <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">No recent notifications executed on this channel.</td>
-                       </tr>
-                    ) : (
-                       notifications.slice(0, 15).map((log, idx) => {
-                          const st = log.status?.toLowerCase() || '';
-                          const sc = (st==='delivered'||st==='sent') ? 'bg-emerald-100 text-emerald-800' : (st==='failed' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800');
-                          const cc = log.channel === 'email' ? 'bg-indigo-50 text-indigo-700' : log.channel === 'sms' ? 'bg-orange-50 text-orange-700' : 'bg-slate-100 text-slate-700';
-
-                          return (
-                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="py-4 px-6 font-mono text-slate-500 text-xs">#{log.id || '...'}</td>
-                                <td className="py-4 px-6">
-                                    <span className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ${cc}`}>{log.channel}</span>
-                                </td>
-                                <td className="py-4 px-6">
-                                    <span className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ${sc}`}>{log.status}</span>
-                                </td>
-                                <td className="py-4 px-6 font-medium text-slate-800">{log.recipient}</td>
-                                <td className="py-4 px-6 text-slate-500 text-xs">{formatTimeAgo(log.created_at)}</td>
-                            </tr>
-                          );
-                       })
-                    )}
-                </tbody>
-            </table>
-         </div>
-      </div>
-
-    </div>
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white/80 p-6 shadow-sm">
+      <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">{label}</p>
+      <p className={`text-4xl font-bold tracking-tight ${toneMap[tone]}`}>{value}</p>
+    </section>
   );
 }

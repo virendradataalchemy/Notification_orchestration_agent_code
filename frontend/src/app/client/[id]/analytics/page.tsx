@@ -1,156 +1,197 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
-export default function ClientAnalytics({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const [data, setData] = useState<any>(null);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [activeChannel, setActiveChannel] = useState<string>("");
+import { ClientPortalShell } from "@/components/client-portal-shell";
+import { fetchJson, formatTimeAgo } from "@/lib/client-portal";
+
+type ChannelAnalytics = {
+  channel: string;
+  total: number;
+  sent: number;
+  delivered: number;
+  failed: number;
+  success_rate: number;
+};
+
+type OverviewResponse = {
+  client_name: string;
+  tier: string;
+  channels: ChannelAnalytics[];
+};
+
+type NotificationItem = {
+  type: string;
+  recipient: string;
+  status: string;
+  priority: string;
+  created_at?: string;
+};
+
+export default function ClientAnalyticsPage() {
+  const params = useParams<{ id: string }>();
+  const clientId = String(params.id);
+  const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [activeChannel, setActiveChannel] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchOverview = async () => {
+    let active = true;
+    const load = async () => {
       try {
-        const res = await fetch(`/api/client-dashboard/client/${id}/overview`);
-        if (res.ok) {
-          const overview = await res.json();
-          setData(overview);
-          if (overview.channels?.length > 0) {
-            handleLoadNotifications(overview.channels[0].channel);
-          }
+        const data = await fetchJson<OverviewResponse>(`/api/client-dashboard/client/${clientId}/overview`);
+        if (!active) return;
+        setOverview(data);
+        const nextChannel = activeChannel || data.channels[0]?.channel || "";
+        if (nextChannel) {
+          setActiveChannel(nextChannel);
+          const history = await fetchJson<{ notifications: NotificationItem[] }>(
+            `/api/client-dashboard/client/${clientId}/channel/${nextChannel}`,
+          );
+          if (active) setNotifications(history.notifications || []);
         }
-      } catch (err) {
-        console.error(err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
-    fetchOverview();
-    
-    // Refresh every 30s
-    const interval = setInterval(fetchOverview, 30000);
-    return () => clearInterval(interval);
-  }, [id]);
+    load();
+    return () => {
+      active = false;
+    };
+  }, [activeChannel, clientId]);
 
-  const handleLoadNotifications = async (channel: string) => {
+  const loadChannel = async (channel: string) => {
     setActiveChannel(channel);
-    try {
-      const res = await fetch(`/api/client-dashboard/client/${id}/channel/${channel}`);
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data.notifications || []);
-      }
-    } catch {}
+    const history = await fetchJson<{ notifications: NotificationItem[] }>(
+      `/api/client-dashboard/client/${clientId}/channel/${channel}`,
+    );
+    setNotifications(history.notifications || []);
   };
 
-  const formatTimeAgo = (dateStr: string) => {
-    if (!dateStr) return 'N/A';
-    const s = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / 1000);
-    if (s < 60) return '< 1m';
-    if (s < 3600) return Math.floor(s/60) + 'm ago';
-    if (s < 86400) return Math.floor(s/3600) + 'h ago';
-    return Math.floor(s/86400) + 'd ago';
-  };
-
-  if (loading || !data) {
-    return <div className="flex justify-center py-20"><svg className="animate-spin h-6 w-6 border-2 border-slate-900 border-t-transparent rounded-full"></svg></div>;
-  }
-
-  const totalNotifications = data.channels.reduce((s: number, c: any) => s + c.total, 0);
-  const totalSuccess = data.channels.reduce((s: number, c: any) => s + (c.sent + c.delivered), 0);
-  const totalFailed = data.channels.reduce((s: number, c: any) => s + c.failed, 0);
-  const avgSuccessRate = data.channels.length > 0 ? Math.round(data.channels.reduce((s: number, c: any) => s + c.success_rate, 0) / data.channels.length) : 0;
+  const channels = overview?.channels ?? [];
+  const totalNotifications = channels.reduce((sum, channel) => sum + channel.total, 0);
+  const totalSuccess = channels.reduce((sum, channel) => sum + channel.sent + channel.delivered, 0);
+  const totalFailed = channels.reduce((sum, channel) => sum + channel.failed, 0);
+  const avgSuccessRate = channels.length
+    ? Math.round(channels.reduce((sum, channel) => sum + channel.success_rate, 0) / channels.length)
+    : 0;
 
   return (
-    <>
-      <div>
-        <div className="flex justify-between flex-col md:flex-row md:items-end mb-4">
-          <div>
-            <span className="text-xs font-bold font-mono text-slate-400 uppercase tracking-widest bg-slate-100 px-2.5 py-1 mb-4 inline-block">Analytics • ID: {id}</span>
-            <h1 className="text-4xl font-bold tracking-tight text-slate-900 leading-none">{data.client_name}</h1>
+    <ClientPortalShell
+      clientId={clientId}
+      title={overview?.client_name || `Client ${clientId} Analytics`}
+      description="Track delivery reliability, channel performance, and recent transmission ledger activity from the frontend analytics workspace."
+    >
+      {loading ? (
+        <section className="rounded-[28px] border border-slate-200 bg-white/80 p-6 shadow-sm">
+          <p className="text-sm text-slate-500">Loading analytics...</p>
+        </section>
+      ) : (
+        <>
+          <div className="mb-6 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard label="Transmissions" value={String(totalNotifications)} />
+            <MetricCard label="Endpoints" value={String(channels.length)} />
+            <MetricCard label="Delivered" value={String(totalSuccess)} tone="emerald" />
+            <MetricCard label="Dropped" value={String(totalFailed)} tone="rose" />
+            <MetricCard label="Reliability" value={`${avgSuccessRate}%`} />
           </div>
-          <span className="border border-slate-200 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-500 mt-4 md:mt-0">{data.tier} TIER</span>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-0 border border-slate-200 bg-white">
-        <StatBlock label="Transmissions" value={totalNotifications.toLocaleString()} />
-        <StatBlock label="Endpoints" value={data.channels.length} />
-        <StatBlock label="Delivered" value={totalSuccess.toLocaleString()} extraClass="text-emerald-700 bg-emerald-50/30" />
-        <StatBlock label="Dropped" value={totalFailed.toLocaleString()} extraClass="text-red-700 bg-red-50/30" />
-        <StatBlock label="Reliability" value={`${avgSuccessRate}%`} />
-      </div>
+          <section className="mb-6 rounded-[28px] border border-slate-200 bg-white/80 p-6 shadow-sm">
+            <p className="mb-4 text-sm font-bold uppercase tracking-[0.2em] text-slate-400">Active Channels</p>
+            <div className="space-y-4">
+              {channels.map((channel) => (
+                <button
+                  key={channel.channel}
+                  onClick={() => loadChannel(channel.channel)}
+                  className={`w-full rounded-2xl border p-5 text-left transition ${
+                    activeChannel === channel.channel
+                      ? "border-slate-900 bg-slate-50 shadow-sm"
+                      : "border-slate-200 bg-white hover:border-slate-400"
+                  }`}
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-bold uppercase tracking-wide text-slate-800">{channel.channel}</span>
+                    <span className="font-mono text-sm text-slate-500">{channel.success_rate}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100">
+                    <div
+                      className={`h-2 rounded-full ${
+                        channel.success_rate >= 80
+                          ? "bg-emerald-500"
+                          : channel.success_rate >= 50
+                            ? "bg-amber-500"
+                            : "bg-rose-500"
+                      }`}
+                      style={{ width: `${channel.success_rate}%` }}
+                    />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
 
-      <div>
-        <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 border-b border-slate-200 pb-2">Active Channels</h2>
-        <div className="space-y-4">
-          {data.channels.map((ch: any) => {
-            const isSel = ch.channel === activeChannel;
-            const bC = ch.success_rate >= 80 ? 'bg-emerald-500' : ch.success_rate >= 50 ? 'bg-amber-500' : 'bg-red-500';
-            return (
-              <div key={ch.channel} onClick={() => handleLoadNotifications(ch.channel)} className={`bg-white border p-5 flex items-center justify-between cursor-pointer transition-all ${isSel ? 'border-slate-800 shadow-sm' : 'border-slate-200 hover:border-slate-400'}`}>
-                <div className="w-1/4">
-                    <span className="text-sm font-bold uppercase tracking-wider text-slate-800">{ch.channel}</span>
-                </div>
-                <div className="w-1/2 flex items-center space-x-6">
-                    <div className="w-full bg-slate-100 h-1.5 flex-grow relative overflow-hidden">
-                        <div className={`${bC} h-full`} style={{width: `${ch.success_rate}%`}}></div>
-                    </div>
-                    <span className="text-sm font-mono font-medium text-slate-600 w-12 text-right">{ch.success_rate}%</span>
-                </div>
-                <div className="w-1/4 flex justify-end space-x-6 text-sm font-medium">
-                    <span className="text-slate-400 uppercase text-xs tracking-wider">Total <span className="text-slate-900 text-sm ml-1">{ch.total}</span></span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div>
-        <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 border-b border-slate-200 pb-2">Transmission Ledger: {activeChannel.toUpperCase()}</h2>
-        <div className="bg-white border border-slate-200 overflow-x-auto">
-          {notifications.length === 0 ? (
-             <div className="p-8 text-center text-slate-400 text-sm font-medium">No ledger entries found.</div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-                <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">Payload Type</th>
-                        <th className="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">Target</th>
-                        <th className="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">State</th>
-                        <th className="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">Priority</th>
-                        <th className="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">Clock</th>
+          <section className="rounded-[28px] border border-slate-200 bg-white/80 shadow-sm overflow-hidden">
+            <div className="border-b border-slate-200 px-6 py-5">
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-400">
+                Transmission Ledger {activeChannel ? `• ${activeChannel.toUpperCase()}` : ""}
+              </p>
+            </div>
+            {notifications.length === 0 ? (
+              <div className="p-8 text-sm text-slate-500">No ledger entries found.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px]">
+                  <thead className="bg-slate-50 text-left">
+                    <tr>
+                      {["Payload Type", "Target", "State", "Priority", "Clock"].map((label) => (
+                        <th key={label} className="px-6 py-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+                          {label}
+                        </th>
+                      ))}
                     </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                    {notifications.slice(0, 15).map((n, i) => {
-                        const st = n.status.toLowerCase();
-                        const sc = (st==='delivered'||st==='sent') ? 'bg-emerald-100/50 text-emerald-700 border-emerald-200' : (st==='failed' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-100 text-slate-600 border-slate-200');
-                        const pc = (n.priority.toLowerCase()==='critical'||n.priority.toLowerCase()==='high') ? 'text-red-600 font-bold' : 'text-slate-600';
-                        return (
-                          <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
-                              <td className="py-3 px-6 text-sm font-medium text-slate-800">{n.type}</td>
-                              <td className="py-3 px-6 text-xs font-mono text-slate-500">{n.recipient}</td>
-                              <td className="py-3 px-6"><span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border ${sc}`}>{n.status}</span></td>
-                              <td className={`py-3 px-6 text-xs uppercase tracking-wider ${pc}`}>{n.priority}</td>
-                              <td className="py-3 px-6 text-xs text-slate-400">{formatTimeAgo(n.created_at)}</td>
-                          </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {notifications.map((notification, index) => (
+                      <tr key={`${notification.recipient}-${index}`} className="bg-white">
+                        <td className="px-6 py-4 text-sm font-semibold text-slate-800">{notification.type}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600">{notification.recipient}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600">{notification.status}</td>
+                        <td className="px-6 py-4 text-sm uppercase text-slate-500">{notification.priority}</td>
+                        <td className="px-6 py-4 text-sm text-slate-500">{formatTimeAgo(notification.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </ClientPortalShell>
   );
 }
 
-const StatBlock = ({label, value, extraClass=""}: any) => (
-  <div className={`p-6 border-b md:border-b-0 md:border-r border-slate-200 last:border-r-0 ${extraClass}`}>
-      <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-      <p className="text-3xl font-bold tracking-tight text-slate-900">{value}</p>
-  </div>
-);
+function MetricCard({
+  label,
+  value,
+  tone = "indigo",
+}: {
+  label: string;
+  value: string;
+  tone?: "indigo" | "emerald" | "rose";
+}) {
+  const toneMap = {
+    indigo: "text-indigo-700",
+    emerald: "text-emerald-700",
+    rose: "text-rose-700",
+  } as const;
+
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white/80 p-6 shadow-sm">
+      <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">{label}</p>
+      <p className={`text-4xl font-bold tracking-tight ${toneMap[tone]}`}>{value}</p>
+    </section>
+  );
+}

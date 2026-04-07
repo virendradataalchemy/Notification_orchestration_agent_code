@@ -40,6 +40,23 @@
             text-decoration: none;
         }
 
+        .navbar-links {
+            display: flex;
+            gap: 10px;
+            margin-left: 20px;
+        }
+
+        .navbar-links a {
+            text-decoration: none;
+            color: white;
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.25);
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
         .container {
             max-width: 1600px;
             margin: 0 auto;
@@ -281,8 +298,14 @@
 <body>
     <nav class="navbar">
         <div class="navbar-content">
-            <a href="#" onclick="goToDashboard(); return false;" class="navbar-brand">🚀 Client Portal</a>
-            <!-- Notification Bell -->
+            <div style="display:flex; align-items:center;">
+                <a href="#" onclick="goToDashboard(); return false;" class="navbar-brand">🚀 Client Portal</a>
+                <div class="navbar-links">
+                    <a href="#" onclick="goToDashboard(); return false;">Dashboard</a>
+                    <a href="#" onclick="goToTemplates(); return false;">Templates</a>
+                    <a href="#" onclick="goToOrchestration(); return false;">Orchestration</a>
+                </div>
+            </div>
             {% include 'components/notification_bell.html' %}
         </div>
     </nav>
@@ -394,6 +417,10 @@
 
         function goToTemplates() {
             window.location.href = '/portal/' + clientId + '/templates';
+        }
+
+        function goToOrchestration() {
+            window.location.href = '/portal/' + clientId + '/orchestration';
         }
 
         let previewTimeout = null;
