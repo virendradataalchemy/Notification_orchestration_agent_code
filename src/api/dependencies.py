@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 from src.core import get_db, get_db_optional, get_redis_client, verify_token, supabase_client
+from src.core.supabase import CLIENTS_TABLE
 from src.config import settings
 from src.models import Client
 import time
@@ -85,7 +86,7 @@ async def get_authenticated_client(
             client = result.scalar_one_or_none()
         elif supabase_client.configured:
             rows = await supabase_client.select(
-                "clients",
+                CLIENTS_TABLE,
                 "id,name,default_language,logo_url,brand_color,is_active,client_slug,created_at,updated_at",
                 limit=1,
                 filters={
@@ -139,7 +140,7 @@ async def get_authenticated_client(
             client = result.scalar_one_or_none()
         elif supabase_client.configured:
             rows = await supabase_client.select(
-                "clients",
+                CLIENTS_TABLE,
                 "id,name,default_language,logo_url,brand_color,is_active,client_slug,created_at,updated_at",
                 limit=1,
                 filters={

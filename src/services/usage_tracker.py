@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 import redis.asyncio as aioredis
 
 from src.config import settings
-from src.core.supabase import supabase_client
+from src.core.supabase import CLIENTS_TABLE, COMMUNICATIONS_TABLE, supabase_client
 
 
 class UsageTracker:
@@ -33,7 +33,7 @@ class UsageTracker:
         """Check if client has quota available. `db` param kept for compatibility but unused."""
         client_pk = int(client_id)
         rows = await supabase_client.select(
-            "clients", "id,name,is_active", limit=1, filters={"id": f"eq.{client_pk}"}
+            CLIENTS_TABLE, "id,name,is_active", limit=1, filters={"id": f"eq.{client_pk}"}
         )
         if not rows:
             return False, {"error": "Client not found", "tier": "unknown", "quota": 0, "used": 0, "remaining": 0, "reset_date": None}
@@ -83,7 +83,7 @@ class UsageTracker:
         # Fall back to Supabase count
         try:
             rows = await supabase_client.select(
-                "communications",
+                COMMUNICATIONS_TABLE,
                 "id",
                 filters={
                     "client_id": f"eq.{client_id}",
@@ -116,7 +116,7 @@ class UsageTracker:
         return {"client_id": str(client_id), "current_month": current, "historical": historical}
 
     async def get_all_client_usage(self, db: Any) -> list[Dict[str, Any]]:
-        clients = await supabase_client.select("clients", "id,name,is_active", filters={"is_active": "eq.true"})
+        clients = await supabase_client.select(CLIENTS_TABLE, "id,name,is_active", filters={"is_active": "eq.true"})
         now = datetime.utcnow()
         month_start = datetime(now.year, now.month, 1)
         next_month = (month_start + timedelta(days=32)).replace(day=1)

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
+const PENDING_SIGNUP_KEY = "pending_client_signup";
+
 export default function SignupPage() {
   const router = useRouter();
   
@@ -29,11 +31,29 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
 
+  const getErrorMessage = (err: unknown, fallback: string) => {
+    if (err instanceof Error && err.message) {
+      return err.message;
+    }
+    return fallback;
+  };
+
   useEffect(() => {
     // Check if we are resuming from OAuth
     const params = new URLSearchParams(window.location.search);
     if (params.get("step") === "2") {
       setStep(2);
+      const pendingSignup = window.sessionStorage.getItem(PENDING_SIGNUP_KEY);
+      if (pendingSignup) {
+        try {
+          const parsed = JSON.parse(pendingSignup);
+          if (parsed.supabaseUserId) setSupabaseUserId(parsed.supabaseUserId);
+          if (parsed.email) setEmail(parsed.email);
+          if (parsed.name) setName(parsed.name);
+        } catch {
+          // Ignore invalid cached signup state.
+        }
+      }
       supabase.auth.getUser().then(({ data: { user } }) => {
         if (user) {
           setSupabaseUserId(user.id);
@@ -43,6 +63,40 @@ export default function SignupPage() {
       });
     }
   }, []);
+
+  const provisionClientProfile = async (payload: {
+    name: string;
+    supabase_uid: string;
+    default_language?: string;
+    preferred_channels?: string[];
+    quiet_hours?: { start: string; end: string };
+  }) => {
+    const res = await fetch("/api/v1/clients/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: payload.name,
+        default_language: payload.default_language ?? "en",
+        preferred_channels: payload.preferred_channels,
+        is_active: true,
+        supabase_uid: payload.supabase_uid,
+        quiet_hours: payload.quiet_hours,
+      }),
+    });
+
+    if (!res.ok) {
+      let message = `Failed to provision account profile (${res.status}).`;
+      try {
+        const err = await res.json();
+        message = err.detail || err.message || message;
+      } catch {
+        // Keep fallback message.
+      }
+      throw new Error(message);
+    }
+
+    return res.json();
+  };
 
   const handleNext = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,11 +125,28 @@ export default function SignupPage() {
       if (authError) throw authError;
 
       if (data.user) {
+        window.sessionStorage.setItem(
+          PENDING_SIGNUP_KEY,
+          JSON.stringify({
+            supabaseUserId: data.user.id,
+            email,
+            name,
+          })
+        );
         setSupabaseUserId(data.user.id);
         setStep(2);
+        try {
+          await provisionClientProfile({
+            name,
+            supabase_uid: data.user.id,
+            default_language: "en",
+          });
+        } catch (err: unknown) {
+          setError(getErrorMessage(err, "Account created, but profile provisioning will be retried on the next step."));
+        }
       }
-    } catch (err: any) {
-      setError(err.message || "Failed to create account.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to create account."));
     } finally {
       setLoading(false);
     }
@@ -94,39 +165,18 @@ export default function SignupPage() {
     const preferred_channels = Object.keys(channels).filter(c => channels[c]);
 
     try {
-      const res = await fetch("/api/v1/clients/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }, 
-        body: JSON.stringify({ 
-          name,
-          default_language: language,
-          preferred_channels: preferred_channels,
-          is_active: true,
-          supabase_uid: supabaseUserId,
-          quiet_hours: { start: `${quietStart}:00`, end: `${quietEnd}:00` }
-        }),
+      await provisionClientProfile({
+        name,
+        default_language: language,
+        preferred_channels,
+        supabase_uid: supabaseUserId,
+        quiet_hours: { start: `${quietStart}:00`, end: `${quietEnd}:00` },
       });
-
-      if (res.ok) {
-        setSuccess(`Welcome aboard! Account provisioned. Routing you in 2 seconds...`);
-        setTimeout(() => router.push('/login'), 2000);
-      } else {
-        let message = `Failed to provision account profile (${res.status}).`;
-        try {
-          const err = await res.json();
-          message = err.detail || err.message || message;
-        } catch {
-          try {
-            const text = await res.text();
-            if (text) message = text;
-          } catch {
-            // Keep the status-based fallback message.
-          }
-        }
-        setError(message);
-      }
-    } catch {
-      setError("Network error connecting to API.");
+      window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
+      setSuccess(`Welcome aboard! Account provisioned. Routing you in 2 seconds...`);
+      setTimeout(() => router.push('/login'), 2000);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Network error connecting to API."));
     } finally {
       setLoading(false);
     }

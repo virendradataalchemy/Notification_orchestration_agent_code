@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { ensureClientProfile } from "@/lib/clientProvisioning";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,6 +12,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const getErrorMessage = (err: unknown, fallback: string) => {
+    if (err instanceof Error && err.message) {
+      return err.message;
+    }
+    return fallback;
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,19 +33,13 @@ export default function LoginPage() {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Retrieve the internal tenant ID linked to this Supabase user
-        const res = await fetch(`/api/v1/clients/by-supabase/${authData.user.id}`);
-        if (res.ok) {
-           const tenantData = await res.json();
-           localStorage.setItem("access_token", authData.session?.access_token || "");
-           localStorage.setItem("client_id", tenantData.id.toString());
-           router.push(`/client/${tenantData.id}`);
-        } else {
-           setError("Your account is active but no notification profile was found. Contact Admin.");
-        }
+        const clientData = await ensureClientProfile(authData.user);
+        localStorage.setItem("access_token", authData.session?.access_token || "");
+        localStorage.setItem("client_id", clientData.id.toString());
+        router.push(`/client/${clientData.id}`);
       }
-    } catch (err: any) {
-      setError(err.message || "Invalid Login Credentials");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Invalid login credentials"));
     } finally {
       setLoading(false);
     }
@@ -139,7 +140,7 @@ export default function LoginPage() {
           </form>
           
           <div className="mt-8 text-center text-sm font-medium">
-             <span className="text-slate-500">Don't have an account? </span>
+             <span className="text-slate-500">Don&apos;t have an account? </span>
              <Link href="/signup" className="text-indigo-600 hover:text-indigo-800 font-bold">Signup now</Link>
           </div>
         </div>
@@ -156,7 +157,7 @@ export default function LoginPage() {
                     <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700">A</div>
                     <div>
                         <h4 className="text-sm font-bold text-slate-900">Hey Acme 👋</h4>
-                        <p className="text-xs text-slate-500">Here's your outbound communication snapshot today</p>
+                        <p className="text-xs text-slate-500">Here&apos;s your outbound communication snapshot today</p>
                     </div>
                 </div>
                 <div className="flex border-b border-slate-100 pb-6 mb-6">

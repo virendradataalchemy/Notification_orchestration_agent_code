@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { ensureClientProfile } from "@/lib/clientProvisioning";
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -18,21 +19,13 @@ export default function AuthCallback() {
 
       const user = session.user;
       
-      // Check if user has a tenant profile
       try {
-        const res = await fetch(`/api/v1/clients/by-supabase/${user.id}`);
-        if (res.ok) {
-           const tenantData = await res.json();
-           localStorage.setItem("access_token", session.access_token);
-           localStorage.setItem("client_id", tenantData.id.toString());
-           router.push(`/client/${tenantData.id}`);
-        } else {
-           // New user from OAuth - redirect to complete setup (Step 2)
-           // We might need to store the user id temp or just rely on supabase.auth.getUser() on the signup page
-           router.push("/signup?step=2");
-        }
-      } catch (err) {
-        router.push("/login?error=Backend sync failed");
+        const clientData = await ensureClientProfile(user);
+        localStorage.setItem("access_token", session.access_token);
+        localStorage.setItem("client_id", clientData.id.toString());
+        router.push(`/client/${clientData.id}`);
+      } catch {
+        router.push("/login?error=Backend sync failed while provisioning client profile");
       }
     };
 

@@ -10,7 +10,7 @@ from .base import Base
 
 
 class UserPreference(Base):
-    __tablename__ = "user_preferences"
+    __tablename__ = "client_preferences"
 
     user_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     client_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("clients.id"), nullable=True, index=True)

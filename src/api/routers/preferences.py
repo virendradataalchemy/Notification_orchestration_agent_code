@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any
 
 from src.api.dependencies import get_authenticated_client, verify_api_key
 from src.api.schemas import UserPreferenceUpdate, UserPreferenceResponse
-from src.core.supabase import supabase_client
+from src.core.supabase import CLIENT_PREFERENCES_TABLE, supabase_client
 from src.models import Client
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/preferences", tags=["preferences"])
 
 async def _get_or_none(user_id: str, client_id: int) -> Optional[Dict[str, Any]]:
     rows = await supabase_client.select(
-        "user_preferences",
+        CLIENT_PREFERENCES_TABLE,
         "id,user_id,client_id,preferred_channels,quiet_hours,unsubscribed,language,timezone",
         limit=1,
         filters={"user_id": f"eq.{user_id}", "client_id": f"eq.{client_id}"},
@@ -71,13 +71,13 @@ async def update_user_preferences(
 
     if existing:
         rows = await supabase_client.update(
-            "user_preferences", update_data, filters={"id": f"eq.{existing['id']}"}
+            CLIENT_PREFERENCES_TABLE, update_data, filters={"id": f"eq.{existing['id']}"}
         )
         row = rows[0] if rows else {**existing, **update_data}
     else:
-        latest = await supabase_client.select("user_preferences", "id", limit=1, filters={"order": "id.desc"})
+        latest = await supabase_client.select(CLIENT_PREFERENCES_TABLE, "id", limit=1, filters={"order": "id.desc"})
         next_id = int(latest[0]["id"]) + 1 if latest else 1
-        rows = await supabase_client.insert("user_preferences", {
+        rows = await supabase_client.insert(CLIENT_PREFERENCES_TABLE, {
             "id": next_id,
             "user_id": user_id,
             "client_id": client.id,
@@ -112,13 +112,13 @@ async def unsubscribe_notification_type(
 
     if existing:
         rows = await supabase_client.update(
-            "user_preferences", {"unsubscribed": current_unsub}, filters={"id": f"eq.{existing['id']}"}
+            CLIENT_PREFERENCES_TABLE, {"unsubscribed": current_unsub}, filters={"id": f"eq.{existing['id']}"}
         )
         row = rows[0] if rows else {**existing, "unsubscribed": current_unsub}
     else:
-        latest = await supabase_client.select("user_preferences", "id", limit=1, filters={"order": "id.desc"})
+        latest = await supabase_client.select(CLIENT_PREFERENCES_TABLE, "id", limit=1, filters={"order": "id.desc"})
         next_id = int(latest[0]["id"]) + 1 if latest else 1
-        rows = await supabase_client.insert("user_preferences", {
+        rows = await supabase_client.insert(CLIENT_PREFERENCES_TABLE, {
             "id": next_id, "user_id": user_id, "client_id": client.id,
             "unsubscribed": current_unsub, "language": "en", "timezone": "UTC",
         })
@@ -147,7 +147,7 @@ async def resubscribe_notification_type(
     current_unsub = existing.get("unsubscribed") or []
     new_unsub = [t for t in current_unsub if t != notification_type]
     rows = await supabase_client.update(
-        "user_preferences", {"unsubscribed": new_unsub}, filters={"id": f"eq.{existing['id']}"}
+        CLIENT_PREFERENCES_TABLE, {"unsubscribed": new_unsub}, filters={"id": f"eq.{existing['id']}"}
     )
     row = rows[0] if rows else {**existing, "unsubscribed": new_unsub}
 

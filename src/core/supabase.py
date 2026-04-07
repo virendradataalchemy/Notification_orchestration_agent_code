@@ -10,6 +10,11 @@ from src.config import settings
 
 logger = logging.getLogger(__name__)
 
+CLIENTS_TABLE = "clients"
+CANDIDATES_TABLE = "candidates"
+COMMUNICATIONS_TABLE = "communications"
+CLIENT_PREFERENCES_TABLE = "client_preferences"
+
 
 class SupabaseClient:
     """Minimal Supabase REST client using URL + API key."""
@@ -143,7 +148,7 @@ class SupabaseClient:
             return response.json()
 
     async def health_check(self) -> dict[str, Any]:
-        rows = await self.select("clients", "id,name", limit=1)
+        rows = await self.select(CLIENTS_TABLE, "id,name", limit=1)
         return {
             "configured": self.configured,
             "reachable": True,

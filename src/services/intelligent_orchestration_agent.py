@@ -7,7 +7,7 @@ from datetime import datetime
 
 from src.services.llm_service import BedrockLLMService
 from src.services.template_engine import TemplateEngine
-from src.core.supabase import supabase_client
+from src.core.supabase import CANDIDATES_TABLE, CLIENT_PREFERENCES_TABLE, COMMUNICATIONS_TABLE, supabase_client
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class IntelligentOrchestrationAgent:
             # Check deduplication via idempotency key in Supabase
             if idempotency_key:
                 existing = await supabase_client.select(
-                    "communications",
+                    COMMUNICATIONS_TABLE,
                     "id,status",
                     limit=1,
                     filters={"client_id": f"eq.{self.client_id}", "idempotency_key": f"eq.{idempotency_key}"},
@@ -188,7 +188,7 @@ class IntelligentOrchestrationAgent:
             return []
 
     async def _fetch_user_context(self, user_id: str) -> Dict[str, Any]:
-        """Fetch client preferences from user_preferences table using client_id."""
+        """Fetch client preferences from the client_preferences table using client_id."""
         default = {
             'preferred_channels': {'default': ['email', 'push']},
             'client_preferred_channels': [],
@@ -201,7 +201,7 @@ class IntelligentOrchestrationAgent:
         # Fetch client-level preferences (preferred channels, quiet hours, timezone)
         try:
             rows = await supabase_client.select(
-                "user_preferences",
+                CLIENT_PREFERENCES_TABLE,
                 "preferred_channels,timezone,quiet_hours",
                 limit=1,
                 filters={"client_id": f"eq.{self.client_id}"},
@@ -296,7 +296,7 @@ class IntelligentOrchestrationAgent:
         candidate_details: Dict[str, Any] = {}
         try:
             rows = await supabase_client.select(
-                "candidates",
+                CANDIDATES_TABLE,
                 "id,name,email,phone,whatsapp_number",
                 limit=1,
                 filters={"id": f"eq.{user_id}", "client_id": f"eq.{self.client_id}"},
