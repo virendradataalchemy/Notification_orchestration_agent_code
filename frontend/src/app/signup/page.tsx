@@ -9,6 +9,7 @@ const PENDING_SIGNUP_KEY = "pending_client_signup";
 
 export default function SignupPage() {
   const router = useRouter();
+  const availableChannels = ["email", "sms", "whatsapp", "voice", "push", "slack", "inapp"];
   
   // Step 1 State
   const [step, setStep] = useState(1);
@@ -22,9 +23,21 @@ export default function SignupPage() {
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
   
   // Step 2 State
+  const [clientSlug, setClientSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [brandColor, setBrandColor] = useState("#3b82f6");
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
   const [quietStart, setQuietStart] = useState("22");
   const [quietEnd, setQuietEnd] = useState("08");
-  const [channels, setChannels] = useState<{ [key: string]: boolean }>({ email: true, sms: false, whatsapp: false, push: false, slack: false });
+  const [channels, setChannels] = useState<{ [key: string]: boolean }>({
+    email: true,
+    sms: false,
+    whatsapp: false,
+    voice: false,
+    push: false,
+    slack: false,
+    inapp: false,
+  });
   const [language, setLanguage] = useState("en");
 
   const [loading, setLoading] = useState(false);
@@ -37,6 +50,15 @@ export default function SignupPage() {
     }
     return fallback;
   };
+
+  const generateSlug = (value: string) =>
+    value.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+
+  useEffect(() => {
+    if (!slugEdited) {
+      setClientSlug(generateSlug(name));
+    }
+  }, [name, slugEdited]);
 
   useEffect(() => {
     // Check if we are resuming from OAuth
@@ -69,6 +91,8 @@ export default function SignupPage() {
     supabase_uid: string;
     default_language?: string;
     preferred_channels?: string[];
+    client_slug?: string;
+    brand_color?: string;
     quiet_hours?: { start: string; end: string };
   }) => {
     const res = await fetch("/api/v1/clients/create", {
@@ -78,6 +102,8 @@ export default function SignupPage() {
         name: payload.name,
         default_language: payload.default_language ?? "en",
         preferred_channels: payload.preferred_channels,
+        client_slug: payload.client_slug,
+        brand_color: payload.brand_color,
         is_active: true,
         supabase_uid: payload.supabase_uid,
         quiet_hours: payload.quiet_hours,
@@ -169,8 +195,10 @@ export default function SignupPage() {
         name,
         default_language: language,
         preferred_channels,
+        client_slug: clientSlug || generateSlug(name),
+        brand_color: brandColor,
         supabase_uid: supabaseUserId,
-        quiet_hours: { start: `${quietStart}:00`, end: `${quietEnd}:00` },
+        quiet_hours: quietHoursEnabled ? { start: `${quietStart}:00`, end: `${quietEnd}:00` } : undefined,
       });
       window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
       setSuccess(`Welcome aboard! Account provisioned. Routing you in 2 seconds...`);
@@ -307,10 +335,55 @@ export default function SignupPage() {
 
           {step === 2 && (
             <form onSubmit={handleSignup} className="space-y-6">
-              
+              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                <div className="border-b border-slate-100 px-5 py-4">
+                  <p className="text-sm font-bold text-slate-900">Basic Information</p>
+                  <p className="mt-1 text-xs text-slate-500">Core client details and branding.</p>
+                </div>
+                <div className="space-y-4 px-5 py-5">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Client Slug</label>
+                    <input
+                      type="text"
+                      value={clientSlug}
+                      onChange={(e) => {
+                        setSlugEdited(true);
+                        setClientSlug(generateSlug(e.target.value));
+                      }}
+                      className="block w-full py-3 px-4 border border-slate-200 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-all text-sm rounded-md placeholder-slate-400"
+                      placeholder="acme-technologies"
+                    />
+                    <p className="mt-1 text-xs text-slate-400">URL-friendly identifier for your client workspace.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Brand Color</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={brandColor}
+                        onChange={(e) => setBrandColor(e.target.value)}
+                        className="h-11 w-14 cursor-pointer rounded-md border border-slate-200 bg-white p-1"
+                      />
+                      <div className="h-11 w-11 rounded-md border border-slate-200" style={{ backgroundColor: brandColor }} />
+                      <span className="text-sm font-mono text-slate-500">{brandColor}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">Quiet Hours Settings</label>
                 <div className="bg-slate-50 p-4 border border-slate-200 flex flex-col space-y-4 rounded-md">
+                   <label className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-4 py-3">
+                      <span className="text-sm font-semibold text-slate-700">Enable quiet hours for this client</span>
+                      <input
+                        type="checkbox"
+                        checked={quietHoursEnabled}
+                        onChange={(e) => setQuietHoursEnabled(e.target.checked)}
+                        className="h-4 w-4 rounded accent-indigo-600"
+                      />
+                   </label>
                    <div>
                       <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
                           <span>Start Time (24h)</span>
@@ -319,7 +392,8 @@ export default function SignupPage() {
                       <input 
                         type="range" min="0" max="23" 
                         value={quietStart} onChange={e => setQuietStart(e.target.value)} 
-                        className="w-full accent-indigo-600"
+                        disabled={!quietHoursEnabled}
+                        className="w-full accent-indigo-600 disabled:opacity-40"
                       />
                    </div>
                    <div>
@@ -330,7 +404,8 @@ export default function SignupPage() {
                       <input 
                         type="range" min="0" max="23" 
                         value={quietEnd} onChange={e => setQuietEnd(e.target.value)} 
-                        className="w-full accent-indigo-600"
+                        disabled={!quietHoursEnabled}
+                        className="w-full accent-indigo-600 disabled:opacity-40"
                       />
                    </div>
                 </div>
@@ -338,22 +413,25 @@ export default function SignupPage() {
 
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-3">Preferred Output Channels</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.keys(channels).map(ch => (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {availableChannels.map((ch) => (
                     <label key={ch} className={`flex items-center space-x-3 p-3 border rounded-md cursor-pointer transition-colors ${channels[ch] ? 'border-indigo-600 bg-indigo-50/30' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
                       <input type="checkbox" checked={channels[ch]} onChange={() => setChannels({...channels, [ch]: !channels[ch]})} className="h-4 w-4 text-indigo-600 rounded accent-indigo-600" />
                       <span className="text-sm font-bold text-slate-700 capitalize">{ch}</span>
                     </label>
                   ))}
                 </div>
+                <p className="mt-2 text-xs text-slate-400">Select the channels your client should use by default.</p>
               </div>
 
               <div>
                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Agent Default Localization</label>
                  <select value={language} onChange={e=>setLanguage(e.target.value)} className="w-full py-3 px-4 bg-slate-50 border border-slate-200 text-sm font-medium rounded-md focus:outline-none focus:border-indigo-600">
                     <option value="en">English (US)</option>
+                    <option value="hi">Hindi</option>
                     <option value="es">Spanish</option>
                     <option value="fr">French</option>
+                    <option value="de">German</option>
                  </select>
               </div>
 
