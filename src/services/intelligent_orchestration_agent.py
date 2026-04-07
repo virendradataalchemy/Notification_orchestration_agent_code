@@ -152,13 +152,8 @@ class IntelligentOrchestrationAgent:
         return None
 
     async def _fetch_templates(self) -> list[Dict[str, Any]]:
-        """Fetch active templates for tenant via Supabase REST."""
-        try:
-            rows = await supabase_client.select(
-                "templates",
-                "id,name,notification_type,content,channel_id",
-                filters={"tenant_id": f"eq.{self.tenant_id}", "is_active": "eq.true"},
-            )
+        """Fetch active templates — tenant-specific first, fall back to all templates."""
+        def _serialize(rows):
             return [
                 {
                     'id': t['id'],
@@ -170,6 +165,24 @@ class IntelligentOrchestrationAgent:
                 }
                 for t in rows
             ]
+
+        try:
+            rows = await supabase_client.select(
+                "templates",
+                "id,name,notification_type,content,channel_id",
+                filters={"tenant_id": f"eq.{self.tenant_id}", "is_active": "eq.true"},
+            )
+            if rows:
+                return _serialize(rows)
+
+            # Tenant has no templates — fall back to all active templates
+            logger.info(f"No templates for tenant {self.tenant_id}, using platform-wide templates")
+            all_rows = await supabase_client.select(
+                "templates",
+                "id,name,notification_type,content,channel_id",
+                filters={"is_active": "eq.true"},
+            )
+            return _serialize(all_rows)
         except Exception as e:
             logger.error(f"Failed to fetch templates: {e}")
             return []
