@@ -1,0 +1,87 @@
+"""Tenant portal authentication - Supabase REST based."""
+
+from fastapi import APIRouter, HTTPException, status, Header
+from typing import Optional
+from datetime import timedelta
+from jose import JWTError, jwt
+
+from src.api.schemas import TenantLoginRequest, TenantLoginResponse
+from src.core.security import create_access_token
+from src.core.supabase import supabase_client
+from src.config import settings
+
+router = APIRouter(prefix="/tenant/auth", tags=["tenant-auth"])
+
+
+@router.post("/login", response_model=TenantLoginResponse)
+async def tenant_login(credentials: TenantLoginRequest):
+    """
+    Dev-mode login: accepts tenant_id as username, any password.
+    In production, replace with real credential verification.
+    """
+    # Try to find tenant by id (username = tenant_id for dev)
+    try:
+        tenant_pk = int(credentials.username)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    rows = await supabase_client.select(
+        "tenants", "id,name,is_active",
+        limit=1, filters={"id": f"eq.{tenant_pk}", "is_active": "eq.true"},
+    )
+    if not rows:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    tenant = rows[0]
+    token_expiration = 8 * 60 * 60  # 8 hours
+    access_token = create_access_token(
+        data={"sub": str(tenant["id"]), "tenant_id": tenant["id"], "tenant_name": tenant["name"]},
+        expires_delta=timedelta(seconds=token_expiration),
+    )
+    return TenantLoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        tenant_id=tenant["id"],
+        tenant_name=tenant["name"],
+        expires_in=token_expiration,
+    )
+
+
+@router.post("/logout")
+async def tenant_logout():
+    return {"message": "Logged out successfully"}
+
+
+@router.post("/refresh", response_model=TenantLoginResponse)
+async def refresh_token(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        tenant_id = payload.get("tenant_id")
+        if not tenant_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    rows = await supabase_client.select(
+        "tenants", "id,name,is_active",
+        limit=1, filters={"id": f"eq.{tenant_id}", "is_active": "eq.true"},
+    )
+    if not rows:
+        raise HTTPException(status_code=401, detail="Tenant not found or not active")
+
+    tenant = rows[0]
+    token_expiration = 8 * 60 * 60
+    access_token = create_access_token(
+        data={"sub": str(tenant["id"]), "tenant_id": tenant["id"], "tenant_name": tenant["name"]},
+        expires_delta=timedelta(seconds=token_expiration),
+    )
+    return TenantLoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        tenant_id=tenant["id"],
+        tenant_name=tenant["name"],
+        expires_in=token_expiration,
+    )

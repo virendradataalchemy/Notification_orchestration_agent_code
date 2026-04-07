@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ tenant_id }} - Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #64748b;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .tenant-header {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        .tenant-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+
+        .tenant-name {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 0.5rem;
+        }
+
+        .tenant-id {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            font-family: 'Courier New', monospace;
+        }
+
+        .tenant-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tenant-badge.free { background: #f1f5f9; color: #475569; }
+        .tenant-badge.basic { background: #dbeafe; color: #1e40af; }
+        .tenant-badge.pro { background: #dcfce7; color: #166534; }
+        .tenant-badge.enterprise { background: #fce7f3; color: #9f1239; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+
+        .stat-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .stat-change {
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .stat-change.positive {
+            color: #16a34a;
+        }
+
+        .stat-change.negative {
+            color: #dc2626;
+        }
+
+        .channels-section {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 1.5rem;
+        }
+
+        .channels-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .channel-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 2fr;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .channel-row:hover {
+            background: #f1f5f9;
+        }
+
+        .channel-row.header {
+            background: transparent;
+            font-weight: 600;
+            color: #64748b;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .channel-name {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 500;
+        }
+
+        .channel-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.125rem;
+        }
+
+        .channel-icon.email { background: #dbeafe; }
+        .channel-icon.sms { background: #dcfce7; }
+        .channel-icon.whatsapp { background: #d1fae5; }
+        .channel-icon.slack { background: #fce7f3; }
+        .channel-icon.push { background: #fef3c7; }
+        .channel-icon.voice { background: #e9d5ff; }
+        .channel-icon.inapp { background: #e0f2fe; }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill.high {
+            background: linear-gradient(90deg, #16a34a 0%, #15803d 100%);
+        }
+
+        .progress-fill.medium {
+            background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .progress-fill.low {
+            background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .notifications-table {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        th {
+            text-align: left;
+            padding: 1rem;
+            font-weight: 600;
+            color: #64748b;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        tbody tr {
+            transition: background 0.2s;
+        }
+
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.sent,
+        .status-badge.delivered {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-badge.failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-badge.queued {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .priority-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .priority-badge.critical {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .priority-badge.high {
+            background: #fed7aa;
+            color: #9a3412;
+        }
+
+        .priority-badge.medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .priority-badge.low {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 4rem;
+            color: #94a3b8;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .channel-row {
+                grid-template-columns: 1fr;
+            }
+
+            .channel-row.header {
+                display: none;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <a href="/" class="back-btn">
+                ← Back to Tenants
+            </a>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Refresh</button>
+                <button class="btn btn-primary" onclick="window.location.href='/portal/{{ tenant_id }}/dashboard'">
+                    Open Portal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tenant-header">
+            <div class="tenant-title">
+                <div>
+                    <h1 class="tenant-name" id="tenant-name">Loading...</h1>
+                    <p class="tenant-id">Tenant ID: {{ tenant_id }}</p>
+                </div>
+                <span class="tenant-badge" id="tenant-tier">Loading...</span>
+            </div>
+        </div>
+
+        <div class="stats-grid" id="stats-grid">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading statistics...</p>
+            </div>
+        </div>
+
+        <div class="channels-section">
+            <h2 class="section-title">Channel Performance</h2>
+            <div class="channels-grid" id="channels-grid">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading channels...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="notifications-table">
+            <h2 class="section-title">Recent Notifications</h2>
+            <div id="notifications-table">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading notifications...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tenantId = "{{ tenant_id }}";
+
+        async function loadData() {
+            try {
+                const response = await fetch(`/api/tenant-dashboard/tenant/${tenantId}/overview`);
+                const data = await response.json();
+
+                // Update header
+                document.getElementById('tenant-name').textContent = data.tenant_name;
+                document.getElementById('tenant-tier').textContent = data.tier;
+                document.getElementById('tenant-tier').className = `tenant-badge ${data.tier}`;
+
+                // Render stats
+                renderStats(data);
+
+                // Render channels
+                renderChannels(data.channels);
+
+                // Load notifications for first channel
+                if (data.channels.length > 0) {
+                    loadNotifications(data.channels[0].channel);
+                }
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        function renderStats(data) {
+            const container = document.getElementById('stats-grid');
+            
+            const totalNotifications = data.channels.reduce((sum, ch) => sum + ch.total, 0);
+            const totalSuccess = data.channels.reduce((sum, ch) => sum + (ch.sent + ch.delivered), 0);
+            const totalFailed = data.channels.reduce((sum, ch) => sum + ch.failed, 0);
+            const avgSuccessRate = data.channels.length > 0
+                ? Math.round(data.channels.reduce((sum, ch) => sum + ch.success_rate, 0) / data.channels.length)
+                : 0;
+
+            container.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-label">Total Notifications</div>
+                    <div class="stat-value">${totalNotifications.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Channels</div>
+                    <div class="stat-value">${data.channels.length}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Successful</div>
+                    <div class="stat-value" style="color: #16a34a">${totalSuccess.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Failed</div>
+                    <div class="stat-value" style="color: #dc2626">${totalFailed.toLocaleString()}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Success Rate</div>
+                    <div class="stat-value">${avgSuccessRate}%</div>
+                </div>
+            `;
+        }
+
+        function renderChannels(channels) {
+            const container = document.getElementById('channels-grid');
+
+            const channelIcons = {
+                'email': '✉️',
+                'sms': '💬',
+                'whatsapp': '📱',
+                'slack': '💼',
+                'push': '🔔',
+                'voice': '📞',
+                'inapp': '🏠'
+            };
+
+            const html = `
+                <div class="channel-row header">
+                    <div>Channel</div>
+                    <div>Total</div>
+                    <div>Success</div>
+                    <div>Failed</div>
+                    <div>Success Rate</div>
+                </div>
+                ${channels.map(channel => {
+                    const successRate = channel.success_rate;
+                    const progressClass = successRate >= 80 ? 'high' : successRate >= 50 ? 'medium' : 'low';
+                    
+                    return `
+                        <div class="channel-row">
+                            <div class="channel-name">
+                                <div class="channel-icon ${channel.channel}">
+                                    ${channelIcons[channel.channel] || '📊'}
+                                </div>
+                                <span>${channel.channel.toUpperCase()}</span>
+                            </div>
+                            <div><strong>${channel.total}</strong></div>
+                            <div style="color: #16a34a"><strong>${channel.sent + channel.delivered}</strong></div>
+                            <div style="color: #dc2626"><strong>${channel.failed}</strong></div>
+                            <div>
+                                <div style="margin-bottom: 0.25rem"><strong>${successRate}%</strong></div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill ${progressClass}" style="width: ${successRate}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            `;
+
+            container.innerHTML = html;
+        }
+
+        async function loadNotifications(channel) {
+            const container = document.getElementById('notifications-table');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading notifications...</p></div>';
+
+            try {
+                const response = await fetch(`/api/tenant-dashboard/tenant/${tenantId}/channel/${channel}`);
+                const data = await response.json();
+
+                if (data.notifications.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #94a3b8; padding: 2rem;">No notifications found</p>';
+                    return;
+                }
+
+                const table = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Recipient</th>
+                                <th>Status</th>
+                                <th>Priority</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.notifications.slice(0, 10).map(notif => `
+                                <tr>
+                                    <td><strong>${notif.type}</strong></td>
+                                    <td><code style="font-size: 0.875rem; color: #64748b;">${notif.recipient}</code></td>
+                                    <td><span class="status-badge ${notif.status.toLowerCase()}">${notif.status}</span></td>
+                                    <td><span class="priority-badge ${notif.priority.toLowerCase()}">${notif.priority}</span></td>
+                                    <td style="color: #64748b; font-size: 0.875rem;">${formatTimeAgo(notif.created_at)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+
+                container.innerHTML = table;
+
+            } catch (error) {
+                console.error('Error loading notifications:', error);
+                container.innerHTML = '<p style="text-align: center; color: #dc2626; padding: 2rem;">Error loading notifications</p>';
+            }
+        }
+
+        function formatTimeAgo(dateString) {
+            if (!dateString) return 'N/A';
+
+            const date = new Date(dateString);
+            const now = new Date();
+            const seconds = Math.floor((now - date) / 1000);
+
+            if (seconds < 60) return 'Just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + ' min ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + ' hours ago';
+            return Math.floor(seconds / 86400) + ' days ago';
+        }
+
+        // Load data on page load
+        loadData();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>

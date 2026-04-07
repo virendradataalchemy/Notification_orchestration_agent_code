@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Notification System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; min-height: 100vh; }
+
+        .header { background: white; border-bottom: 1px solid #e2e8f0; padding: 1.5rem 2rem; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.5rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 0.5rem; }
+        .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.2rem; }
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .nav-link { color: #64748b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.875rem; font-weight: 500; transition: all 0.2s; }
+        .nav-link:hover { background: #f1f5f9; color: #0f172a; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .page-header { margin-bottom: 2rem; }
+        .page-title { font-size: 2rem; font-weight: 700; color: #0f172a; margin-bottom: 0.5rem; }
+        .page-subtitle { color: #64748b; font-size: 1rem; }
+
+        .tenants-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+
+        /* Existing tenant card */
+        .tenant-card { background: white; border-radius: 12px; padding: 1.5rem; border: 1px solid #e2e8f0; transition: all 0.3s ease; cursor: pointer; position: relative; overflow: hidden; }
+        .tenant-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #3b82f6, #1d4ed8); transform: scaleX(0); transition: transform 0.3s ease; }
+        .tenant-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); border-color: #3b82f6; }
+        .tenant-card:hover::before { transform: scaleX(1); }
+
+        /* Add tenant card */
+        .tenant-card.add-card { background: linear-gradient(135deg, #3b82f6, #1d4ed8); border: 2px dashed #93c5fd; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; color: white; gap: 1rem; }
+        .tenant-card.add-card::before { display: none; }
+        .tenant-card.add-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(59,130,246,0.4); border-color: white; }
+        .add-icon { width: 56px; height: 56px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; }
+        .add-label { font-size: 1.1rem; font-weight: 600; }
+        .add-sublabel { font-size: 0.8rem; opacity: 0.8; }
+
+        .tenant-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem; }
+        .tenant-name { font-size: 1.25rem; font-weight: 600; color: #0f172a; margin-bottom: 0.25rem; }
+        .tenant-id { font-size: 0.75rem; color: #94a3b8; font-family: monospace; }
+        .tenant-status { padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .tenant-status.active { background: #dcfce7; color: #166534; }
+        .tenant-status.inactive, .tenant-status.suspended { background: #fee2e2; color: #991b1b; }
+        .tenant-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 1.5rem; }
+        .stat-item { text-align: center; padding: 0.75rem; background: #f8fafc; border-radius: 8px; }
+        .stat-value { font-size: 1.5rem; font-weight: 700; color: #0f172a; display: block; }
+        .stat-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0.25rem; }
+        .tenant-footer { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .tenant-email { font-size: 0.875rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .view-btn { background: #3b82f6; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .view-btn:hover { background: #2563eb; }
+
+        .loading { text-align: center; padding: 4rem; color: #94a3b8; }
+        .spinner { width: 48px; height: 48px; border: 4px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state { text-align: center; padding: 4rem 2rem; background: white; border-radius: 12px; border: 2px dashed #e2e8f0; }
+        .empty-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.3; }
+        .empty-text { color: #64748b; font-size: 1.125rem; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-overlay.open { display: flex; }
+        .modal { background: white; border-radius: 16px; padding: 2rem; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 48px rgba(0,0,0,0.2); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .modal-title { font-size: 1.25rem; font-weight: 700; color: #0f172a; }
+        .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #94a3b8; line-height: 1; }
+        .form-group { margin-bottom: 1.25rem; }
+        .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.4rem; }
+        .form-label span { color: #ef4444; }
+        .form-input, .form-select { width: 100%; padding: 0.625rem 0.875rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; color: #0f172a; outline: none; transition: border-color 0.2s; }
+        .form-input:focus, .form-select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .form-hint { font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem; }
+        .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #f1f5f9; }
+        .btn-cancel { padding: 0.625rem 1.25rem; border: 1px solid #d1d5db; border-radius: 8px; background: white; color: #374151; font-size: 0.875rem; font-weight: 500; cursor: pointer; }
+        .btn-submit { padding: 0.625rem 1.5rem; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; border: none; border-radius: 8px; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+        .alert { padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
+        .alert-error { background: #fee2e2; color: #991b1b; }
+        .alert-success { background: #dcfce7; color: #166534; }
+        .section-divider { font-size: 0.75rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin: 1.25rem 0 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid #f1f5f9; }
+
+        @media (max-width: 768px) {
+            .tenants-grid { grid-template-columns: 1fr; }
+            .header-content { flex-direction: column; gap: 1rem; align-items: flex-start; }
+            .nav-links { width: 100%; flex-wrap: wrap; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">🔔</div>
+                <span>Notification System</span>
+            </div>
+            <nav class="nav-links">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/admin/dashboard" class="nav-link">Admin</a>
+                <a href="/tenant-dashboard" class="nav-link">Analytics</a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="page-header">
+            <h1 class="page-title">Tenants</h1>
+            <p class="page-subtitle">Select a tenant to view their dashboard</p>
+        </div>
+        <div id="tenants-container">
+            <div class="loading"><div class="spinner"></div><p>Loading tenants...</p></div>
+        </div>
+    </div>
+
+    <!-- Add Tenant Modal -->
+    <div class="modal-overlay" id="addTenantModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">➕ Add New Tenant</h2>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div id="modal-alert"></div>
+
+            <div class="section-divider">Basic Information</div>
+            <div class="form-group">
+                <label class="form-label">Tenant Name <span>*</span></label>
+                <input type="text" class="form-input" id="f-name" placeholder="e.g. Acme Technologies">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Default Language</label>
+                    <select class="form-select" id="f-language">
+                        <option value="en">English</option>
+                        <option value="hi">Hindi</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="f-status">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section-divider">Notification Preferences</div>
+            <div class="form-group">
+                <label class="form-label">Preferred Channels</label>
+                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.25rem;">
+                    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.875rem;cursor:pointer;">
+                        <input type="checkbox" value="email" class="ch-pref" checked> Email
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.875rem;cursor:pointer;">
+                        <input type="checkbox" value="sms" class="ch-pref"> SMS
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.875rem;cursor:pointer;">
+                        <input type="checkbox" value="whatsapp" class="ch-pref"> WhatsApp
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.875rem;cursor:pointer;">
+                        <input type="checkbox" value="voice" class="ch-pref"> Voice
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.875rem;cursor:pointer;">
+                        <input type="checkbox" value="push" class="ch-pref"> Push
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.875rem;cursor:pointer;">
+                        <input type="checkbox" value="slack" class="ch-pref"> Slack
+                    </label>
+                </div>
+                <p class="form-hint">Select channels this tenant will use for notifications</p>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Quiet Hours Start</label>
+                    <input type="time" class="form-input" id="f-quiet-start" value="22:00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Quiet Hours End</label>
+                    <input type="time" class="form-input" id="f-quiet-end" value="08:00">
+                </div>
+            </div>
+
+            <div class="section-divider">Branding (Optional)</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Brand Color</label>
+                    <input type="color" class="form-input" id="f-color" value="#3b82f6" style="height:42px;padding:4px;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tenant Slug</label>
+                    <input type="text" class="form-input" id="f-slug" placeholder="e.g. acme-tech">
+                    <p class="form-hint">URL-friendly identifier</p>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="btn-submit" id="submitBtn" onclick="submitTenant()">💾 Save Tenant</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let tenantsGrid = null;
+
+        function openModal() {
+            document.getElementById('addTenantModal').classList.add('open');
+            document.getElementById('modal-alert').innerHTML = '';
+        }
+
+        function closeModal() {
+            document.getElementById('addTenantModal').classList.remove('open');
+            // Reset form
+            document.getElementById('f-name').value = '';
+            document.getElementById('f-slug').value = '';
+            document.getElementById('modal-alert').innerHTML = '';
+        }
+
+        function createTenantCard(tenant) {
+            const card = document.createElement('div');
+            card.className = 'tenant-card';
+            card.onclick = () => viewTenant(tenant.id);
+            card.innerHTML = `
+                <div class="tenant-header">
+                    <div>
+                        <div class="tenant-name">${tenant.name}</div>
+                        <div class="tenant-id">ID: ${tenant.id}</div>
+                    </div>
+                    <span class="tenant-status ${tenant.status}">${tenant.status}</span>
+                </div>
+                <div class="tenant-stats">
+                    <div class="stat-item">
+                        <span class="stat-value">${(tenant.notification_count || 0).toLocaleString()}</span>
+                        <span class="stat-label">Notifications</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${tenant.provider_configs || 0}</span>
+                        <span class="stat-label">Providers</span>
+                    </div>
+                </div>
+                <div class="tenant-footer">
+                    <span class="tenant-email">${tenant.admin_email || tenant.default_language || 'en'}</span>
+                    <button class="view-btn" onclick="event.stopPropagation(); viewTenant('${tenant.id}')">View →</button>
+                </div>
+            `;
+            return card;
+        }
+
+        function createAddCard() {
+            const card = document.createElement('div');
+            card.className = 'tenant-card add-card';
+            card.onclick = () => window.location.href = '/portal/tenant/new';
+            card.innerHTML = `
+                <div class="add-icon">+</div>
+                <div class="add-label">Add New Tenant</div>
+                <div class="add-sublabel">Click to create a new tenant</div>
+            `;
+            return card;
+        }
+
+        async function loadTenants() {
+            const container = document.getElementById('tenants-container');
+            try {
+                const response = await fetch('/admin/api/tenants');
+                const tenants = await response.json();
+
+                tenantsGrid = document.createElement('div');
+                tenantsGrid.className = 'tenants-grid';
+
+                // Add existing tenant cards
+                tenants.forEach(tenant => tenantsGrid.appendChild(createTenantCard(tenant)));
+
+                // Add the blue "Add" card at the end
+                tenantsGrid.appendChild(createAddCard());
+
+                container.innerHTML = '';
+                container.appendChild(tenantsGrid);
+            } catch (error) {
+                container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p class="empty-text">Error loading tenants.</p></div>`;
+            }
+        }
+
+        async function submitTenant() {
+            const name = document.getElementById('f-name').value.trim();
+            if (!name) {
+                showAlert('Tenant name is required.', 'error');
+                return;
+            }
+
+            const channels = [...document.querySelectorAll('.ch-pref:checked')].map(c => c.value);
+            const color = document.getElementById('f-color').value;
+            const slug = document.getElementById('f-slug').value.trim() || name.toLowerCase().replace(/\s+/g, '-');
+            const isActive = document.getElementById('f-status').value === 'true';
+            const language = document.getElementById('f-language').value;
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                const res = await fetch('/api/v1/tenants/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': '1' },
+                    body: JSON.stringify({
+                        name,
+                        default_language: language,
+                        is_active: isActive,
+                        brand_color: color,
+                        tenant_slug: slug,
+                        preferred_channels: channels
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to create tenant');
+
+                showAlert('Tenant created successfully!', 'success');
+
+                // Add new card to grid before the add card
+                const newCard = createTenantCard({
+                    id: data.id,
+                    name: data.name,
+                    status: data.is_active ? 'active' : 'inactive',
+                    notification_count: 0,
+                    provider_configs: 0,
+                    admin_email: null,
+                    default_language: language
+                });
+
+                const addCard = tenantsGrid.lastElementChild;
+                tenantsGrid.insertBefore(newCard, addCard);
+
+                setTimeout(() => closeModal(), 1200);
+            } catch (err) {
+                showAlert(err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💾 Save Tenant';
+            }
+        }
+
+        function showAlert(msg, type) {
+            document.getElementById('modal-alert').innerHTML =
+                `<div class="alert alert-${type}">${msg}</div>`;
+        }
+
+        function viewTenant(tenantId) {
+            window.location.href = `/admin/tenant-detail-modern/${tenantId}`;
+        }
+
+        // Close modal on overlay click
+        document.getElementById('addTenantModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        loadTenants();
+    </script>
+</body>
+</html>
