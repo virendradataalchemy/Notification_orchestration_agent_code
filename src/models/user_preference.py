@@ -13,7 +13,7 @@ class UserPreference(Base):
     __tablename__ = "user_preferences"
 
     user_id: Mapped[str] = mapped_column(String(50), primary_key=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    client_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
     preferred_channels: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     quiet_hours: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     unsubscribed: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String), nullable=True)

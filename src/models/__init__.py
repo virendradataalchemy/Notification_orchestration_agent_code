@@ -1,7 +1,7 @@
 from .base import Base
-from .tenant import Tenant, TenantProviderConfig
+from .client import Client, ClientProviderConfig
 from .channel import Channel
-from .contact import Contact
+from .candidate import Candidate
 from .provider import Provider
 from .delivery_log import DeliveryLog
 from .notification import (
@@ -21,10 +21,10 @@ from .audit_log import AuditLog
 
 __all__ = [
     "Base",
-    "Tenant",
-    "TenantProviderConfig",
+    "Client",
+    "ClientProviderConfig",
     "Channel",
-    "Contact",
+    "Candidate",
     "Provider",
     "DeliveryLog",
     "Notification",

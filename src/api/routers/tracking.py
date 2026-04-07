@@ -5,15 +5,15 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
 
-from src.api.dependencies import get_authenticated_tenant
+from src.api.dependencies import get_authenticated_client
 from src.core.supabase import supabase_client
-from src.models import Tenant
+from src.models import Client
 
 router = APIRouter(prefix="/tracking", tags=["tracking-logs"])
 
 
 class UnsubscribeRequest(BaseModel):
-    contact_id: int
+    candidate_id: int
     channels: Optional[List[str]] = None
     reason: Optional[str] = None
 
@@ -27,11 +27,11 @@ class UnsubscribeResponse(BaseModel):
 @router.get("/logs/{communication_id}")
 async def get_notification_logs(
     communication_id: int,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
     comms = await supabase_client.select(
-        "communications", "id,tenant_id,notification_type,contact_id,created_at",
-        limit=1, filters={"id": f"eq.{communication_id}", "tenant_id": f"eq.{tenant.id}"},
+        "communications", "id,client_id,notification_type,candidate_id,created_at",
+        limit=1, filters={"id": f"eq.{communication_id}", "client_id": f"eq.{client.id}"},
     )
     if not comms:
         raise HTTPException(status_code=404, detail="Communication not found")
@@ -50,7 +50,7 @@ async def get_notification_logs(
     return {
         "communication_id": communication_id,
         "notification_type": comm.get("notification_type"),
-        "contact_id": comm.get("contact_id"),
+        "candidate_id": comm.get("candidate_id"),
         "created_at": comm.get("created_at"),
         "channels": [
             {
@@ -103,15 +103,15 @@ async def track_click(
 @router.post("/unsubscribe", response_model=UnsubscribeResponse)
 async def unsubscribe(
     request: UnsubscribeRequest,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
-    contacts = await supabase_client.select(
-        "contacts", "id,metadata",
-        limit=1, filters={"id": f"eq.{request.contact_id}", "tenant_id": f"eq.{tenant.id}"},
+    candidates = await supabase_client.select(
+        "candidates", "id,metadata",
+        limit=1, filters={"id": f"eq.{request.candidate_id}", "client_id": f"eq.{client.id}"},
     )
-    if not contacts:
-        raise HTTPException(status_code=404, detail="Contact not found")
-    metadata: Dict[str, Any] = contacts[0].get("metadata") or {}
+    if not candidates:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    metadata: Dict[str, Any] = candidates[0].get("metadata") or {}
     if request.channels is None:
         ch_rows = await supabase_client.select("channels", "name", filters={"is_active": "eq.true"})
         unsubscribed_channels = [r["name"] for r in ch_rows]
@@ -124,28 +124,28 @@ async def unsubscribe(
     if request.reason:
         metadata["unsubscribe_reason"] = request.reason
     metadata["unsubscribed_at"] = datetime.utcnow().isoformat()
-    await supabase_client.update("contacts", {"metadata": metadata}, filters={"id": f"eq.{request.contact_id}"})
+    await supabase_client.update("candidates", {"metadata": metadata}, filters={"id": f"eq.{request.candidate_id}"})
     return UnsubscribeResponse(
         status="unsubscribed",
-        message=f"Contact unsubscribed from {len(unsubscribed_channels)} channel(s)",
+        message=f"Candidate unsubscribed from {len(unsubscribed_channels)} channel(s)",
         unsubscribed_channels=unsubscribed_channels,
     )
 
 
-@router.get("/unsubscribed/{contact_id}")
+@router.get("/unsubscribed/{candidate_id}")
 async def get_unsubscribed_channels(
-    contact_id: int,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    candidate_id: int,
+    client: Client = Depends(get_authenticated_client),
 ):
-    contacts = await supabase_client.select(
-        "contacts", "id,metadata",
-        limit=1, filters={"id": f"eq.{contact_id}", "tenant_id": f"eq.{tenant.id}"},
+    candidates = await supabase_client.select(
+        "candidates", "id,metadata",
+        limit=1, filters={"id": f"eq.{candidate_id}", "client_id": f"eq.{client.id}"},
     )
-    if not contacts:
-        raise HTTPException(status_code=404, detail="Contact not found")
-    metadata = contacts[0].get("metadata") or {}
+    if not candidates:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    metadata = candidates[0].get("metadata") or {}
     return {
-        "contact_id": contact_id,
+        "candidate_id": candidate_id,
         "unsubscribed_channels": metadata.get("unsubscribed_channels", []),
         "unsubscribed_all": metadata.get("unsubscribed_all", False),
         "unsubscribe_reason": metadata.get("unsubscribe_reason"),
@@ -153,19 +153,19 @@ async def get_unsubscribed_channels(
     }
 
 
-@router.post("/resubscribe/{contact_id}")
+@router.post("/resubscribe/{candidate_id}")
 async def resubscribe(
-    contact_id: int,
+    candidate_id: int,
     channels: Optional[List[str]] = Query(None),
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
-    contacts = await supabase_client.select(
-        "contacts", "id,metadata",
-        limit=1, filters={"id": f"eq.{contact_id}", "tenant_id": f"eq.{tenant.id}"},
+    candidates = await supabase_client.select(
+        "candidates", "id,metadata",
+        limit=1, filters={"id": f"eq.{candidate_id}", "client_id": f"eq.{client.id}"},
     )
-    if not contacts:
-        raise HTTPException(status_code=404, detail="Contact not found")
-    metadata = contacts[0].get("metadata") or {}
+    if not candidates:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    metadata = candidates[0].get("metadata") or {}
     current = metadata.get("unsubscribed_channels", [])
     if channels is None:
         resubscribed = current
@@ -175,9 +175,9 @@ async def resubscribe(
         resubscribed = [ch for ch in channels if ch in current]
         metadata["unsubscribed_channels"] = [ch for ch in current if ch not in channels]
     metadata["resubscribed_at"] = datetime.utcnow().isoformat()
-    await supabase_client.update("contacts", {"metadata": metadata}, filters={"id": f"eq.{contact_id}"})
+    await supabase_client.update("candidates", {"metadata": metadata}, filters={"id": f"eq.{candidate_id}"})
     return {
         "status": "resubscribed",
-        "message": f"Contact resubscribed to {len(resubscribed)} channel(s)",
+        "message": f"Candidate resubscribed to {len(resubscribed)} channel(s)",
         "resubscribed_channels": resubscribed,
     }

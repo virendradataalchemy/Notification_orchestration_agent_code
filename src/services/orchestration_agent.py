@@ -36,7 +36,7 @@ class OrchestrationAgent:
 
     async def process_notification(
         self,
-        tenant_id: str,
+        client_id: str,
         user_id: str,
         notification_type: str,
         content: str,
@@ -76,7 +76,7 @@ class OrchestrationAgent:
             }
 
         # Step 2: Get user context (preferences + engagement history)
-        user_context = await self._get_user_context(tenant_id, user_id)
+        user_context = await self._get_user_context(client_id, user_id)
 
         # Step 3: Get provider health status
         provider_health = await self.provider_mgr.get_provider_health_summary()
@@ -104,7 +104,7 @@ class OrchestrationAgent:
 
         try:
             await self.embeddings.store_embedding(
-                self.db, tenant_id, user_id, content, content_hash
+                self.db, client_id, user_id, content, content_hash
             )
         except Exception as e:
             logger.error(f"Failed to store embedding: {e}")
@@ -163,7 +163,7 @@ class OrchestrationAgent:
         try:
             semantic_dup = await self.embeddings.check_semantic_duplicate(
                 self.db,
-                tenant_id=metadata.get('tenant_id', ''),
+                client_id=metadata.get('client_id', ''),
                 user_id=user_id,
                 content=content,
                 threshold=0.95
@@ -205,7 +205,7 @@ class OrchestrationAgent:
                 ttl=86400  # 24 hours
             )
 
-    async def _get_user_context(self, tenant_id: str, user_id: str) -> Dict[str, Any]:
+    async def _get_user_context(self, client_id: str, user_id: str) -> Dict[str, Any]:
         """
         Get user preferences and engagement history.
 
@@ -213,7 +213,7 @@ class OrchestrationAgent:
         """
         # Get user preferences
         query = select(UserPreference).where(
-            UserPreference.tenant_id == tenant_id,
+            UserPreference.client_id == client_id,
             UserPreference.user_id == user_id
         )
 
@@ -232,13 +232,13 @@ class OrchestrationAgent:
                 avg_delivery_time_seconds,
                 last_successful_delivery
             FROM user_engagement
-            WHERE tenant_id = :tenant_id AND user_id = :user_id
+            WHERE client_id = :client_id AND user_id = :user_id
             ORDER BY success_rate DESC
         """)
 
         engagement_result = await self.db.execute(
             engagement_query,
-            {'tenant_id': tenant_id, 'user_id': user_id}
+            {'client_id': client_id, 'user_id': user_id}
         )
 
         success_rates = {}
@@ -303,7 +303,7 @@ class OrchestrationAgent:
 
     async def update_user_engagement(
         self,
-        tenant_id: str,
+        client_id: str,
         user_id: str,
         channel: str,
         success: bool,
@@ -318,12 +318,12 @@ class OrchestrationAgent:
             if success:
                 query = text("""
                     INSERT INTO user_engagement
-                        (tenant_id, user_id, channel, success_count, failure_count,
+                        (client_id, user_id, channel, success_count, failure_count,
                          total_sent, avg_delivery_time_seconds, last_successful_delivery)
                     VALUES
-                        (:tenant_id, :user_id, :channel, 1, 0, 1,
+                        (:client_id, :user_id, :channel, 1, 0, 1,
                          :delivery_time, NOW())
-                    ON CONFLICT (tenant_id, user_id, channel)
+                    ON CONFLICT (client_id, user_id, channel)
                     DO UPDATE SET
                         success_count = user_engagement.success_count + 1,
                         total_sent = user_engagement.total_sent + 1,
@@ -336,10 +336,10 @@ class OrchestrationAgent:
             else:
                 query = text("""
                     INSERT INTO user_engagement
-                        (tenant_id, user_id, channel, success_count, failure_count, total_sent)
+                        (client_id, user_id, channel, success_count, failure_count, total_sent)
                     VALUES
-                        (:tenant_id, :user_id, :channel, 0, 1, 1)
-                    ON CONFLICT (tenant_id, user_id, channel)
+                        (:client_id, :user_id, :channel, 0, 1, 1)
+                    ON CONFLICT (client_id, user_id, channel)
                     DO UPDATE SET
                         failure_count = user_engagement.failure_count + 1,
                         total_sent = user_engagement.total_sent + 1,
@@ -349,7 +349,7 @@ class OrchestrationAgent:
             await self.db.execute(
                 query,
                 {
-                    'tenant_id': tenant_id,
+                    'client_id': client_id,
                     'user_id': user_id,
                     'channel': channel,
                     'delivery_time': delivery_time_seconds or 0

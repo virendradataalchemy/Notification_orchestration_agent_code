@@ -12,7 +12,7 @@ class Provider(Base):
     __tablename__ = "providers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

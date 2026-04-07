@@ -145,8 +145,8 @@ class TemplateCreate(BaseModel):
     version: int = 1
 
 
-class TenantTemplateCreate(BaseModel):
-    """Create tenant-specific template request."""
+class ClientTemplateCreate(BaseModel):
+    """Create client-specific template request."""
     name: str = Field(..., description="Template name (e.g., 'welcome_email')")
     channel: Channel = Field(..., description="Channel type")
     language: str = Field(default="en", description="Language code (ISO 639-1)")
@@ -156,8 +156,8 @@ class TenantTemplateCreate(BaseModel):
     description: Optional[str] = Field(None, description="Template description")
 
 
-class TenantTemplateUpdate(BaseModel):
-    """Update tenant template request."""
+class ClientTemplateUpdate(BaseModel):
+    """Update client template request."""
     name: Optional[str] = None
     subject: Optional[str] = None
     body: Optional[str] = None
@@ -191,7 +191,7 @@ class TemplateCloneRequest(BaseModel):
 class TemplateResponse(BaseModel):
     """Template response."""
     id: int | str
-    tenant_id: Optional[int | str] = None
+    client_id: Optional[int | str] = None
     name: str
     channel: str
     language: str
@@ -207,13 +207,13 @@ class TemplateResponse(BaseModel):
         from_attributes = True
 
 
-class TenantTemplateListResponse(BaseModel):
-    """List of tenant templates."""
-    tenant_id: int | str
-    tenant_name: Optional[str] = None
+class ClientTemplateListResponse(BaseModel):
+    """List of client templates."""
+    client_id: int | str
+    client_name: Optional[str] = None
     templates: List[TemplateResponse]
     global_templates_count: int
-    tenant_templates_count: int
+    client_templates_count: int
 
 
 # User Preference Schemas
@@ -249,19 +249,19 @@ class WebhookEvent(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
-# Tenant Authentication Schemas
-class TenantLoginRequest(BaseModel):
-    """Tenant portal login request."""
-    username: str = Field(..., description="Tenant username")
-    password: str = Field(..., description="Tenant password")
+# Client Authentication Schemas
+class ClientLoginRequest(BaseModel):
+    """Client portal login request."""
+    username: str = Field(..., description="Client username")
+    password: str = Field(..., description="Client password")
 
 
-class TenantLoginResponse(BaseModel):
-    """Tenant portal login response."""
+class ClientLoginResponse(BaseModel):
+    """Client portal login response."""
     access_token: str = Field(..., description="JWT access token")
     token_type: str = Field(default="bearer", description="Token type")
-    tenant_id: int | str
-    tenant_name: str
+    client_id: int | str
+    client_name: str
     expires_in: int = Field(description="Token expiration in seconds")
 
 

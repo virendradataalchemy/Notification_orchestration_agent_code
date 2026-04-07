@@ -143,7 +143,7 @@ class SupabaseClient:
             return response.json()
 
     async def health_check(self) -> dict[str, Any]:
-        rows = await self.select("tenants", "id,name", limit=1)
+        rows = await self.select("clients", "id,name", limit=1)
         return {
             "configured": self.configured,
             "reachable": True,

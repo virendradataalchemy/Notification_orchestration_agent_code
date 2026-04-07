@@ -1,0 +1,201 @@
+{
+  "project": "Pragmatic-Project",
+  "project_id": "fglvokukcgykzzirdqlq",
+  "exported_at": "2026-03-30T10:00:00Z",
+  "tables": {
+    "tenants": {
+      "row_count": 2,
+      "rows": [
+        {"id": 1, "name": "Acme Technologies", "default_language": "en", "logo_url": null, "brand_color": null, "is_active": true, "tenant_slug": null, "created_at": "2026-03-26T16:05:20.659749", "updated_at": "2026-03-26T16:05:20.659749"},
+        {"id": 2, "name": "ABC Technologies", "default_language": "en", "logo_url": null, "brand_color": null, "is_active": true, "tenant_slug": null, "created_at": "2026-03-26T16:08:57.347938", "updated_at": "2026-03-26T16:08:57.347938"}
+      ]
+    },
+    "channels": {
+      "row_count": 7,
+      "rows": [
+        {"id": 1, "name": "sms", "priority": 1, "is_active": true, "created_at": "2026-03-26T07:01:55.206188"},
+        {"id": 2, "name": "voice", "priority": 2, "is_active": true, "created_at": "2026-03-26T07:01:55.206188"},
+        {"id": 3, "name": "push", "priority": 3, "is_active": true, "created_at": "2026-03-26T07:01:55.206188"},
+        {"id": 4, "name": "whatsapp", "priority": 4, "is_active": true, "created_at": "2026-03-26T07:01:55.206188"},
+        {"id": 5, "name": "email", "priority": 5, "is_active": true, "created_at": "2026-03-26T07:01:55.206188"},
+        {"id": 6, "name": "slack", "priority": 6, "is_active": true, "created_at": "2026-03-26T07:01:55.206188"},
+        {"id": 7, "name": "in_app", "priority": 7, "is_active": true, "created_at": "2026-03-26T07:01:55.206188"}
+      ]
+    },
+    "providers": {
+      "row_count": 4,
+      "rows": [
+        {"id": 1, "tenant_id": null, "channel_id": 2, "name": "twilio_voice", "priority": 1, "is_active": true, "config_ref": null, "created_at": "2026-03-29T06:41:11.478229", "updated_at": "2026-03-29T06:41:11.478229"},
+        {"id": 2, "tenant_id": null, "channel_id": 4, "name": "twilio_whatsapp", "priority": 1, "is_active": true, "config_ref": null, "created_at": "2026-03-29T06:41:11.478229", "updated_at": "2026-03-29T06:41:11.478229"},
+        {"id": 3, "tenant_id": null, "channel_id": 5, "name": "sendgrid", "priority": 1, "is_active": true, "config_ref": null, "created_at": "2026-03-29T06:41:11.478229", "updated_at": "2026-03-29T06:41:11.478229"},
+        {"id": 4, "tenant_id": null, "channel_id": 1, "name": "twilio_sms", "priority": 1, "is_active": true, "config_ref": null, "created_at": "2026-03-29T06:41:11.478229", "updated_at": "2026-03-29T06:41:11.478229"}
+      ]
+    },
+    "contacts": {
+      "row_count": 8,
+      "rows": [
+        {"id": 1, "tenant_id": 1, "name": "Arun", "email": "arun@example.com", "phone": "+919893155055", "whatsapp_number": "+919893155055", "job_title": null, "company": null, "timezone": null, "language": "en", "metadata": null, "created_at": "2026-03-26T16:09:29.405523", "updated_at": "2026-03-26T16:09:29.405523"},
+        {"id": 2, "tenant_id": 2, "name": "Vijay", "email": "vijay@example.com", "phone": "+918171671211", "whatsapp_number": "+918171671211", "job_title": null, "company": null, "timezone": null, "language": "en", "metadata": null, "created_at": "2026-03-26T16:09:29.405523", "updated_at": "2026-03-26T16:09:29.405523"},
+        {"id": 3, "tenant_id": 1, "name": "Muskan", "email": null, "phone": "+919893155055", "whatsapp_number": "+919893155055", "job_title": null, "company": null, "timezone": null, "language": "en", "metadata": null, "created_at": "2026-03-27T05:51:00.874799", "updated_at": "2026-03-27T05:51:00.874799"},
+        {"id": 4, "tenant_id": 2, "name": "Prachi", "email": null, "phone": "+918171671211", "whatsapp_number": "+918171671211", "job_title": null, "company": null, "timezone": null, "language": "en", "metadata": null, "created_at": "2026-03-27T05:51:00.874799", "updated_at": "2026-03-27T05:51:00.874799"},
+        {"id": 5, "tenant_id": 1, "name": "Prateek", "email": null, "phone": "+919893155055", "whatsapp_number": "+919893155055", "job_title": null, "company": null, "timezone": null, "language": "en", "metadata": {"is_candidate": true, "is_interview_stage": true}, "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 6, "tenant_id": 1, "name": "Vijay", "email": null, "phone": "+918171671211", "whatsapp_number": "+918171671211", "job_title": null, "company": null, "timezone": null, "language": "en", "metadata": {"is_candidate": true, "is_interview_stage": false}, "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 7, "tenant_id": 2, "name": "Prateek", "email": null, "phone": "+919893155055", "whatsapp_number": "+919893155055", "job_title": null, "company": null, "timezone": null, "language": "en", "metadata": {"is_candidate": true, "is_interview_stage": true}, "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 8, "tenant_id": 2, "name": "Vijay", "email": null, "phone": "+918171671211", "whatsapp_number": "+918171671211", "job_title": null, "company": null, "timezone": null, "language": "en", "metadata": {"is_candidate": true, "is_interview_stage": false}, "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"}
+      ]
+    },
+    "users": { "row_count": 0, "rows": [] },
+    "user_preferences": { "row_count": 0, "rows": [] },
+    "contact_preferences": { "row_count": 0, "rows": [] },
+    "templates": {
+      "row_count": 18,
+      "rows": [
+        {"id": 1, "tenant_id": 1, "name": "selection_call", "channel_id": 2, "language": "en", "subject": null, "content": "Hello {{name}}, congratulations! You have been selected for the next round. Press 1 to confirm or press 2 to decline.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": null, "created_at": "2026-03-26T16:12:40.598319", "updated_at": "2026-03-26T16:12:40.598319"},
+        {"id": 2, "tenant_id": 2, "name": "interview_call", "channel_id": 2, "language": "en", "subject": null, "content": "Hello {{name}}, your interview is scheduled for tomorrow at 10 AM. Press 1 to confirm or press 2 to reschedule.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": null, "created_at": "2026-03-26T16:12:40.598319", "updated_at": "2026-03-26T16:12:40.598319"},
+        {"id": 3, "tenant_id": 1, "name": "WA Payslip", "channel_id": 4, "language": "en", "subject": null, "content": "Hi {{name}}, your monthly payslip from {{company}} is ready. Login to your portal to view details.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "payslip", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 4, "tenant_id": 1, "name": "WA Leave Approval", "channel_id": 4, "language": "en", "subject": null, "content": "Hi {{name}}, your leave request at {{company}} has been approved. Enjoy your time off!", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "leave_approval", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 5, "tenant_id": 1, "name": "WA Interview Confirm", "channel_id": 4, "language": "en", "subject": null, "content": "Great {{name}}! You are confirmed for {{chosen_slot}}. See you at {{company}}!", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "confirmation", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 6, "tenant_id": 1, "name": "Voice Welcome", "channel_id": 2, "language": "en", "subject": null, "content": "Hello {{name}}, you have a new opportunity waiting. Press 1 to accept or 2 to decline.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "invitation", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 7, "tenant_id": 1, "name": "Voice Interview", "channel_id": 2, "language": "en", "subject": null, "content": "Hello {{name}}, please select your interview slot. Press 1 for the first option, or 2 for the second.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "interview", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 8, "tenant_id": 1, "name": "Voice Confirmation", "channel_id": 2, "language": "en", "subject": null, "content": "Hello {{name}}, your appointment is confirmed. Thank you.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "confirmation", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 9, "tenant_id": 1, "name": "Email Welcome", "channel_id": 5, "language": "en", "subject": null, "content": "Subject: Welcome to {{company}}\r\n\r\nDear {{name}},\r\n\r\nWe are thrilled to welcome you to {{company}}! Please confirm your joining by clicking the link below.\r\n\r\nBest regards,\r\n{{company}} Team", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "invitation", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 10, "tenant_id": 1, "name": "Email Interview", "channel_id": 5, "language": "en", "subject": null, "content": "Subject: Schedule Your Interview at {{company}}\r\n\r\nDear {{name}},\r\n\r\nWe would like to invite you for an interview at {{company}}. Please click below to select your preferred slot.\r\n\r\nBest regards,\r\n{{company}} HR Team", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "interview", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 11, "tenant_id": 1, "name": "Email Payslip", "channel_id": 5, "language": "en", "subject": null, "content": "Subject: Your Payslip for {{month}} - {{company}}\r\n\r\nDear {{name}},\r\n\r\nYour payslip from {{company}} for {{month}} is now available. Please login to the employee portal to download it.\r\n\r\nBest regards,\r\n{{company}} Finance Team", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "payslip", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 12, "tenant_id": 2, "name": "WA Welcome", "channel_id": 4, "language": "en", "subject": null, "content": "Hi {{name}}, welcome to {{company}}! Reply YES to proceed or NO to decline.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "invitation", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 13, "tenant_id": 2, "name": "WA Interview Scheduling", "channel_id": 4, "language": "en", "subject": null, "content": "Hi {{name}}, schedule your interview at {{company}}:\r\n1. {{slot1}}\r\n2. {{slot2}}\r\n3. {{slot3}}\r\nReply 1, 2, or 3.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "interview", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 14, "tenant_id": 2, "name": "WA Interview Confirm", "channel_id": 4, "language": "en", "subject": null, "content": "Confirmed {{name}}! See you at {{chosen_slot}} at {{company}}.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "confirmation", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 15, "tenant_id": 2, "name": "Voice Welcome", "channel_id": 2, "language": "en", "subject": null, "content": "Hello {{name}}, a new opportunity is waiting. Press 1 to accept or 2 to decline.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "invitation", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 16, "tenant_id": 2, "name": "Voice Interview", "channel_id": 2, "language": "en", "subject": null, "content": "Hello {{name}}, please choose your interview slot. Press 1 or 2.", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "interview", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 17, "tenant_id": 2, "name": "Email Welcome", "channel_id": 5, "language": "en", "subject": null, "content": "Subject: Welcome to {{company}}\r\n\r\nDear {{name}},\r\n\r\nWelcome to {{company}}! We look forward to working with you.\r\n\r\nBest regards,\r\n{{company}} Team", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "invitation", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"},
+        {"id": 18, "tenant_id": 2, "name": "Email Interview", "channel_id": 5, "language": "en", "subject": null, "content": "Subject: Interview Invitation - {{company}}\r\n\r\nDear {{name}},\r\n\r\nYou are invited for an interview at {{company}}. Please select your preferred time slot.\r\n\r\nBest regards,\r\n{{company}} HR", "variable_schema": null, "version": 1, "is_active": true, "notification_type": "interview", "created_at": "2026-03-29T06:38:26.442605", "updated_at": "2026-03-29T06:38:26.442605"}
+      ]
+    },
+    "template_provider_mapping": {
+      "row_count": 18,
+      "rows": [
+        {"id": 1, "template_id": 1, "provider_id": 2, "provider_template_id": "WA_TMPL_WELCOME_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 2, "template_id": 2, "provider_id": 2, "provider_template_id": "WA_TMPL_INTERVIEW_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 3, "template_id": 3, "provider_id": 2, "provider_template_id": "WA_TMPL_PAYSLIP_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 4, "template_id": 4, "provider_id": 2, "provider_template_id": "WA_TMPL_LEAVE_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 5, "template_id": 5, "provider_id": 2, "provider_template_id": "WA_TMPL_CONFIRM_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 6, "template_id": 6, "provider_id": 1, "provider_template_id": "VOICE_TMPL_WELCOME_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 7, "template_id": 7, "provider_id": 1, "provider_template_id": "VOICE_TMPL_INTERVIEW_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 8, "template_id": 8, "provider_id": 1, "provider_template_id": "VOICE_TMPL_CONFIRM_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 9, "template_id": 9, "provider_id": 3, "provider_template_id": "EMAIL_TMPL_WELCOME_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 10, "template_id": 10, "provider_id": 3, "provider_template_id": "EMAIL_TMPL_INTERVIEW_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 11, "template_id": 11, "provider_id": 3, "provider_template_id": "EMAIL_TMPL_PAYSLIP_T1", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 12, "template_id": 12, "provider_id": 2, "provider_template_id": "WA_TMPL_WELCOME_T2", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 13, "template_id": 13, "provider_id": 2, "provider_template_id": "WA_TMPL_INTERVIEW_T2", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 14, "template_id": 14, "provider_id": 2, "provider_template_id": "WA_TMPL_CONFIRM_T2", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 15, "template_id": 15, "provider_id": 1, "provider_template_id": "VOICE_TMPL_WELCOME_T2", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 16, "template_id": 16, "provider_id": 1, "provider_template_id": "VOICE_TMPL_INTERVIEW_T2", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 17, "template_id": 17, "provider_id": 3, "provider_template_id": "EMAIL_TMPL_WELCOME_T2", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"},
+        {"id": 18, "template_id": 18, "provider_id": 3, "provider_template_id": "EMAIL_TMPL_INTERVIEW_T2", "is_active": true, "created_at": "2026-03-29T06:42:09.187742"}
+      ]
+    },
+    "channel_fallback_rules": { "row_count": 0, "rows": [] },
+    "batches": { "row_count": 0, "rows": [] },
+    "communications": {
+      "row_count": 24,
+      "rows": [
+        {"id": 1, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "ringing", "idempotency_key": "CA9ffea29fcc9a6bd159a3cceb0d484b92", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T16:14:06.954702", "updated_at": "2026-03-26T16:14:06.954702"},
+        {"id": 2, "tenant_id": 2, "contact_id": 2, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 2, "status": "ringing", "idempotency_key": "CA742dd51a0bc6e106c5bf1975fc18b3b1", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T16:14:11.177012", "updated_at": "2026-03-26T16:14:11.177012"},
+        {"id": 3, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "ringing", "idempotency_key": "CA80c71b93e974731ccb47556778da247e", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T17:51:40.472043", "updated_at": "2026-03-26T17:51:40.472043"},
+        {"id": 4, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "initiated", "idempotency_key": "call-4", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T17:51:44.037849", "updated_at": "2026-03-26T17:51:44.037849"},
+        {"id": 5, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "ringing", "idempotency_key": "CA6d45e2da5b3b2b93db50b31d87df2dd1", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T17:53:43.178378", "updated_at": "2026-03-26T17:53:43.178378"},
+        {"id": 6, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "ringing", "idempotency_key": "CA6cea3684dcb18f61a6ee7a352d8da071", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T18:00:20.750833", "updated_at": "2026-03-26T18:00:20.750833"},
+        {"id": 7, "tenant_id": 2, "contact_id": 2, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 2, "status": "ringing", "idempotency_key": "CA9708e648e16477665dca206432bb26d9", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T18:00:21.351554", "updated_at": "2026-03-26T18:00:21.351554"},
+        {"id": 8, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "ringing", "idempotency_key": "CA3aa1d1b602763855035df4f02c952f4f", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T18:09:20.886999", "updated_at": "2026-03-26T18:09:20.886999"},
+        {"id": 9, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "ringing", "idempotency_key": "CAaed0b35d27c2f220186c519eb8141682", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T18:09:23.334789", "updated_at": "2026-03-26T18:09:23.334789"},
+        {"id": 10, "tenant_id": 2, "contact_id": 2, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 2, "status": "ringing", "idempotency_key": "CA5925c61638a6b236e219f52fec1adef8", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T18:09:24.271135", "updated_at": "2026-03-26T18:09:24.271135"},
+        {"id": 11, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "interview_call", "channel_id": 2, "priority": "high", "template_id": null, "status": "failed", "idempotency_key": null, "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T21:50:08.885812", "updated_at": "2026-03-26T21:50:12.109353"},
+        {"id": 12, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "interview_call", "channel_id": 2, "priority": "high", "template_id": null, "status": "failed", "idempotency_key": null, "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-26T21:51:20.579997", "updated_at": "2026-03-26T21:51:22.932171"},
+        {"id": 13, "tenant_id": 1, "contact_id": 3, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "ringing", "idempotency_key": "CA645ebf0a2a0f65e4877b0119169e84f6", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T05:53:18.63726", "updated_at": "2026-03-27T05:53:18.63726"},
+        {"id": 14, "tenant_id": 2, "contact_id": 4, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 2, "status": "ringing", "idempotency_key": "CA782502c4446a95ac23c276a94b96a276", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T05:53:21.747234", "updated_at": "2026-03-27T05:53:21.747234"},
+        {"id": 15, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "interview_call", "channel_id": 2, "priority": "high", "template_id": null, "status": "failed", "idempotency_key": null, "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T08:38:47.541234", "updated_at": "2026-03-27T08:38:51.780256"},
+        {"id": 16, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "interview_call", "channel_id": 2, "priority": "high", "template_id": null, "status": "failed", "idempotency_key": null, "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T08:42:37.630717", "updated_at": "2026-03-27T08:42:40.920707"},
+        {"id": 17, "tenant_id": 2, "contact_id": 2, "triggered_by_user_id": null, "batch_id": null, "notification_type": "interview_call", "channel_id": 2, "priority": "high", "template_id": null, "status": "failed", "idempotency_key": null, "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T08:46:50.433287", "updated_at": "2026-03-27T08:46:55.808515"},
+        {"id": 18, "tenant_id": 2, "contact_id": 2, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 2, "status": "initiated", "idempotency_key": "call-18", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T08:46:52.671348", "updated_at": "2026-03-27T08:46:52.671348"},
+        {"id": 19, "tenant_id": 2, "contact_id": 2, "triggered_by_user_id": null, "batch_id": null, "notification_type": "interview_call", "channel_id": 2, "priority": "high", "template_id": null, "status": "sent", "idempotency_key": null, "scheduled_at": null, "sent_at": "2026-03-27T08:48:49.037171", "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T08:48:44.174717", "updated_at": "2026-03-27T08:48:49.037171"},
+        {"id": 20, "tenant_id": 2, "contact_id": 2, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 2, "status": "ringing", "idempotency_key": "CA0ec36d934415f5b628069c2925d0a9d3", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T08:48:46.953357", "updated_at": "2026-03-27T08:48:46.953357"},
+        {"id": 21, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "selection_call", "channel_id": 2, "priority": "high", "template_id": null, "status": "sent", "idempotency_key": null, "scheduled_at": null, "sent_at": "2026-03-27T10:48:17.253224", "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T10:48:12.888228", "updated_at": "2026-03-27T10:48:17.252122"},
+        {"id": 22, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "ringing", "idempotency_key": "CA6d4bf4828b75409a66c57fd67bfcce12", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T10:48:15.25", "updated_at": "2026-03-27T10:48:15.25"},
+        {"id": 23, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "selection_call", "channel_id": 2, "priority": "high", "template_id": null, "status": "sent", "idempotency_key": null, "scheduled_at": null, "sent_at": "2026-03-27T10:48:42.75766", "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T10:48:39.808859", "updated_at": "2026-03-27T10:48:42.75766"},
+        {"id": 24, "tenant_id": 1, "contact_id": 1, "triggered_by_user_id": null, "batch_id": null, "notification_type": "voice_call", "channel_id": 2, "priority": "medium", "template_id": 1, "status": "ringing", "idempotency_key": "CA8e9d802f42e6e9584d74b76b676aba33", "scheduled_at": null, "sent_at": null, "retry_count": 0, "max_retries": 3, "created_at": "2026-03-27T10:48:41.359365", "updated_at": "2026-03-27T10:48:41.359365"}
+      ]
+    },
+    "idempotency_keys": { "row_count": 0, "rows": [] },
+    "communication_payloads": {
+      "row_count": 8,
+      "rows": [
+        {"id": 1, "communication_id": 11, "key": "template_id", "value": "2"},
+        {"id": 2, "communication_id": 12, "key": "template_id", "value": "2"},
+        {"id": 3, "communication_id": 15, "key": "template_id", "value": "2"},
+        {"id": 4, "communication_id": 16, "key": "template_id", "value": "2"},
+        {"id": 5, "communication_id": 17, "key": "template_id", "value": "2"},
+        {"id": 6, "communication_id": 19, "key": "template_id", "value": "2"},
+        {"id": 7, "communication_id": 21, "key": "template_id", "value": "1"},
+        {"id": 8, "communication_id": 23, "key": "template_id", "value": "1"}
+      ]
+    },
+    "communication_attempts": {
+      "row_count": 5,
+      "rows": [
+        {"id": 1, "communication_id": 11, "attempt_number": 1, "provider_id": null, "status": "failed", "error_message": "Voice adapter error: {'code': 'PGRST116', 'details': 'The result contains 0 rows', 'hint': null, 'message': 'Cannot coerce the result to a single JSON object'}", "error_code": null, "created_at": "2026-03-26T21:50:11.150956"},
+        {"id": 2, "communication_id": 12, "attempt_number": 1, "provider_id": null, "status": "failed", "error_message": "Voice adapter error: {'code': 'PGRST116', 'details': 'The result contains 0 rows', 'hint': null, 'message': 'Cannot coerce the result to a single JSON object'}", "error_code": null, "created_at": "2026-03-26T21:51:22.023417"},
+        {"id": 3, "communication_id": 15, "attempt_number": 1, "provider_id": null, "status": "failed", "error_message": "Voice service error 500: {\"detail\": \"{'code': 'PGRST116', 'details': 'The result contains 0 rows', 'hint': null, 'message': 'Cannot coerce the result to a single JSON object'}\"}", "error_code": null, "created_at": "2026-03-27T08:38:50.422609"},
+        {"id": 4, "communication_id": 16, "attempt_number": 1, "provider_id": null, "status": "failed", "error_message": "Voice service error 500: {\"detail\": \"{'code': 'PGRST116', 'details': 'The result contains 0 rows', 'hint': null, 'message': 'Cannot coerce the result to a single JSON object'}\"}", "error_code": null, "created_at": "2026-03-27T08:42:39.544359"},
+        {"id": 5, "communication_id": 17, "attempt_number": 1, "provider_id": null, "status": "failed", "error_message": "Voice service error 500: {\"detail\": \"HTTP 401 error: Unable to create record: Authentication Error - No credentials provided\"}", "error_code": null, "created_at": "2026-03-27T08:46:54.392639"}
+      ]
+    },
+    "conversation_state": { "row_count": 0, "rows": [] },
+    "delivery_logs": { "row_count": 0, "rows": [] },
+    "notification_events": {
+      "row_count": 21,
+      "rows": [
+        {"id": 1, "communication_id": 11, "event_type": "attempting", "channel_id": 2, "status": null, "metadata": {"attempt": 1}, "created_at": "2026-03-26T21:50:09.716959"},
+        {"id": 2, "communication_id": 11, "event_type": "channel_failed", "channel_id": 2, "status": null, "metadata": {"error": "Voice adapter error: PGRST116", "attempt": 1}, "created_at": "2026-03-26T21:50:11.632808"},
+        {"id": 3, "communication_id": 11, "event_type": "all_channels_failed", "channel_id": null, "status": null, "metadata": {"tried": ["voice"]}, "created_at": "2026-03-26T21:50:12.108503"},
+        {"id": 4, "communication_id": 12, "event_type": "attempting", "channel_id": 2, "status": null, "metadata": {"attempt": 1}, "created_at": "2026-03-26T21:51:21.382825"},
+        {"id": 5, "communication_id": 12, "event_type": "channel_failed", "channel_id": 2, "status": null, "metadata": {"error": "Voice adapter error: PGRST116", "attempt": 1}, "created_at": "2026-03-26T21:51:22.456377"},
+        {"id": 6, "communication_id": 12, "event_type": "all_channels_failed", "channel_id": null, "status": null, "metadata": {"tried": ["voice"]}, "created_at": "2026-03-26T21:51:22.905262"},
+        {"id": 7, "communication_id": 15, "event_type": "attempting", "channel_id": 2, "status": null, "metadata": {"attempt": 1}, "created_at": "2026-03-27T08:38:48.263687"},
+        {"id": 8, "communication_id": 15, "event_type": "channel_failed", "channel_id": 2, "status": null, "metadata": {"error": "Voice service error 500", "attempt": 1}, "created_at": "2026-03-27T08:38:50.820764"},
+        {"id": 9, "communication_id": 15, "event_type": "all_channels_failed", "channel_id": null, "status": null, "metadata": {"tried": ["voice"]}, "created_at": "2026-03-27T08:38:51.227382"},
+        {"id": 10, "communication_id": 16, "event_type": "attempting", "channel_id": 2, "status": null, "metadata": {"attempt": 1}, "created_at": "2026-03-27T08:42:38.367095"},
+        {"id": 11, "communication_id": 16, "event_type": "channel_failed", "channel_id": 2, "status": null, "metadata": {"error": "Voice service error 500", "attempt": 1}, "created_at": "2026-03-27T08:42:39.964728"},
+        {"id": 12, "communication_id": 16, "event_type": "all_channels_failed", "channel_id": null, "status": null, "metadata": {"tried": ["voice"]}, "created_at": "2026-03-27T08:42:40.369496"},
+        {"id": 13, "communication_id": 17, "event_type": "attempting", "channel_id": 2, "status": null, "metadata": {"attempt": 1}, "created_at": "2026-03-27T08:46:51.337515"},
+        {"id": 14, "communication_id": 17, "event_type": "channel_failed", "channel_id": 2, "status": null, "metadata": {"error": "HTTP 401 Authentication Error", "attempt": 1}, "created_at": "2026-03-27T08:46:54.861498"},
+        {"id": 15, "communication_id": 17, "event_type": "all_channels_failed", "channel_id": null, "status": null, "metadata": {"tried": ["voice"]}, "created_at": "2026-03-27T08:46:55.297721"},
+        {"id": 16, "communication_id": 19, "event_type": "attempting", "channel_id": 2, "status": null, "metadata": {"attempt": 1}, "created_at": "2026-03-27T08:48:44.919508"},
+        {"id": 17, "communication_id": 19, "event_type": "sent", "channel_id": 2, "status": null, "metadata": {"provider_id": "CA0ec36d934415f5b628069c2925d0a9d3"}, "created_at": "2026-03-27T08:48:49.178941"},
+        {"id": 18, "communication_id": 21, "event_type": "attempting", "channel_id": 2, "status": null, "metadata": {"attempt": 1}, "created_at": "2026-03-27T10:48:13.573377"},
+        {"id": 19, "communication_id": 21, "event_type": "sent", "channel_id": 2, "status": null, "metadata": {"provider_id": "CA6d4bf4828b75409a66c57fd67bfcce12"}, "created_at": "2026-03-27T10:48:17.181409"},
+        {"id": 20, "communication_id": 23, "event_type": "attempting", "channel_id": 2, "status": null, "metadata": {"attempt": 1}, "created_at": "2026-03-27T10:48:40.390466"},
+        {"id": 21, "communication_id": 23, "event_type": "sent", "channel_id": 2, "status": null, "metadata": {"provider_id": "CA8e9d802f42e6e9584d74b76b676aba33"}, "created_at": "2026-03-27T10:48:42.57659"}
+      ]
+    },
+    "device_tokens": { "row_count": 0, "rows": [] },
+    "notifications": { "row_count": 0, "rows": [] },
+    "notification_channels": { "row_count": 0, "rows": [] },
+    "in_app_notifications": { "row_count": 0, "rows": [] },
+    "slots": {
+      "row_count": 12,
+      "rows": [
+        {"id": 1, "tenant_id": 1, "label": "Monday 10am", "slot_time": "2026-03-31T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "interview", "offered_via_channel_id": 4, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 2, "tenant_id": 1, "label": "Tuesday 2pm", "slot_time": "2026-04-01T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "interview", "offered_via_channel_id": 4, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 3, "tenant_id": 1, "label": "Wednesday 11am", "slot_time": "2026-04-02T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "interview", "offered_via_channel_id": 4, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 4, "tenant_id": 1, "label": "Monday 10am", "slot_time": "2026-03-31T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "call", "offered_via_channel_id": 2, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 5, "tenant_id": 1, "label": "Tuesday 2pm", "slot_time": "2026-04-01T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "call", "offered_via_channel_id": 2, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 6, "tenant_id": 1, "label": "Wednesday 11am", "slot_time": "2026-04-02T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "call", "offered_via_channel_id": 2, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 7, "tenant_id": 1, "label": "Monday 10am", "slot_time": "2026-03-31T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "meeting", "offered_via_channel_id": 5, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 8, "tenant_id": 1, "label": "Tuesday 2pm", "slot_time": "2026-04-01T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "meeting", "offered_via_channel_id": 5, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 9, "tenant_id": 1, "label": "Wednesday 11am", "slot_time": "2026-04-02T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "meeting", "offered_via_channel_id": 5, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 10, "tenant_id": 2, "label": "Monday 10am", "slot_time": "2026-03-31T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "interview", "offered_via_channel_id": null, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 11, "tenant_id": 2, "label": "Tuesday 2pm", "slot_time": "2026-04-01T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "interview", "offered_via_channel_id": null, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"},
+        {"id": 12, "tenant_id": 2, "label": "Wednesday 11am", "slot_time": "2026-04-02T05:18:16.565959", "duration_mins": 30, "taken_by": null, "booked_at": null, "slot_type": "interview", "offered_via_channel_id": null, "booked_via_channel_id": null, "communication_id": null, "expires_at": null, "created_at": "2026-03-29T05:18:16.565959"}
+      ]
+    }
+  }
+}

@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 import logging
 
-from src.api.dependencies import get_authenticated_tenant
-from src.models import Tenant
+from src.api.dependencies import get_authenticated_client
+from src.models import Client
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +40,13 @@ class OrchestrationResponse(BaseModel):
 @router.post("/send", response_model=OrchestrationResponse)
 async def orchestrate_send(
     request: OrchestrationRequest,
-    tenant: Tenant = Depends(get_authenticated_tenant)
+    client: Client = Depends(get_authenticated_client)
 ):
     """
     Orchestrate intelligent notification sending using IntelligentOrchestrationAgent.
     
     Pipeline:
-    1. Fetches user/contact details
+    1. Fetches user/candidate details
     2. LLM selects best template
     3. LLM determines channel priority
     4. Executes real delivery via SupabaseNotificationService
@@ -55,7 +55,7 @@ async def orchestrate_send(
     try:
         from src.services.intelligent_orchestration_agent import IntelligentOrchestrationAgent
 
-        agent = IntelligentOrchestrationAgent(tenant_id=tenant.id)
+        agent = IntelligentOrchestrationAgent(client_id=client.id)
 
         result = await agent.orchestrate_send(
             message_content=request.message_content,
@@ -92,10 +92,10 @@ async def orchestrate_send(
 
 
 # Dedicated orchestration page route
-@router.get("/page/{tenant_id}", response_class=HTMLResponse, include_in_schema=False)
-async def orchestration_page(request: Request, tenant_id: str):
+@router.get("/page/{client_id}", response_class=HTMLResponse, include_in_schema=False)
+async def orchestration_page(request: Request, client_id: str):
     """Render dedicated orchestration page."""
     return templates.TemplateResponse(
         request, "orchestration_page.html",
-        {"tenant_id": tenant_id}
+        {"client_id": client_id}
     )

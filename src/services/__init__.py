@@ -1,5 +1,5 @@
 from .template_engine import TemplateEngine
-from .tenant_template_engine import TenantTemplateEngine
+from .client_template_engine import ClientTemplateEngine
 from .router import MessageRouter
 
-__all__ = ["TemplateEngine", "TenantTemplateEngine", "MessageRouter"]
+__all__ = ["TemplateEngine", "ClientTemplateEngine", "MessageRouter"]

@@ -86,7 +86,7 @@ class EmbeddingService:
     async def check_semantic_duplicate(
         self,
         db: AsyncSession,
-        tenant_id: str,
+        client_id: str,
         user_id: str,
         content: str,
         threshold: float = 0.95
@@ -104,7 +104,7 @@ class EmbeddingService:
         query = text("""
             SELECT id
             FROM notification_embeddings
-            WHERE tenant_id = :tenant_id
+            WHERE client_id = :client_id
               AND user_id = :user_id
               AND content_hash = :content_hash
               AND created_at > NOW() - INTERVAL '10 minutes'
@@ -114,7 +114,7 @@ class EmbeddingService:
         result = await db.execute(
             query,
             {
-                'tenant_id': tenant_id,
+                'client_id': client_id,
                 'user_id': user_id,
                 'content_hash': content_hash
             }
@@ -159,7 +159,7 @@ class EmbeddingService:
             #     n_results=1,
             #     where={
             #         "$and": [
-            #             {"tenant_id": tenant_id},
+            #             {"client_id": client_id},
             #             {"user_id": user_id},
             #             {"created_at": {"$gte": ten_minutes_ago}}
             #         ]
@@ -176,7 +176,7 @@ class EmbeddingService:
                 n_results=1,
                 where={
                     "$and": [
-                        {"tenant_id": tenant_id},
+                        {"client_id": client_id},
                         {"user_id": user_id},
                         # Use the float timestamp for comparison
                         {"created_at": {"$gte": ten_minutes_ago_timestamp}}
@@ -211,7 +211,7 @@ class EmbeddingService:
     async def store_embedding(
         self,
         db: AsyncSession,
-        tenant_id: str,
+        client_id: str,
         user_id: str,
         content: str,
         content_hash: str
@@ -232,16 +232,16 @@ class EmbeddingService:
             # Store metadata in PostgreSQL for exact hash matching
             query = text("""
                 INSERT INTO notification_embeddings
-                    (tenant_id, user_id, content_hash, notification_content)
+                    (client_id, user_id, content_hash, notification_content)
                 VALUES
-                    (:tenant_id, :user_id, :content_hash, :content)
+                    (:client_id, :user_id, :content_hash, :content)
                 RETURNING id
             """)
 
             result = await db.execute(
                 query,
                 {
-                    'tenant_id': tenant_id,
+                    'client_id': client_id,
                     'user_id': user_id,
                     'content_hash': content_hash,
                     'content': content[:500]  # Store truncated content
@@ -265,7 +265,7 @@ class EmbeddingService:
                             documents=[content[:500]],
                             ids=[embedding_id],
                             metadatas=[{
-                                "tenant_id": tenant_id,
+                                "client_id": client_id,
                                 "user_id": user_id,
                                 "content_hash": content_hash,
                                 # "created_at": datetime.utcnow().isoformat()

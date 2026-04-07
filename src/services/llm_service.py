@@ -275,7 +275,7 @@ Respond with ONLY the urgency level (one word)."""
     async def select_template(
         self,
         message_content: str,
-        tenant_id: int,
+        client_id: int,
         templates: list[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
@@ -283,7 +283,7 @@ Respond with ONLY the urgency level (one word)."""
 
         Args:
             message_content: The message content to analyze
-            tenant_id: Tenant ID for context
+            client_id: Client ID for context
             templates: List of available templates with metadata
 
         Returns:
@@ -438,13 +438,13 @@ Respond ONLY with valid JSON (no markdown, no extra text):
         # Check quiet hours
         is_quiet = user_context.get('is_quiet_hours', False)
         if is_quiet and urgency not in ['critical', 'high']:
-            tenant_channels = user_context.get('tenant_preferred_channels', [])
-            quiet_channels = tenant_channels if tenant_channels else ['email', 'inapp']
+            client_channels = user_context.get('client_preferred_channels', [])
+            quiet_channels = client_channels if client_channels else ['email', 'inapp']
             return {
                 'priority_order': quiet_channels,
                 'timing': 'scheduled',
                 'scheduled_time': user_context.get('optimal_send_time'),
-                'reasoning': 'Tenant in quiet hours, using tenant preferred channels for non-intrusive delivery'
+                'reasoning': 'Client in quiet hours, using client preferred channels for non-intrusive delivery'
             }
 
         prompt = f"""You are a channel priority agent. Determine the optimal order of notification channels.
@@ -452,7 +452,7 @@ Respond ONLY with valid JSON (no markdown, no extra text):
 Message Content: {message_content[:300]}
 Urgency: {urgency}
 
-Tenant Preferred Channels (set by the company): {user_context.get('tenant_preferred_channels', [])}
+Client Preferred Channels (set by the company): {user_context.get('client_preferred_channels', [])}
 
 User Context:
 - User Preferred Channels: {user_context.get('preferred_channels', {})}
@@ -472,8 +472,8 @@ Provider Health:
 - Slack: {provider_health.get('slack', {}).get('is_healthy', True)}
 
 Rules:
-1. HIGHEST PRIORITY: If tenant has set preferred channels, use those first
-2. If user also has preferred channels, combine with tenant preferences
+1. HIGHEST PRIORITY: If client has set preferred channels, use those first
+2. If user also has preferred channels, combine with client preferences
 3. HIGH urgency: Prioritize preferred channels if healthy
 4. MEDIUM/LOW urgency: Optimize for cost and preferences
 5. Only include healthy providers
@@ -549,14 +549,14 @@ Respond ONLY with valid JSON (no markdown, no extra text):
         provider_health: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Fallback rule-based priority determination."""
-        # Respect tenant preferred channels first, even in fallback
-        tenant_channels = user_context.get('tenant_preferred_channels', [])
-        if tenant_channels:
+        # Respect client preferred channels first, even in fallback
+        client_channels = user_context.get('client_preferred_channels', [])
+        if client_channels:
             return {
-                'priority_order': tenant_channels,
+                'priority_order': client_channels,
                 'timing': 'immediate' if urgency in ['critical', 'high'] else 'scheduled',
                 'scheduled_time': None,
-                'reasoning': f'Fallback using tenant preferred channels for {urgency} urgency'
+                'reasoning': f'Fallback using client preferred channels for {urgency} urgency'
             }
 
         priority_map = {

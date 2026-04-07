@@ -13,7 +13,7 @@ class Template(Base):
     __tablename__ = "templates"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id"), nullable=False, index=True)
     language: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
@@ -26,7 +26,7 @@ class Template(Base):
     created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
 
-    tenant = relationship("Tenant", back_populates="templates")
+    client = relationship("Client", back_populates="templates")
     channel_ref = relationship("Channel", back_populates="templates")
     communications = relationship("Communication", back_populates="template")
 
@@ -52,7 +52,7 @@ class Template(Base):
 
     @property
     def is_global(self) -> bool:
-        return self.tenant_id is None
+        return self.client_id is None
 
     @property
     def base_template_id(self) -> Optional[int]:

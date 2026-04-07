@@ -17,8 +17,8 @@ class ProviderManager:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_healthy_provider(self, channel: str, tenant_id: Optional[int] = None) -> str:
-        provider = await self._get_provider(channel, tenant_id)
+    async def get_healthy_provider(self, channel: str, client_id: Optional[int] = None) -> str:
+        provider = await self._get_provider(channel, client_id)
         return provider.name if provider else "unknown"
 
     async def mark_provider_success(self, provider: str, channel: str, latency_ms: int):
@@ -28,9 +28,9 @@ class ProviderManager:
         logger.warning("Provider failure recorded for %s/%s", provider, channel)
 
     async def get_failover_provider(
-        self, channel: str, failed_provider: str, tenant_id: Optional[int] = None
+        self, channel: str, failed_provider: str, client_id: Optional[int] = None
     ) -> Optional[str]:
-        providers = await self._list_providers(channel, tenant_id)
+        providers = await self._list_providers(channel, client_id)
         for provider in providers:
             if provider.name != failed_provider:
                 return provider.name
@@ -85,19 +85,19 @@ class ProviderManager:
             for channel_row, provider in result.all()
         ]
 
-    async def _get_provider(self, channel: str, tenant_id: Optional[int]) -> Optional[Provider]:
-        providers = await self._list_providers(channel, tenant_id)
+    async def _get_provider(self, channel: str, client_id: Optional[int]) -> Optional[Provider]:
+        providers = await self._list_providers(channel, client_id)
         return providers[0] if providers else None
 
-    async def _list_providers(self, channel: str, tenant_id: Optional[int]) -> List[Provider]:
+    async def _list_providers(self, channel: str, client_id: Optional[int]) -> List[Provider]:
         query = (
             select(Provider)
             .join(Channel, Provider.channel_id == Channel.id)
             .where(Channel.name == channel, Channel.is_active == True, Provider.is_active == True)
-            .order_by(Provider.tenant_id.desc(), Provider.priority.asc(), Provider.id.asc())
+            .order_by(Provider.client_id.desc(), Provider.priority.asc(), Provider.id.asc())
         )
-        if tenant_id is not None:
-            query = query.where((Provider.tenant_id == tenant_id) | (Provider.tenant_id.is_(None)))
+        if client_id is not None:
+            query = query.where((Provider.client_id == client_id) | (Provider.client_id.is_(None)))
 
         result = await self.db.execute(query)
         return list(result.scalars().all())

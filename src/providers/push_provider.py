@@ -55,9 +55,9 @@ class PushProvider(NotificationProvider):
             # For web tokens, we can't send from backend - it's handled by browser
             # Just store the token and return success
             try:
-                contact_id = message.metadata.get('contact_id')
-                if contact_id and message.recipient:
-                    await self._store_device_token(contact_id, message.recipient, platform='web')
+                candidate_id = message.metadata.get('candidate_id')
+                if candidate_id and message.recipient:
+                    await self._store_device_token(candidate_id, message.recipient, platform='web')
                 
                 return ProviderResponse(
                     status=ProviderStatus.SUCCESS,
@@ -120,12 +120,12 @@ class PushProvider(NotificationProvider):
             # Send message
             response = messaging.send(fcm_message)
 
-            # Store device token in database if we have contact info
+            # Store device token in database if we have candidate info
             try:
-                contact_id = message.metadata.get('contact_id')
-                if contact_id and message.recipient:
-                    await self._store_device_token(contact_id, message.recipient)
-                    await self._store_device_token(contact_id, message.recipient)
+                candidate_id = message.metadata.get('candidate_id')
+                if candidate_id and message.recipient:
+                    await self._store_device_token(candidate_id, message.recipient)
+                    await self._store_device_token(candidate_id, message.recipient)
             except Exception as db_error:
                 print(f"Warning: Failed to store device token: {db_error}")
 
@@ -156,14 +156,14 @@ class PushProvider(NotificationProvider):
                 error_message=str(e)
             )
 
-    async def _store_device_token(self, contact_id: int, device_token: str, platform: str = "unknown"):
+    async def _store_device_token(self, candidate_id: int, device_token: str, platform: str = "unknown"):
         """Store device token in database."""
         try:
             # Check if token already exists
             existing = await supabase_client.select(
                 "device_tokens",
                 "id,is_active",
-                filters={"contact_id": f"eq.{contact_id}", "device_token": f"eq.{device_token}"},
+                filters={"candidate_id": f"eq.{candidate_id}", "device_token": f"eq.{device_token}"},
                 limit=1
             )
             
@@ -193,7 +193,7 @@ class PushProvider(NotificationProvider):
                     "device_tokens",
                     {
                         "id": next_id,
-                        "contact_id": contact_id,
+                        "candidate_id": candidate_id,
                         "device_token": device_token,
                         "platform": platform,
                         "is_active": True,

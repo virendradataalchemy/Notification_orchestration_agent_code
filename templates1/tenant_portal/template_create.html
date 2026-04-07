@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Template - Tenant Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+        }
+
+        .navbar-brand {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+
+        .page-header {
+            margin-bottom: 30px;
+        }
+
+        .page-header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .page-header p {
+            color: #666;
+        }
+
+        .editor-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .editor-panel, .preview-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .panel-header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group label .required {
+            color: #e74c3c;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .form-group textarea {
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            min-height: 200px;
+        }
+
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-help {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .form-help code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #555;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .preview-content {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 300px;
+        }
+
+        .preview-subject {
+            font-weight: 600;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .preview-body {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.6;
+        }
+
+        .preview-placeholder {
+            color: #999;
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .sample-data-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .sample-data-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .sample-data-input {
+            font-family: 'Courier New', monospace;
+            min-height: 150px;
+            font-size: 12px;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .variables-hint {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+
+        .variables-hint strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .preview-loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .spinner-small {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 1200px) {
+            .editor-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="#" onclick="goToDashboard(); return false;" class="navbar-brand">🚀 Tenant Portal</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Create New Template</h1>
+            <p>Build custom notification templates for your channels</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="editor-layout">
+            <!-- Editor Panel -->
+            <div class="editor-panel">
+                <div class="panel-header">Template Configuration</div>
+
+                <div class="variables-hint">
+                    <strong>💡 Using Variables</strong>
+                    Use <code>{% raw %}{{variable}}{% endraw %}</code> syntax for dynamic content<br>
+                    Example: <code>{% raw %}{{user.name}}{% endraw %}</code>, <code>{% raw %}{{order.id}}{% endraw %}</code>, <code>{% raw %}{{company.name}}{% endraw %}</code>
+                </div>
+
+                <form id="templateForm">
+                    <div class="form-group">
+                        <label for="templateName">Template Name <span class="required">*</span></label>
+                        <input type="text" id="templateName" placeholder="e.g., order_confirmation" required>
+                        <div class="form-help">Use lowercase with underscores (e.g., welcome_email, promo_sms)</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="channel">Channel <span class="required">*</span></label>
+                        <select id="channel" required onchange="handleChannelChange()">
+                            <option value="">Select a channel...</option>
+                            <option value="email">📧 Email</option>
+                            <option value="sms">💬 SMS</option>
+                            <option value="slack">💼 Slack</option>
+                            <option value="whatsapp">📱 WhatsApp</option>
+                            <option value="push">🔔 Push Notification</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="subjectGroup" style="display: none;">
+                        <label for="subject">Subject <span class="required">*</span></label>
+                        {% raw %}<input type="text" id="subject" placeholder="e.g., Order #{{order.id}} Confirmed" oninput="updatePreview()">{% endraw %}
+                        <div class="form-help">Email subject line with variables</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="body">Template Body <span class="required">*</span></label>
+                        {% raw %}<textarea id="body" placeholder="Hi {{user.name}},&#10;&#10;Your message here..." required oninput="updatePreview()"></textarea>{% endraw %}
+                        <div class="form-help">Use Jinja2 syntax: <code>{% raw %}{{variable}}{% endraw %}</code> for variables, <code>{% raw %}{% if %}{% endraw %}</code> for conditions</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description (optional)</label>
+                        <input type="text" id="description" placeholder="Brief description of this template">
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="submitBtn">Create Template</button>
+                        <button type="button" class="btn btn-secondary" onclick="goToTemplates()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Preview Panel -->
+            <div class="preview-panel">
+                <div class="panel-header">Live Preview</div>
+
+                <div class="sample-data-section">
+                    <div class="sample-data-title">Sample Data (JSON)</div>
+                    <textarea class="sample-data-input" id="sampleData" oninput="updatePreview()">{
+  "user": {
+    "name": "John Doe",
+    "email": "john@example.com"
+  },
+  "order": {
+    "id": "12345",
+    "total": "299.99"
+  },
+  "company": {
+    "name": "Your Company"
+  }
+}</textarea>
+                    <div class="form-help">Edit this JSON to test your template with different data</div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="sample-data-title">Rendered Output</div>
+                    <div class="preview-content" id="previewContent">
+                        <div class="preview-placeholder">
+                            Enter template content to see preview...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get tenant ID from URL path
+        const pathParts = window.location.pathname.split('/');
+        const tenantId = pathParts[2];
+
+        function goToDashboard() {
+            window.location.href = '/portal/' + tenantId + '/dashboard';
+        }
+
+        function goToTemplates() {
+            window.location.href = '/portal/' + tenantId + '/templates';
+        }
+
+        let previewTimeout = null;
+
+        function handleChannelChange() {
+            const channel = document.getElementById('channel').value;
+            const subjectGroup = document.getElementById('subjectGroup');
+            const subjectInput = document.getElementById('subject');
+
+            if (channel === 'email') {
+                subjectGroup.style.display = 'block';
+                subjectInput.required = true;
+            } else {
+                subjectGroup.style.display = 'none';
+                subjectInput.required = false;
+                subjectInput.value = '';
+            }
+
+            updatePreview();
+        }
+
+        function updatePreview() {
+            // Debounce preview updates
+            clearTimeout(previewTimeout);
+            previewTimeout = setTimeout(async () => {
+                const subject = document.getElementById('subject').value;
+                const body = document.getElementById('body').value;
+                const sampleDataText = document.getElementById('sampleData').value;
+
+                if (!body) {
+                    document.getElementById('previewContent').innerHTML =
+                        '<div class="preview-placeholder">Enter template content to see preview...</div>';
+                    return;
+                }
+
+                let sampleData;
+                try {
+                    sampleData = JSON.parse(sampleDataText);
+                } catch (e) {
+                    document.getElementById('previewContent').innerHTML =
+                        '<div class="preview-placeholder" style="color: #c33;">' +
+                            'Invalid JSON in sample data' +
+                        '</div>';
+                    return;
+                }
+
+                // Show loading
+                document.getElementById('previewContent').innerHTML =
+                    '<div class="preview-loading">' +
+                        '<div class="spinner-small"></div>' +
+                        '<p>Rendering preview...</p>' +
+                    '</div>';
+
+                try {
+                    const response = await fetch('/api/v1/tenant/templates/preview', {
+                        method: 'POST',
+                        headers: {
+                            'X-Tenant-Id': tenantId,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            subject: subject || null,
+                            body: body,
+                            sample_data: sampleData
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.valid) {
+                        let html = '';
+                        if (result.rendered_subject) {
+                            html += '<div class="preview-subject">Subject: ' + escapeHtml(result.rendered_subject) + '</div>';
+                        }
+                        html += '<div class="preview-body">' + escapeHtml(result.rendered_body) + '</div>';
+                        document.getElementById('previewContent').innerHTML = html;
+                    } else {
+                        document.getElementById('previewContent').innerHTML =
+                            '<div class="preview-placeholder" style="color: #c33;">' +
+                                '<strong>Template Error:</strong><br>' + escapeHtml(result.error) +
+                            '</div>';
+                    }
+                } catch (error) {
+                    console.error('Preview error:', error);
+                    document.getElementById('previewContent').innerHTML =
+                        '<div class="preview-placeholder" style="color: #c33;">' +
+                            'Failed to render preview' +
+                        '</div>';
+                }
+            }, 500);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showAlert(message, type) {
+            type = type || 'success';
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = 'alert alert-' + type;
+            alert.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            if (type === 'success') {
+                setTimeout(function() {
+                    alert.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        document.getElementById('templateForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating...';
+
+            const templateData = {
+                name: document.getElementById('templateName').value.trim(),
+                channel: document.getElementById('channel').value,
+                subject: document.getElementById('subject').value.trim() || null,
+                body: document.getElementById('body').value.trim(),
+                description: document.getElementById('description').value.trim() || null,
+                language: 'en'
+            };
+
+            try {
+                const response = await fetch('/api/v1/tenant/templates/', {
+                    method: 'POST',
+                    headers: {
+                        'X-Tenant-Id': tenantId,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(templateData)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showAlert('Template "' + result.name + '" created successfully!', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/portal/' + tenantId + '/templates';
+                    }, 1500);
+                } else {
+                    const error = await response.json();
+                    showAlert(error.detail || 'Failed to create template', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Create Template';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Network error. Please try again.', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Template';
+            }
+        });
+    </script>
+</body>
+</html>

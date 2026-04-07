@@ -62,19 +62,19 @@ async def _send_notification_async(notification_id: str) -> Dict[str, Any]:
         return {"status": "error", "reason": "not_found"}
 
     channel_name = comm.get("channel_name", "unknown")
-    contact = comm.get("contact", {})
+    candidate = comm.get("candidate", {})
 
     # Unsubscribe check
-    metadata = contact.get("metadata") or {}
+    metadata = candidate.get("metadata") or {}
     if isinstance(metadata, dict):
         if channel_name in metadata.get("unsubscribed_channels", []) or metadata.get("unsubscribed_all"):
-            logger.info(f"Contact {comm['contact_id']} unsubscribed from {channel_name}. Skipping.")
+            logger.info(f"Candidate {comm['candidate_id']} unsubscribed from {channel_name}. Skipping.")
             await _update_status(comm_id, "failed")
             await _append_event(comm_id, comm["channel_id"], "unsubscribed", "failed", {"channel": channel_name})
             return {"status": "skipped", "reason": "unsubscribed"}
 
     # Resolve provider
-    provider_name = await _get_provider_name(channel_name, comm["tenant_id"])
+    provider_name = await _get_provider_name(channel_name, comm["client_id"])
     provider_instance = get_provider_for_channel(channel_name, _normalize_provider_name(provider_name))
 
     if provider_instance is None:
@@ -84,11 +84,11 @@ async def _send_notification_async(notification_id: str) -> Dict[str, Any]:
     # Build message from payload
     payload = comm.get("payload", {})
     message = Message(
-        recipient=_get_recipient(channel_name, contact, payload),
+        recipient=_get_recipient(channel_name, candidate, payload),
         subject=payload.get("subject"),
         body=payload.get("body", ""),
         data=payload,
-        metadata={"communication_id": comm_id, "tenant_id": comm["tenant_id"], "contact_id": comm["contact_id"]},
+        metadata={"communication_id": comm_id, "client_id": comm["client_id"], "candidate_id": comm["candidate_id"]},
     )
 
     await _append_event(comm_id, comm["channel_id"], "attempting", None, {"provider": provider_name})
@@ -124,10 +124,10 @@ async def _send_notification_async(notification_id: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 async def _load_communication(comm_id: int) -> Optional[Dict[str, Any]]:
-    """Load communication + contact + payload from Supabase."""
+    """Load communication + candidate + payload from Supabase."""
     rows = await supabase_client.select(
         "communications",
-        "id,tenant_id,contact_id,channel_id,notification_type,priority,status,retry_count,template_id",
+        "id,client_id,candidate_id,channel_id,notification_type,priority,status,retry_count,template_id",
         limit=1,
         filters={"id": f"eq.{comm_id}"},
     )
@@ -139,12 +139,12 @@ async def _load_communication(comm_id: int) -> Optional[Dict[str, Any]]:
     ch_rows = await supabase_client.select("channels", "id,name", limit=1, filters={"id": f"eq.{comm['channel_id']}"})
     comm["channel_name"] = ch_rows[0]["name"] if ch_rows else "unknown"
 
-    # Load contact
-    contact_rows = await supabase_client.select(
-        "contacts", "id,name,email,phone,whatsapp_number,metadata",
-        limit=1, filters={"id": f"eq.{comm['contact_id']}"}
+    # Load candidate
+    candidate_rows = await supabase_client.select(
+        "candidates", "id,name,email,phone,whatsapp_number,metadata",
+        limit=1, filters={"id": f"eq.{comm['candidate_id']}"}
     )
-    comm["contact"] = contact_rows[0] if contact_rows else {}
+    comm["candidate"] = candidate_rows[0] if candidate_rows else {}
 
     # Load payload
     payload_rows = await supabase_client.select(
@@ -156,7 +156,7 @@ async def _load_communication(comm_id: int) -> Optional[Dict[str, Any]]:
     return comm
 
 
-async def _get_provider_name(channel_name: str, tenant_id: int) -> str:
+async def _get_provider_name(channel_name: str, client_id: int) -> str:
     rows = await supabase_client.select(
         "providers", "name",
         limit=1,
@@ -238,13 +238,13 @@ def _normalize_provider_name(provider_name: str) -> str:
     }.get(provider_name, provider_name)
 
 
-def _get_recipient(channel_name: str, contact: Dict[str, Any], payload: Dict[str, Any]) -> str:
+def _get_recipient(channel_name: str, candidate: Dict[str, Any], payload: Dict[str, Any]) -> str:
     if channel_name == "email":
-        return payload.get("email") or contact.get("email") or ""
+        return payload.get("email") or candidate.get("email") or ""
     if channel_name in {"sms", "voice"}:
-        return payload.get("phone") or contact.get("phone") or ""
+        return payload.get("phone") or candidate.get("phone") or ""
     if channel_name == "whatsapp":
-        return payload.get("whatsapp_number") or contact.get("whatsapp_number") or contact.get("phone") or ""
+        return payload.get("whatsapp_number") or candidate.get("whatsapp_number") or candidate.get("phone") or ""
     if channel_name == "in_app":
-        return str(contact.get("id", ""))
+        return str(candidate.get("id", ""))
     return payload.get("recipient") or ""

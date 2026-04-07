@@ -40,8 +40,8 @@ class Communication(Base):
     __tablename__ = "communications"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
-    contact_id: Mapped[int] = mapped_column(ForeignKey("contacts.id"), nullable=False, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False, index=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("candidates.id"), nullable=False, index=True)
     triggered_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     batch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     notification_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
@@ -62,8 +62,8 @@ class Communication(Base):
     created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
 
-    tenant = relationship("Tenant", back_populates="communications")
-    contact = relationship("Contact", back_populates="communications")
+    client = relationship("Client", back_populates="communications")
+    candidate = relationship("Candidate", back_populates="communications")
     channel_ref = relationship("Channel", back_populates="communications")
     template = relationship("Template", back_populates="communications")
     payloads = relationship("CommunicationPayload", back_populates="communication")
@@ -77,7 +77,7 @@ class Communication(Base):
 
     @property
     def user_id(self) -> str:
-        return str(self.contact_id)
+        return str(self.candidate_id)
 
     @property
     def channels(self) -> list["NotificationChannel"]:

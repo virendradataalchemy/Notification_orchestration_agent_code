@@ -9,7 +9,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core import get_db_optional, supabase_client
-from src.models import Communication, CommunicationAttempt, Contact, Provider, Template, Tenant
+from src.models import Communication, CommunicationAttempt, Candidate, Provider, Template, Client
 from src.models.channel import Channel
 from src.models.notification import NotificationEvent
 
@@ -33,38 +33,38 @@ def _status_value(value: Any) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
-def _tenant_summary(tenant: Tenant) -> dict[str, Any]:
+def _client_summary(client: Client) -> dict[str, Any]:
     return {
-        "id": tenant.id,
-        "name": tenant.name,
-        "status": tenant.status,
-        "admin_email": getattr(tenant, "admin_email", None),
+        "id": client.id,
+        "name": client.name,
+        "status": client.status,
+        "admin_email": getattr(client, "admin_email", None),
         "notification_count": 0,
         "provider_configs": 0,
-        "created_at": tenant.created_at.isoformat() if tenant.created_at else datetime.utcnow().isoformat(),
-        "updated_at": tenant.updated_at.isoformat() if tenant.updated_at else datetime.utcnow().isoformat(),
+        "created_at": client.created_at.isoformat() if client.created_at else datetime.utcnow().isoformat(),
+        "updated_at": client.updated_at.isoformat() if client.updated_at else datetime.utcnow().isoformat(),
     }
 
 
 async def _load_supabase_admin_data() -> dict[str, Any]:
-    tenants = await supabase_client.select(
-        "tenants",
-        "id,name,is_active,created_at,updated_at,default_language,tenant_slug",
+    clients = await supabase_client.select(
+        "clients",
+        "id,name,is_active,created_at,updated_at,default_language,client_slug",
     )
     communications = await supabase_client.select(
         "communications",
-        "id,tenant_id,contact_id,notification_type,priority,status,channel_id,created_at,updated_at",
+        "id,client_id,candidate_id,notification_type,priority,status,channel_id,created_at,updated_at",
     )
     channels = await supabase_client.select("channels", "id,name")
-    providers = await supabase_client.select("providers", "id,tenant_id,channel_id,name,is_active")
-    contacts = await supabase_client.select("contacts", "id,tenant_id,name,email")
+    providers = await supabase_client.select("providers", "id,client_id,channel_id,name,is_active")
+    candidates = await supabase_client.select("candidates", "id,client_id,name,email")
     attempts = await supabase_client.select("communication_attempts", "id,communication_id,attempt_number,status,provider_id")
     return {
-        "tenants": tenants,
+        "clients": clients,
         "communications": communications,
         "channels": channels,
         "providers": providers,
-        "contacts": contacts,
+        "candidates": candidates,
         "attempts": attempts,
     }
 
@@ -74,10 +74,10 @@ async def admin_dashboard(request: Request):
     return templates.TemplateResponse(request, "admin_dashboard.html")
 
 
-@router.get("/tenant-detail-modern/{tenant_id}", response_class=HTMLResponse)
-async def tenant_detail_modern(request: Request, tenant_id: str):
-    """Modern tenant detail dashboard"""
-    return templates.TemplateResponse(request, "tenant_detail_modern.html", {"tenant_id": tenant_id})
+@router.get("/client-detail-modern/{client_id}", response_class=HTMLResponse)
+async def client_detail_modern(request: Request, client_id: str):
+    """Modern client detail dashboard"""
+    return templates.TemplateResponse(request, "client_detail_modern.html", {"client_id": client_id})
 
 
 
@@ -87,37 +87,37 @@ async def get_dashboard_stats(db: AsyncSession | None = Depends(get_db_optional)
     twenty_four_hours_ago = now - timedelta(hours=24)
 
     if db is not None:
-        tenant_rows = (await db.execute(select(Tenant))).scalars().all()
+        client_rows = (await db.execute(select(Client))).scalars().all()
         comm_rows = (await db.execute(select(Communication))).scalars().all()
         channel_rows = (await db.execute(select(Channel))).scalars().all()
 
-        tenant_counter = Counter(tenant.status for tenant in tenant_rows)
+        client_counter = Counter(client.status for client in client_rows)
         status_counter = Counter(_status_value(comm.status) for comm in comm_rows)
         recent_rows = [comm for comm in comm_rows if (comm.created_at and comm.created_at >= twenty_four_hours_ago)]
         recent_count = len(recent_rows)
         delivered_recent = sum(1 for comm in recent_rows if _status_value(comm.status) == "delivered")
         success_rate = round((delivered_recent / recent_count * 100), 2) if recent_count else 0
 
-        tenant_activity_counter = Counter(comm.tenant_id for comm in comm_rows)
-        tenant_activity = [
+        client_activity_counter = Counter(comm.client_id for comm in comm_rows)
+        client_activity = [
             {
-                "tenant_id": tenant.id,
-                "tenant_name": tenant.name,
-                "notification_count": tenant_activity_counter.get(tenant.id, 0),
+                "client_id": client.id,
+                "client_name": client.name,
+                "notification_count": client_activity_counter.get(client.id, 0),
             }
-            for tenant in tenant_rows
+            for client in client_rows
         ]
-        tenant_activity.sort(key=lambda row: row["notification_count"], reverse=True)
+        client_activity.sort(key=lambda row: row["notification_count"], reverse=True)
 
         channel_map = {channel.id: channel.name for channel in channel_rows}
         channel_usage = Counter(channel_map.get(comm.channel_id, "unknown") for comm in comm_rows)
 
         return {
-            "tenants": {
-                "active": tenant_counter.get("active", 0),
-                "suspended": tenant_counter.get("suspended", 0),
-                "deleted": tenant_counter.get("deleted", 0),
-                "total": len(tenant_rows),
+            "clients": {
+                "active": client_counter.get("active", 0),
+                "suspended": client_counter.get("suspended", 0),
+                "deleted": client_counter.get("deleted", 0),
+                "total": len(client_rows),
             },
             "notifications": {
                 "total": len(comm_rows),
@@ -131,7 +131,7 @@ async def get_dashboard_stats(db: AsyncSession | None = Depends(get_db_optional)
                 "usage": dict(channel_usage),
                 "delivery_stats": {},
             },
-            "tenant_activity": tenant_activity,
+            "client_activity": client_activity,
             "timestamp": now.isoformat(),
         }
 
@@ -139,7 +139,7 @@ async def get_dashboard_stats(db: AsyncSession | None = Depends(get_db_optional)
         raise HTTPException(status_code=503, detail="No database backend available")
 
     data = await _load_supabase_admin_data()
-    tenant_counter = Counter("active" if tenant.get("is_active", True) else "inactive" for tenant in data["tenants"])
+    client_counter = Counter("active" if client.get("is_active", True) else "inactive" for client in data["clients"])
     status_counter = Counter(str(comm.get("status", "unknown")).lower() for comm in data["communications"])
 
     recent_rows = []
@@ -151,27 +151,27 @@ async def get_dashboard_stats(db: AsyncSession | None = Depends(get_db_optional)
     delivered_recent = sum(1 for comm in recent_rows if str(comm.get("status", "")).lower() == "delivered")
     success_rate = round((delivered_recent / recent_count * 100), 2) if recent_count else 0
 
-    tenant_name_map = {tenant["id"]: tenant.get("name", f"Tenant {tenant['id']}") for tenant in data["tenants"]}
-    tenant_activity_counter = Counter(comm.get("tenant_id") for comm in data["communications"])
-    tenant_activity = [
+    client_name_map = {client["id"]: client.get("name", f"Client {client['id']}") for client in data["clients"]}
+    client_activity_counter = Counter(comm.get("client_id") for comm in data["communications"])
+    client_activity = [
         {
-            "tenant_id": tenant["id"],
-            "tenant_name": tenant.get("name", f"Tenant {tenant['id']}"),
-            "notification_count": tenant_activity_counter.get(tenant["id"], 0),
+            "client_id": client["id"],
+            "client_name": client.get("name", f"Client {client['id']}"),
+            "notification_count": client_activity_counter.get(client["id"], 0),
         }
-        for tenant in data["tenants"]
+        for client in data["clients"]
     ]
-    tenant_activity.sort(key=lambda row: row["notification_count"], reverse=True)
+    client_activity.sort(key=lambda row: row["notification_count"], reverse=True)
 
     channel_map = {channel["id"]: str(channel.get("name", "unknown")).lower() for channel in data["channels"]}
     channel_usage = Counter(channel_map.get(comm.get("channel_id"), "unknown") for comm in data["communications"])
 
     return {
-        "tenants": {
-            "active": tenant_counter.get("active", 0),
-            "suspended": tenant_counter.get("suspended", 0),
-            "deleted": tenant_counter.get("deleted", 0),
-            "total": len(data["tenants"]),
+        "clients": {
+            "active": client_counter.get("active", 0),
+            "suspended": client_counter.get("suspended", 0),
+            "deleted": client_counter.get("deleted", 0),
+            "total": len(data["clients"]),
         },
         "notifications": {
             "total": len(data["communications"]),
@@ -185,26 +185,26 @@ async def get_dashboard_stats(db: AsyncSession | None = Depends(get_db_optional)
             "usage": dict(channel_usage),
             "delivery_stats": {},
         },
-        "tenant_activity": tenant_activity,
+        "client_activity": client_activity,
         "timestamp": now.isoformat(),
     }
 
 
-@router.get("/api/tenants")
-async def get_all_tenants(db: AsyncSession | None = Depends(get_db_optional)) -> List[Dict[str, Any]]:
+@router.get("/api/clients")
+async def get_all_clients(db: AsyncSession | None = Depends(get_db_optional)) -> List[Dict[str, Any]]:
     if db is not None:
-        tenant_rows = (await db.execute(select(Tenant).order_by(Tenant.created_at.desc()))).scalars().all()
+        client_rows = (await db.execute(select(Client).order_by(Client.created_at.desc()))).scalars().all()
         comm_counts = Counter(
-            row[0] for row in (await db.execute(select(Communication.tenant_id))).all()
+            row[0] for row in (await db.execute(select(Communication.client_id))).all()
         )
         provider_counts = Counter(
-            row[0] for row in (await db.execute(select(Provider.tenant_id).where(Provider.is_active == True))).all()
+            row[0] for row in (await db.execute(select(Provider.client_id).where(Provider.is_active == True))).all()
         )
         result = []
-        for tenant in tenant_rows:
-            row = _tenant_summary(tenant)
-            row["notification_count"] = comm_counts.get(tenant.id, 0)
-            row["provider_configs"] = provider_counts.get(tenant.id, 0)
+        for client in client_rows:
+            row = _client_summary(client)
+            row["notification_count"] = comm_counts.get(client.id, 0)
+            row["provider_configs"] = provider_counts.get(client.id, 0)
             result.append(row)
         return result
 
@@ -212,50 +212,50 @@ async def get_all_tenants(db: AsyncSession | None = Depends(get_db_optional)) ->
         raise HTTPException(status_code=503, detail="No database backend available")
 
     data = await _load_supabase_admin_data()
-    comm_counts = Counter(comm.get("tenant_id") for comm in data["communications"])
+    comm_counts = Counter(comm.get("client_id") for comm in data["communications"])
     provider_counts = Counter(
-        provider.get("tenant_id") for provider in data["providers"] if provider.get("is_active", True)
+        provider.get("client_id") for provider in data["providers"] if provider.get("is_active", True)
     )
     result = []
-    for tenant in sorted(data["tenants"], key=lambda row: row.get("created_at") or "", reverse=True):
+    for client in sorted(data["clients"], key=lambda row: row.get("created_at") or "", reverse=True):
         result.append(
             {
-                "id": tenant["id"],
-                "name": tenant.get("name", f"Tenant {tenant['id']}"),
-                "status": "active" if tenant.get("is_active", True) else "inactive",
-                "admin_email": tenant.get("admin_email"),
-                "notification_count": comm_counts.get(tenant["id"], 0),
-                "provider_configs": provider_counts.get(tenant["id"], 0),
-                "created_at": tenant.get("created_at") or datetime.utcnow().isoformat(),
-                "updated_at": tenant.get("updated_at") or datetime.utcnow().isoformat(),
+                "id": client["id"],
+                "name": client.get("name", f"Client {client['id']}"),
+                "status": "active" if client.get("is_active", True) else "inactive",
+                "admin_email": client.get("admin_email"),
+                "notification_count": comm_counts.get(client["id"], 0),
+                "provider_configs": provider_counts.get(client["id"], 0),
+                "created_at": client.get("created_at") or datetime.utcnow().isoformat(),
+                "updated_at": client.get("updated_at") or datetime.utcnow().isoformat(),
             }
         )
     return result
 
 
-@router.get("/api/tenants/{tenant_id}/details")
-async def get_tenant_details(tenant_id: str, db: AsyncSession | None = Depends(get_db_optional)) -> Dict[str, Any]:
-    tenant_pk = int(tenant_id)
+@router.get("/api/clients/{client_id}/details")
+async def get_client_details(client_id: str, db: AsyncSession | None = Depends(get_db_optional)) -> Dict[str, Any]:
+    client_pk = int(client_id)
 
     if db is not None:
-        tenant = await db.get(Tenant, tenant_pk)
-        if not tenant:
-            raise HTTPException(status_code=404, detail="Tenant not found")
+        client = await db.get(Client, client_pk)
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
 
         communications = (
             await db.execute(
                 select(Communication)
-                .where(Communication.tenant_id == tenant_pk)
+                .where(Communication.client_id == client_pk)
                 .order_by(Communication.created_at.desc())
             )
         ).scalars().all()
-        providers = (await db.execute(select(Provider).where(or_(Provider.tenant_id == tenant_pk, Provider.tenant_id.is_(None))))).scalars().all()
-        templates_rows = (await db.execute(select(Template).where(Template.tenant_id == tenant_pk))).scalars().all()
+        providers = (await db.execute(select(Provider).where(or_(Provider.client_id == client_pk, Provider.client_id.is_(None))))).scalars().all()
+        templates_rows = (await db.execute(select(Template).where(Template.client_id == client_pk))).scalars().all()
         channel_rows = (await db.execute(select(Channel))).scalars().all()
         channel_map = {channel.id: channel.name for channel in channel_rows}
 
         return {
-            "tenant": _tenant_summary(tenant),
+            "client": _client_summary(client),
             "notification_stats": dict(Counter(_status_value(comm.status) for comm in communications)),
             "recent_notifications": [
                 {
@@ -293,29 +293,29 @@ async def get_tenant_details(tenant_id: str, db: AsyncSession | None = Depends(g
         raise HTTPException(status_code=503, detail="No database backend available")
 
     data = await _load_supabase_admin_data()
-    tenant = next((row for row in data["tenants"] if row["id"] == tenant_pk), None)
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    client = next((row for row in data["clients"] if row["id"] == client_pk), None)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
 
     channel_map = {channel["id"]: str(channel.get("name", "unknown")).lower() for channel in data["channels"]}
-    communications = [comm for comm in data["communications"] if comm.get("tenant_id") == tenant_pk]
-    providers = [provider for provider in data["providers"] if provider.get("tenant_id") in (None, tenant_pk)]
+    communications = [comm for comm in data["communications"] if comm.get("client_id") == client_pk]
+    providers = [provider for provider in data["providers"] if provider.get("client_id") in (None, client_pk)]
     templates_rows = await supabase_client.select(
         "templates",
-        "id,tenant_id,name,language,subject,content,version,is_active,channel_id,created_at",
-        filters={"tenant_id": f"eq.{tenant_pk}"},
+        "id,client_id,name,language,subject,content,version,is_active,channel_id,created_at",
+        filters={"client_id": f"eq.{client_pk}"},
     )
 
     return {
-        "tenant": {
-            "id": tenant["id"],
-            "name": tenant.get("name", f"Tenant {tenant['id']}"),
-            "status": "active" if tenant.get("is_active", True) else "inactive",
-            "admin_email": tenant.get("admin_email"),
+        "client": {
+            "id": client["id"],
+            "name": client.get("name", f"Client {client['id']}"),
+            "status": "active" if client.get("is_active", True) else "inactive",
+            "admin_email": client.get("admin_email"),
             "notification_count": len(communications),
             "provider_configs": len(providers),
-            "created_at": tenant.get("created_at") or datetime.utcnow().isoformat(),
-            "updated_at": tenant.get("updated_at") or datetime.utcnow().isoformat(),
+            "created_at": client.get("created_at") or datetime.utcnow().isoformat(),
+            "updated_at": client.get("updated_at") or datetime.utcnow().isoformat(),
         },
         "notification_stats": dict(Counter(str(comm.get("status", "unknown")).lower() for comm in communications)),
         "recent_notifications": [
@@ -343,7 +343,7 @@ async def get_tenant_details(tenant_id: str, db: AsyncSession | None = Depends(g
                 "name": template.get("name"),
                 "channel": channel_map.get(template.get("channel_id"), "unknown"),
                 "language": template.get("language"),
-                "is_global": template.get("tenant_id") is None,
+                "is_global": template.get("client_id") is None,
                 "active": template.get("is_active", True),
             }
             for template in templates_rows
@@ -361,7 +361,7 @@ async def get_recent_activity(limit: int = 50, db: AsyncSession | None = Depends
                 .limit(limit)
             )
         ).scalars().all()
-        tenants = {tenant.id: tenant.name for tenant in (await db.execute(select(Tenant))).scalars().all()}
+        clients = {client.id: client.name for client in (await db.execute(select(Client))).scalars().all()}
         channels = {channel.id: channel.name for channel in (await db.execute(select(Channel))).scalars().all()}
         attempts = (await db.execute(select(CommunicationAttempt))).scalars().all()
         attempt_map: dict[int, list[CommunicationAttempt]] = defaultdict(list)
@@ -371,12 +371,12 @@ async def get_recent_activity(limit: int = 50, db: AsyncSession | None = Depends
         return [
             {
                 "id": str(comm.id),
-                "tenant_name": tenants.get(comm.tenant_id, f"Tenant {comm.tenant_id}"),
-                "tenant_id": comm.tenant_id,
+                "client_name": clients.get(comm.client_id, f"Client {comm.client_id}"),
+                "client_id": comm.client_id,
                 "type": comm.notification_type,
                 "priority": _status_value(comm.priority),
                 "status": _status_value(comm.status),
-                "user_id": str(comm.contact_id),
+                "user_id": str(comm.candidate_id),
                 "channels": [
                     {
                         "channel": channels.get(comm.channel_id, "unknown"),
@@ -394,9 +394,9 @@ async def get_recent_activity(limit: int = 50, db: AsyncSession | None = Depends
         raise HTTPException(status_code=503, detail="No database backend available")
 
     data = await _load_supabase_admin_data()
-    tenant_names = {tenant["id"]: tenant.get("name", f"Tenant {tenant['id']}") for tenant in data["tenants"]}
+    client_names = {client["id"]: client.get("name", f"Client {client['id']}") for client in data["clients"]}
     channel_names = {channel["id"]: str(channel.get("name", "unknown")).lower() for channel in data["channels"]}
-    contact_names = {contact["id"]: contact.get("email") or contact.get("name") or str(contact["id"]) for contact in data["contacts"]}
+    candidate_names = {candidate["id"]: candidate.get("email") or candidate.get("name") or str(candidate["id"]) for candidate in data["candidates"]}
     attempt_counter: dict[int, int] = defaultdict(int)
     for attempt in data["attempts"]:
         comm_id = attempt.get("communication_id")
@@ -406,12 +406,12 @@ async def get_recent_activity(limit: int = 50, db: AsyncSession | None = Depends
     return [
         {
             "id": str(comm["id"]),
-            "tenant_name": tenant_names.get(comm.get("tenant_id"), f"Tenant {comm.get('tenant_id')}"),
-            "tenant_id": comm.get("tenant_id"),
+            "client_name": client_names.get(comm.get("client_id"), f"Client {comm.get('client_id')}"),
+            "client_id": comm.get("client_id"),
             "type": comm.get("notification_type"),
             "priority": str(comm.get("priority", "medium")).lower(),
             "status": str(comm.get("status", "unknown")).lower(),
-            "user_id": contact_names.get(comm.get("contact_id"), str(comm.get("contact_id"))),
+            "user_id": candidate_names.get(comm.get("candidate_id"), str(comm.get("candidate_id"))),
             "channels": [
                 {
                     "channel": channel_names.get(comm.get("channel_id"), "unknown"),
@@ -426,49 +426,49 @@ async def get_recent_activity(limit: int = 50, db: AsyncSession | None = Depends
     ]
 
 
-@router.post("/api/tenants/{tenant_id}/suspend")
-async def suspend_tenant(tenant_id: str, db: AsyncSession | None = Depends(get_db_optional)) -> Dict[str, str]:
-    tenant_pk = int(tenant_id)
+@router.post("/api/clients/{client_id}/suspend")
+async def suspend_client(client_id: str, db: AsyncSession | None = Depends(get_db_optional)) -> Dict[str, str]:
+    client_pk = int(client_id)
     if db is not None:
-        tenant = await db.get(Tenant, tenant_pk)
-        if not tenant:
-            raise HTTPException(status_code=404, detail="Tenant not found")
-        tenant.is_active = False
+        client = await db.get(Client, client_pk)
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        client.is_active = False
         await db.commit()
-        return {"message": f"Tenant {tenant_id} has been suspended", "status": "suspended"}
+        return {"message": f"Client {client_id} has been suspended", "status": "suspended"}
 
     if not supabase_client.configured:
         raise HTTPException(status_code=503, detail="No database backend available")
-    rows = await supabase_client.update("tenants", {"is_active": False}, filters={"id": f"eq.{tenant_pk}"})
+    rows = await supabase_client.update("clients", {"is_active": False}, filters={"id": f"eq.{client_pk}"})
     if not rows:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return {"message": f"Tenant {tenant_id} has been suspended", "status": "suspended"}
+        raise HTTPException(status_code=404, detail="Client not found")
+    return {"message": f"Client {client_id} has been suspended", "status": "suspended"}
 
 
-@router.post("/api/tenants/{tenant_id}/activate")
-async def activate_tenant(tenant_id: str, db: AsyncSession | None = Depends(get_db_optional)) -> Dict[str, str]:
-    tenant_pk = int(tenant_id)
+@router.post("/api/clients/{client_id}/activate")
+async def activate_client(client_id: str, db: AsyncSession | None = Depends(get_db_optional)) -> Dict[str, str]:
+    client_pk = int(client_id)
     if db is not None:
-        tenant = await db.get(Tenant, tenant_pk)
-        if not tenant:
-            raise HTTPException(status_code=404, detail="Tenant not found")
-        tenant.is_active = True
+        client = await db.get(Client, client_pk)
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        client.is_active = True
         await db.commit()
-        return {"message": f"Tenant {tenant_id} has been activated", "status": "active"}
+        return {"message": f"Client {client_id} has been activated", "status": "active"}
 
     if not supabase_client.configured:
         raise HTTPException(status_code=503, detail="No database backend available")
-    rows = await supabase_client.update("tenants", {"is_active": True}, filters={"id": f"eq.{tenant_pk}"})
+    rows = await supabase_client.update("clients", {"is_active": True}, filters={"id": f"eq.{client_pk}"})
     if not rows:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return {"message": f"Tenant {tenant_id} has been activated", "status": "active"}
+        raise HTTPException(status_code=404, detail="Client not found")
+    return {"message": f"Client {client_id} has been activated", "status": "active"}
 
 
 @router.get("/api/templates")
 async def get_all_templates(db: AsyncSession | None = Depends(get_db_optional)) -> List[Dict[str, Any]]:
     if db is not None:
         templates_rows = (await db.execute(select(Template).order_by(Template.created_at.desc()))).scalars().all()
-        tenants = {tenant.id: tenant.name for tenant in (await db.execute(select(Tenant))).scalars().all()}
+        clients = {client.id: client.name for client in (await db.execute(select(Client))).scalars().all()}
         channels = {channel.id: channel.name for channel in (await db.execute(select(Channel))).scalars().all()}
         return [
             {
@@ -477,8 +477,8 @@ async def get_all_templates(db: AsyncSession | None = Depends(get_db_optional)) 
                 "channel": channels.get(template.channel_id, "unknown"),
                 "language": template.language,
                 "is_global": template.is_global,
-                "tenant_id": template.tenant_id,
-                "tenant_name": tenants.get(template.tenant_id),
+                "client_id": template.client_id,
+                "client_name": clients.get(template.client_id),
                 "active": template.active,
                 "version": template.version,
                 "created_at": template.created_at.isoformat() if template.created_at else datetime.utcnow().isoformat(),
@@ -491,11 +491,11 @@ async def get_all_templates(db: AsyncSession | None = Depends(get_db_optional)) 
 
     templates_rows = await supabase_client.select(
         "templates",
-        "id,tenant_id,name,language,version,is_active,created_at,channel_id",
+        "id,client_id,name,language,version,is_active,created_at,channel_id",
     )
-    tenants = await supabase_client.select("tenants", "id,name")
+    clients = await supabase_client.select("clients", "id,name")
     channels = await supabase_client.select("channels", "id,name")
-    tenant_names = {tenant["id"]: tenant.get("name") for tenant in tenants}
+    client_names = {client["id"]: client.get("name") for client in clients}
     channel_names = {channel["id"]: str(channel.get("name", "unknown")).lower() for channel in channels}
     return [
         {
@@ -503,9 +503,9 @@ async def get_all_templates(db: AsyncSession | None = Depends(get_db_optional)) 
             "name": template.get("name"),
             "channel": channel_names.get(template.get("channel_id"), "unknown"),
             "language": template.get("language"),
-            "is_global": template.get("tenant_id") is None,
-            "tenant_id": template.get("tenant_id"),
-            "tenant_name": tenant_names.get(template.get("tenant_id")),
+            "is_global": template.get("client_id") is None,
+            "client_id": template.get("client_id"),
+            "client_name": client_names.get(template.get("client_id")),
             "active": template.get("is_active", True),
             "version": template.get("version", 1),
             "created_at": template.get("created_at") or datetime.utcnow().isoformat(),

@@ -28,11 +28,11 @@ class IntelligentOrchestrationAgent:
 
     def __init__(
         self,
-        tenant_id: int,
+        client_id: int,
         llm_service: Optional[BedrockLLMService] = None,
         template_engine: Optional[TemplateEngine] = None,
     ):
-        self.tenant_id = tenant_id
+        self.client_id = client_id
         self.llm_service = llm_service or BedrockLLMService()
         self.template_engine = template_engine or TemplateEngine()
 
@@ -59,7 +59,7 @@ class IntelligentOrchestrationAgent:
         start_time = time.time()
         
         try:
-            logger.info(f"Starting orchestration for user {user_id}, tenant {self.tenant_id}")
+            logger.info(f"Starting orchestration for user {user_id}, client {self.client_id}")
             validation_error = self._validate_input(message_content, user_id)
             if validation_error:
                 return self._error_response(validation_error, start_time)
@@ -70,7 +70,7 @@ class IntelligentOrchestrationAgent:
                     "communications",
                     "id,status",
                     limit=1,
-                    filters={"tenant_id": f"eq.{self.tenant_id}", "idempotency_key": f"eq.{idempotency_key}"},
+                    filters={"client_id": f"eq.{self.client_id}", "idempotency_key": f"eq.{idempotency_key}"},
                 )
                 if existing:
                     logger.info(f"Duplicate request detected: {idempotency_key}")
@@ -78,11 +78,11 @@ class IntelligentOrchestrationAgent:
 
             # Fetch templates
             templates = await self._fetch_templates()
-            logger.info(f"Found {len(templates)} templates for tenant {self.tenant_id}")
+            logger.info(f"Found {len(templates)} templates for client {self.client_id}")
 
             # LLM template selection
             template_selection = await self.llm_service.select_template(
-                message_content, self.tenant_id, templates
+                message_content, self.client_id, templates
             )
             logger.info(f"Template selected: {template_selection}")
 
@@ -152,7 +152,7 @@ class IntelligentOrchestrationAgent:
         return None
 
     async def _fetch_templates(self) -> list[Dict[str, Any]]:
-        """Fetch active templates — tenant-specific first, fall back to all templates."""
+        """Fetch active templates — client-specific first, fall back to all templates."""
         def _serialize(rows):
             return [
                 {
@@ -170,13 +170,13 @@ class IntelligentOrchestrationAgent:
             rows = await supabase_client.select(
                 "templates",
                 "id,name,notification_type,content,channel_id",
-                filters={"tenant_id": f"eq.{self.tenant_id}", "is_active": "eq.true"},
+                filters={"client_id": f"eq.{self.client_id}", "is_active": "eq.true"},
             )
             if rows:
                 return _serialize(rows)
 
-            # Tenant has no templates — fall back to all active templates
-            logger.info(f"No templates for tenant {self.tenant_id}, using platform-wide templates")
+            # Client has no templates — fall back to all active templates
+            logger.info(f"No templates for client {self.client_id}, using platform-wide templates")
             all_rows = await supabase_client.select(
                 "templates",
                 "id,name,notification_type,content,channel_id",
@@ -188,39 +188,39 @@ class IntelligentOrchestrationAgent:
             return []
 
     async def _fetch_user_context(self, user_id: str) -> Dict[str, Any]:
-        """Fetch tenant preferences from user_preferences table using tenant_id."""
+        """Fetch client preferences from user_preferences table using client_id."""
         default = {
             'preferred_channels': {'default': ['email', 'push']},
-            'tenant_preferred_channels': [],
+            'client_preferred_channels': [],
             'success_rates': {},
             'timezone': 'UTC',
             'quiet_hours': {'start': '22:00', 'end': '08:00'},
             'is_quiet_hours': False,
         }
 
-        # Fetch tenant-level preferences (preferred channels, quiet hours, timezone)
+        # Fetch client-level preferences (preferred channels, quiet hours, timezone)
         try:
             rows = await supabase_client.select(
                 "user_preferences",
                 "preferred_channels,timezone,quiet_hours",
                 limit=1,
-                filters={"tenant_id": f"eq.{self.tenant_id}"},
+                filters={"client_id": f"eq.{self.client_id}"},
             )
             if rows:
                 prefs = rows[0]
-                tenant_channels = prefs.get('preferred_channels') or {}
-                channel_list = tenant_channels.get('default', [])
+                client_channels = prefs.get('preferred_channels') or {}
+                channel_list = client_channels.get('default', [])
                 default.update({
-                    'preferred_channels': tenant_channels,
-                    'tenant_preferred_channels': channel_list,
+                    'preferred_channels': client_channels,
+                    'client_preferred_channels': channel_list,
                     'timezone': prefs.get('timezone') or 'UTC',
                     'quiet_hours': prefs.get('quiet_hours') or {'start': '22:00', 'end': '08:00'},
                 })
-                logger.info(f"Tenant {self.tenant_id} preferred channels: {channel_list}")
+                logger.info(f"Client {self.client_id} preferred channels: {channel_list}")
             else:
-                logger.warning(f"No preferences found for tenant {self.tenant_id}, using defaults")
+                logger.warning(f"No preferences found for client {self.client_id}, using defaults")
         except Exception as e:
-            logger.error(f"Failed to fetch tenant preferences: {e}")
+            logger.error(f"Failed to fetch client preferences: {e}")
 
         return default
 
@@ -292,30 +292,30 @@ class IntelligentOrchestrationAgent:
         from src.services.supabase_notification_service import SupabaseNotificationService
         svc = SupabaseNotificationService()
 
-        # Fetch contact details so recipient info is available for all channels
-        contact_details: Dict[str, Any] = {}
+        # Fetch candidate details so recipient info is available for all channels
+        candidate_details: Dict[str, Any] = {}
         try:
             rows = await supabase_client.select(
-                "contacts",
+                "candidates",
                 "id,name,email,phone,whatsapp_number",
                 limit=1,
-                filters={"id": f"eq.{user_id}", "tenant_id": f"eq.{self.tenant_id}"},
+                filters={"id": f"eq.{user_id}", "client_id": f"eq.{self.client_id}"},
             )
             if rows:
-                contact_details = rows[0]
+                candidate_details = rows[0]
         except Exception as e:
-            logger.warning(f"Could not fetch contact details: {e}")
+            logger.warning(f"Could not fetch candidate details: {e}")
 
         for channel in priority_order:
             try:
                 logger.info(f"Attempting delivery via {channel}")
                 result = await svc.send_notification(
-                    tenant_id=self.tenant_id,
+                    client_id=self.client_id,
                     payload={
-                        "contact_id": user_id,
-                        "email": contact_details.get("email"),
-                        "phone": contact_details.get("phone"),
-                        "whatsapp_number": contact_details.get("whatsapp_number"),
+                        "candidate_id": user_id,
+                        "email": candidate_details.get("email"),
+                        "phone": candidate_details.get("phone"),
+                        "whatsapp_number": candidate_details.get("whatsapp_number"),
                         "channels": [channel],
                         "notification_type": urgency,
                         "priority": urgency,

@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends
 from typing import Dict, List, Any
 from pydantic import BaseModel
 
-from src.api.dependencies import get_authenticated_tenant
+from src.api.dependencies import get_authenticated_client
 from src.core.supabase import supabase_client
-from src.models import Tenant
+from src.models import Client
 from src.services.usage_tracker import usage_tracker
 
 router = APIRouter(prefix="/usage", tags=["usage"])
@@ -22,22 +22,22 @@ class UsageResponse(BaseModel):
 
 
 @router.get("/me", response_model=UsageResponse)
-async def get_current_usage(tenant: Tenant = Depends(get_authenticated_tenant)):
-    _, usage_info = await usage_tracker.check_quota(None, tenant.id)
+async def get_current_usage(client: Client = Depends(get_authenticated_client)):
+    _, usage_info = await usage_tracker.check_quota(None, client.id)
     return UsageResponse(**usage_info)
 
 
 @router.get("/me/stats")
-async def get_usage_stats(months: int = 6, tenant: Tenant = Depends(get_authenticated_tenant)):
-    return await usage_tracker.get_usage_stats(None, tenant.id, months)
+async def get_usage_stats(months: int = 6, client: Client = Depends(get_authenticated_client)):
+    return await usage_tracker.get_usage_stats(None, client.id, months)
 
 
 @router.get("/me/check")
-async def check_quota_available(tenant: Tenant = Depends(get_authenticated_tenant)):
-    allowed, _ = await usage_tracker.check_quota(None, tenant.id)
+async def check_quota_available(client: Client = Depends(get_authenticated_client)):
+    allowed, _ = await usage_tracker.check_quota(None, client.id)
     return {"allowed": allowed}
 
 
 @router.get("/all")
-async def get_all_tenant_usage():
-    return await usage_tracker.get_all_tenant_usage(None)
+async def get_all_client_usage():
+    return await usage_tracker.get_all_client_usage(None)

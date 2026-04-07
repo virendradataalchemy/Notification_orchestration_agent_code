@@ -23,7 +23,7 @@ async def get_failed_notifications(limit: int = 20):
     from src.core.supabase import supabase_client
     rows = await supabase_client.select(
         "communications",
-        "id,tenant_id,contact_id,notification_type,channel_id,status,retry_count,created_at,updated_at",
+        "id,client_id,candidate_id,notification_type,channel_id,status,retry_count,created_at,updated_at",
         filters={"status": "eq.failed"},
     )
     return rows[:limit]

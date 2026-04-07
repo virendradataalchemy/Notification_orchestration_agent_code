@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from src.api.dependencies import get_authenticated_tenant
-from src.models import Tenant
+from src.api.dependencies import get_authenticated_client
+from src.models import Client
 from src.core.supabase import supabase_client
 from datetime import datetime
 
@@ -9,7 +9,7 @@ router = APIRouter(prefix="/device-tokens", tags=["device-tokens"])
 
 
 class RegisterDeviceTokenRequest(BaseModel):
-    contact_id: int
+    candidate_id: int
     device_token: str
     platform: str = "unknown"  # ios, android, web
 
@@ -17,27 +17,27 @@ class RegisterDeviceTokenRequest(BaseModel):
 @router.post("/register")
 async def register_device_token(
     request: RegisterDeviceTokenRequest,
-    tenant: Tenant = Depends(get_authenticated_tenant)
+    client: Client = Depends(get_authenticated_client)
 ):
     """Register a device token for push notifications."""
     try:
-        # Verify contact belongs to tenant
-        contacts = await supabase_client.select(
-            "contacts",
-            "id,tenant_id",
-            filters={"id": f"eq.{request.contact_id}", "tenant_id": f"eq.{tenant.id}"},
+        # Verify candidate belongs to client
+        candidates = await supabase_client.select(
+            "candidates",
+            "id,client_id",
+            filters={"id": f"eq.{request.candidate_id}", "client_id": f"eq.{client.id}"},
             limit=1
         )
         
-        if not contacts:
-            raise HTTPException(status_code=404, detail="Contact not found or doesn't belong to this tenant")
+        if not candidates:
+            raise HTTPException(status_code=404, detail="Candidate not found or doesn't belong to this client")
         
         # Check if token already exists
         existing = await supabase_client.select(
             "device_tokens",
             "id,is_active",
             filters={
-                "contact_id": f"eq.{request.contact_id}",
+                "candidate_id": f"eq.{request.candidate_id}",
                 "device_token": f"eq.{request.device_token}"
             },
             limit=1
@@ -75,7 +75,7 @@ async def register_device_token(
                 "device_tokens",
                 {
                     "id": next_id,
-                    "contact_id": request.contact_id,
+                    "candidate_id": request.candidate_id,
                     "device_token": request.device_token,
                     "platform": request.platform,
                     "is_active": True,
@@ -97,32 +97,32 @@ async def register_device_token(
         raise HTTPException(status_code=500, detail=f"Failed to register device token: {str(e)}")
 
 
-@router.get("/contact/{contact_id}")
-async def get_contact_tokens(
-    contact_id: int,
-    tenant: Tenant = Depends(get_authenticated_tenant)
+@router.get("/candidate/{candidate_id}")
+async def get_candidate_tokens(
+    candidate_id: int,
+    client: Client = Depends(get_authenticated_client)
 ):
-    """Get all device tokens for a contact."""
+    """Get all device tokens for a candidate."""
     try:
-        # Verify contact belongs to tenant
-        contacts = await supabase_client.select(
-            "contacts",
-            "id,tenant_id",
-            filters={"id": f"eq.{contact_id}", "tenant_id": f"eq.{tenant.id}"},
+        # Verify candidate belongs to client
+        candidates = await supabase_client.select(
+            "candidates",
+            "id,client_id",
+            filters={"id": f"eq.{candidate_id}", "client_id": f"eq.{client.id}"},
             limit=1
         )
         
-        if not contacts:
-            raise HTTPException(status_code=404, detail="Contact not found")
+        if not candidates:
+            raise HTTPException(status_code=404, detail="Candidate not found")
         
         tokens = await supabase_client.select(
             "device_tokens",
             "id,device_token,platform,is_active,last_used_at,created_at",
-            filters={"contact_id": f"eq.{contact_id}"}
+            filters={"candidate_id": f"eq.{candidate_id}"}
         )
         
         return {
-            "contact_id": contact_id,
+            "candidate_id": candidate_id,
             "tokens": tokens,
             "active_count": sum(1 for t in tokens if t.get("is_active"))
         }
@@ -136,7 +136,7 @@ async def get_contact_tokens(
 @router.delete("/{token_id}")
 async def deactivate_device_token(
     token_id: int,
-    tenant: Tenant = Depends(get_authenticated_tenant)
+    client: Client = Depends(get_authenticated_client)
 ):
     """Deactivate a device token."""
     try:

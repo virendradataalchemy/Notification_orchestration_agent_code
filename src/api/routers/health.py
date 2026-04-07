@@ -62,5 +62,5 @@ async def health_check(
 @router.get("/", response_class=HTMLResponse)
 @router.get("/app", response_class=HTMLResponse)
 async def root(request: Request):
-    """Main landing page - User Dashboard with tenant grid."""
+    """Main landing page - User Dashboard with client grid."""
     return templates.TemplateResponse(request, "user_dashboard.html")

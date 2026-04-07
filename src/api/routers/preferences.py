@@ -3,20 +3,20 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Optional, Dict, Any
 
-from src.api.dependencies import get_authenticated_tenant, verify_api_key
+from src.api.dependencies import get_authenticated_client, verify_api_key
 from src.api.schemas import UserPreferenceUpdate, UserPreferenceResponse
 from src.core.supabase import supabase_client
-from src.models import Tenant
+from src.models import Client
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
 
 
-async def _get_or_none(user_id: str, tenant_id: int) -> Optional[Dict[str, Any]]:
+async def _get_or_none(user_id: str, client_id: int) -> Optional[Dict[str, Any]]:
     rows = await supabase_client.select(
         "user_preferences",
-        "id,user_id,tenant_id,preferred_channels,quiet_hours,unsubscribed,language,timezone",
+        "id,user_id,client_id,preferred_channels,quiet_hours,unsubscribed,language,timezone",
         limit=1,
-        filters={"user_id": f"eq.{user_id}", "tenant_id": f"eq.{tenant_id}"},
+        filters={"user_id": f"eq.{user_id}", "client_id": f"eq.{client_id}"},
     )
     return rows[0] if rows else None
 
@@ -35,9 +35,9 @@ def _default_prefs(user_id: str) -> Dict[str, Any]:
 @router.get("/{user_id}", response_model=UserPreferenceResponse)
 async def get_user_preferences(
     user_id: str,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
-    row = await _get_or_none(user_id, tenant.id)
+    row = await _get_or_none(user_id, client.id)
     if not row:
         return UserPreferenceResponse(**_default_prefs(user_id))
     return UserPreferenceResponse(
@@ -54,9 +54,9 @@ async def get_user_preferences(
 async def update_user_preferences(
     user_id: str,
     preferences: UserPreferenceUpdate,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
-    existing = await _get_or_none(user_id, tenant.id)
+    existing = await _get_or_none(user_id, client.id)
     update_data: Dict[str, Any] = {}
     if preferences.preferred_channels is not None:
         update_data["preferred_channels"] = preferences.preferred_channels
@@ -80,7 +80,7 @@ async def update_user_preferences(
         rows = await supabase_client.insert("user_preferences", {
             "id": next_id,
             "user_id": user_id,
-            "tenant_id": tenant.id,
+            "client_id": client.id,
             "preferred_channels": preferences.preferred_channels,
             "quiet_hours": preferences.quiet_hours,
             "unsubscribed": preferences.unsubscribed,
@@ -103,9 +103,9 @@ async def update_user_preferences(
 async def unsubscribe_notification_type(
     user_id: str,
     notification_type: str,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
-    existing = await _get_or_none(user_id, tenant.id)
+    existing = await _get_or_none(user_id, client.id)
     current_unsub = (existing or {}).get("unsubscribed") or []
     if notification_type not in current_unsub:
         current_unsub = current_unsub + [notification_type]
@@ -119,7 +119,7 @@ async def unsubscribe_notification_type(
         latest = await supabase_client.select("user_preferences", "id", limit=1, filters={"order": "id.desc"})
         next_id = int(latest[0]["id"]) + 1 if latest else 1
         rows = await supabase_client.insert("user_preferences", {
-            "id": next_id, "user_id": user_id, "tenant_id": tenant.id,
+            "id": next_id, "user_id": user_id, "client_id": client.id,
             "unsubscribed": current_unsub, "language": "en", "timezone": "UTC",
         })
         row = rows[0]
@@ -138,9 +138,9 @@ async def unsubscribe_notification_type(
 async def resubscribe_notification_type(
     user_id: str,
     notification_type: str,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
-    existing = await _get_or_none(user_id, tenant.id)
+    existing = await _get_or_none(user_id, client.id)
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User preferences not found")
 

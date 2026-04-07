@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Orchestration - B2B Platform</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #faf8ff; }
+        .tab-active { border-bottom-color: #0f172a; color: #0f172a; font-weight: 600; }
+        .tab-inactive { border-bottom-color: transparent; color: #64748b; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-slate-900 border-t-4 border-slate-900 selection:bg-slate-900 selection:text-white">
+    <!-- Navbar -->
+    <header class="flex items-center justify-between px-8 py-6">
+        <div class="flex items-center space-x-2 font-bold text-xl tracking-tight">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            <span>Orchestration Ledger</span>
+        </div>
+        <div class="space-x-4">
+            <a href="javascript:void(0)" onclick="switchTab('admin');" class="text-xs font-semibold text-slate-500 hover:text-slate-900 uppercase tracking-widest transition-all">
+                Platform Admin Login
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex flex-col items-center justify-center -mt-16 sm:px-6 lg:px-8">
+        <div class="w-full max-w-md mx-auto relative group">
+            <!-- decorative background blur -->
+            <div class="absolute -inset-1 bg-gradient-to-r from-slate-200 to-slate-100 blur opacity-40 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
+            
+            <div class="relative bg-white px-10 py-10 shadow-sm border border-slate-200">
+                
+                <!-- Tab Headers -->
+                <div class="flex space-x-6 border-b border-slate-200 mb-8" id="tabs">
+                    <button onclick="switchTab('login')" id="tab-login" class="tab-active pb-3 text-sm tracking-wide focus:outline-none transition-colors">Client Login</button>
+                    <button onclick="switchTab('signup')" id="tab-signup" class="tab-inactive pb-3 text-sm tracking-wide focus:outline-none transition-colors">Sign Up</button>
+                    <button onclick="switchTab('admin')" id="tab-admin" class="hidden pb-3 text-sm tracking-wide focus:outline-none transition-colors">Admin Access</button>
+                </div>
+
+                <!-- LOGIN FORM -->
+                <form id="login-form" class="space-y-6 block">
+                    <p class="text-sm text-slate-500 leading-relaxed mb-6">
+                        Access your client orchestration dashboard. Enter your Client ID to continue.
+                    </p>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Client ID</label>
+                        <input id="login-client-id" type="number" required class="block w-full px-4 py-3 border border-slate-300 focus:outline-none focus:border-slate-800 transition-colors text-sm" placeholder="e.g. 1">
+                    </div>
+                    <div class="pt-2">
+                        <button type="submit" id="login-btn" class="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-all shadow-sm">
+                            Sign In
+                        </button>
+                    </div>
+                </form>
+
+                <!-- SIGNUP FORM -->
+                <form id="signup-form" class="space-y-6 hidden">
+                    <p class="text-sm text-slate-500 leading-relaxed mb-6">
+                        Start orchestrating notifications across channels with intelligent routing.
+                    </p>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Company Name</label>
+                        <input id="signup-name" type="text" required class="block w-full px-4 py-3 border border-slate-300 focus:outline-none focus:border-slate-800 transition-colors text-sm" placeholder="Acme Inc.">
+                    </div>
+                    <div class="pt-2">
+                        <button type="submit" id="signup-btn" class="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-all shadow-sm">
+                            Create Account
+                        </button>
+                    </div>
+                </form>
+
+                <!-- ADMIN FORM -->
+                <form id="admin-form" class="space-y-6 hidden">
+                    <h3 class="text-lg font-semibold text-slate-900 mb-2">Admin Authority</h3>
+                    <p class="text-sm text-slate-500 leading-relaxed mb-6">
+                        Access the global multi-tenant platform dashboard.
+                    </p>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Admin Passcode</label>
+                        <input id="admin-pass" type="password" value="********" class="block w-full px-4 py-3 border border-slate-300 focus:outline-none focus:border-slate-800 transition-colors text-sm text-slate-400 bg-slate-50 cursor-not-allowed" disabled>
+                    </div>
+                    <div class="pt-2">
+                        <button type="button" id="admin-btn" onclick="window.location.href='/admin/dashboard';" class="w-full flex w-full justify-center py-3 px-4 border border-transparent text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-all shadow-sm">
+                            Enter Platform Admin
+                        </button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function switchTab(tab) {
+            document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+            document.getElementById('signup-form').classList.toggle('hidden', tab !== 'signup');
+            document.getElementById('admin-form').classList.toggle('hidden', tab !== 'admin');
+            
+            document.getElementById('tab-login').className = (tab === 'login') ? 'tab-active pb-3 text-sm tracking-wide focus:outline-none transition-colors border-b-2' : 'tab-inactive pb-3 text-sm tracking-wide focus:outline-none transition-colors border-b-2';
+            document.getElementById('tab-signup').className = (tab === 'signup') ? 'tab-active pb-3 text-sm tracking-wide focus:outline-none transition-colors border-b-2' : 'tab-inactive pb-3 text-sm tracking-wide focus:outline-none transition-colors border-b-2';
+            
+            if (tab === 'admin') {
+                document.getElementById('tab-admin').classList.remove('hidden');
+                document.getElementById('tab-admin').className = 'tab-active pb-3 text-sm tracking-wide focus:outline-none transition-colors border-b-2';
+            } else {
+                document.getElementById('tab-admin').classList.add('hidden');
+            }
+        }
+
+        // Login Handler
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('login-btn');
+            const orig = btn.innerText;
+            btn.innerText = 'Authenticating...';
+            btn.disabled = true;
+
+            const clientId = document.getElementById('login-client-id').value;
+            
+            try {
+                // local login system
+                const res = await fetch('/api/v1/client/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: clientId, password: "dev"})
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    localStorage.setItem('access_token', data.access_token);
+                    localStorage.setItem('client_id', data.client_id);
+                    window.location.href = `/admin/client-detail-modern/${data.client_id}`;
+                } else {
+                    const err = await res.json();
+                    alert("Login failed: " + (err.detail || "Invalid Client ID"));
+                }
+            } catch (err) {
+                alert("Network error.");
+            } finally {
+                btn.innerText = orig;
+                btn.disabled = false;
+            }
+        });
+
+        // Signup Handler
+        document.getElementById('signup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('signup-btn');
+            const orig = btn.innerText;
+            btn.innerText = 'Creating Account...';
+            btn.disabled = true;
+
+            const name = document.getElementById('signup-name').value;
+            
+            try {
+                const res = await fetch('/api/v1/clients/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: name})
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`Account Created Successfully!\nYour new Client ID is: ${data.id}\nPlease save this ID to log in.`);
+                    // Switch to login tab and prepopulate
+                    switchTab('login');
+                    document.getElementById('login-client-id').value = data.id;
+                } else {
+                    alert("Failed to create account.");
+                }
+            } catch (err) {
+                alert("Network error.");
+            } finally {
+                btn.innerText = orig;
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

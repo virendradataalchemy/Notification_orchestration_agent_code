@@ -22,12 +22,12 @@ class SupabaseNotificationService:
     def __init__(self):
         self.template_env = Environment(undefined=StrictUndefined, autoescape=False)
 
-    async def get_demo_options(self, tenant_id: int) -> dict[str, Any]:
-        data = await self._load_reference_data(tenant_id)
+    async def get_demo_options(self, client_id: int) -> dict[str, Any]:
+        data = await self._load_reference_data(client_id)
         channels_by_id = {row["id"]: row["name"] for row in data["channels"]}
         return {
-            "tenant": data["tenant"],
-            "contacts": data["contacts"],
+            "client": data["client"],
+            "candidates": data["candidates"],
             "channels": data["channels"],
             "providers": data["providers"],
             "templates": [
@@ -39,12 +39,12 @@ class SupabaseNotificationService:
             ],
         }
 
-    async def send_notification(self, tenant_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-        data = await self._load_reference_data(tenant_id)
-        tenant = data["tenant"]
-        contact = self._resolve_contact(payload, data["contacts"])
-        if not contact:
-            raise ValueError("No matching contact found for this tenant")
+    async def send_notification(self, client_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._load_reference_data(client_id)
+        client = data["client"]
+        candidate = self._resolve_candidate(payload, data["candidates"])
+        if not candidate:
+            raise ValueError("No matching candidate found for this client")
 
         # Normalize channel names: "inapp" → "in_app"
         if payload.get("channels"):
@@ -66,8 +66,8 @@ class SupabaseNotificationService:
         base_idempotency_key = payload.get("idempotency_key")
 
         duplicate_info = await self._check_duplicate(
-            tenant_id=tenant_id,
-            contact_id=contact["id"],
+            client_id=client_id,
+            candidate_id=candidate["id"],
             notification_type=notification_type,
             payload_data=requested_data,
             idempotency_key=base_idempotency_key,
@@ -92,11 +92,11 @@ class SupabaseNotificationService:
 
             render_context = {
                 **requested_data,
-                "name": contact.get("name") or "",
-                "email": contact.get("email") or "",
-                "phone": contact.get("phone") or "",
-                "whatsapp_number": contact.get("whatsapp_number") or "",
-                "company": contact.get("company") or tenant.get("name") or "",
+                "name": candidate.get("name") or "",
+                "email": candidate.get("email") or "",
+                "phone": candidate.get("phone") or "",
+                "whatsapp_number": candidate.get("whatsapp_number") or "",
+                "company": candidate.get("company") or client.get("name") or "",
             }
             rendered_subject, rendered_body = self._render_message(payload, template, render_context)
 
@@ -106,9 +106,9 @@ class SupabaseNotificationService:
             
             # For push notifications, try to get device token from database
             if channel_name == "push":
-                recipient = await self._resolve_push_recipient(contact, payload)
+                recipient = await self._resolve_push_recipient(candidate, payload)
             else:
-                recipient = self._resolve_recipient(channel_name, contact, payload)
+                recipient = self._resolve_recipient(channel_name, candidate, payload)
             
             communication_idempotency_key = (
                 f"{base_idempotency_key}:{channel_name}" if base_idempotency_key else None
@@ -128,8 +128,8 @@ class SupabaseNotificationService:
                     "communications",
                     {
                         "id": next_comm_id,
-                        "tenant_id": tenant_id,
-                        "contact_id": contact["id"],
+                        "client_id": client_id,
+                        "candidate_id": candidate["id"],
                         "triggered_by_user_id": None,
                         "batch_id": None,
                         "notification_type": notification_type,
@@ -149,7 +149,7 @@ class SupabaseNotificationService:
                 if exc.response.status_code != 409 or not communication_idempotency_key:
                     raise
                 existing = await self._find_existing_by_idempotency(
-                    tenant_id=tenant_id,
+                    client_id=client_id,
                     idempotency_key=communication_idempotency_key,
                 )
                 if existing:
@@ -188,7 +188,7 @@ class SupabaseNotificationService:
 
             provider_result = await self._deliver(
                 communication_id=communication["id"],
-                contact=contact,
+                candidate=candidate,
                 channel_name=channel_name,
                 provider=provider,
                 rendered_subject=rendered_subject,
@@ -200,21 +200,21 @@ class SupabaseNotificationService:
             results.append(provider_result)
 
         return {
-            "tenant_id": tenant_id,
-            "tenant_name": tenant.get("name"),
-            "contact_id": contact["id"],
-            "contact_name": contact.get("name"),
+            "client_id": client_id,
+            "client_name": client.get("name"),
+            "candidate_id": candidate["id"],
+            "candidate_name": candidate.get("name"),
             "notification_type": notification_type,
             "priority": priority,
             "channels": results,
             "deduplicated": False,
         }
 
-    async def get_history(self, tenant_id: int, limit: int = 20) -> list[dict[str, Any]]:
-        data = await self._load_reference_data(tenant_id, include_runtime=True)
+    async def get_history(self, client_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        data = await self._load_reference_data(client_id, include_runtime=True)
         channels_by_id = {row["id"]: row["name"] for row in data["channels"]}
         templates_by_id = {row["id"]: row for row in data["templates"]}
-        contacts_by_id = {row["id"]: row for row in data["contacts"]}
+        candidates_by_id = {row["id"]: row for row in data["candidates"]}
         attempts_by_comm: dict[int, list[dict[str, Any]]] = {}
         for attempt in data["attempts"]:
             attempts_by_comm.setdefault(attempt.get("communication_id"), []).append(attempt)
@@ -222,13 +222,13 @@ class SupabaseNotificationService:
         history = []
         for communication in sorted(data["communications"], key=lambda row: row.get("created_at") or "", reverse=True)[:limit]:
             template = templates_by_id.get(communication.get("template_id"))
-            contact = contacts_by_id.get(communication.get("contact_id"), {})
+            candidate = candidates_by_id.get(communication.get("candidate_id"), {})
             attempts = attempts_by_comm.get(communication["id"], [])
             history.append(
                 {
                     "id": communication["id"],
-                    "contact_name": contact.get("name"),
-                    "recipient": contact.get("email") or contact.get("phone") or contact.get("whatsapp_number") or contact.get("id"),
+                    "candidate_name": candidate.get("name"),
+                    "recipient": candidate.get("email") or candidate.get("phone") or candidate.get("whatsapp_number") or candidate.get("id"),
                     "type": communication.get("notification_type"),
                     "priority": str(communication.get("priority", "medium")).lower(),
                     "status": str(communication.get("status", "unknown")).lower(),
@@ -242,8 +242,8 @@ class SupabaseNotificationService:
             )
         return history
 
-    async def get_notification_status(self, tenant_id: int, communication_id: int) -> dict[str, Any]:
-        data = await self._load_reference_data(tenant_id, include_runtime=True)
+    async def get_notification_status(self, client_id: int, communication_id: int) -> dict[str, Any]:
+        data = await self._load_reference_data(client_id, include_runtime=True)
         communication = next((row for row in data["communications"] if row["id"] == communication_id), None)
         if not communication:
             raise ValueError("Notification not found")
@@ -251,12 +251,12 @@ class SupabaseNotificationService:
         attempts = [row for row in data["attempts"] if row.get("communication_id") == communication_id]
         events = [row for row in data["events"] if row.get("communication_id") == communication_id]
         channels_by_id = {row["id"]: row["name"] for row in data["channels"]}
-        contacts_by_id = {row["id"]: row for row in data["contacts"]}
+        candidates_by_id = {row["id"]: row for row in data["candidates"]}
 
         return {
             "id": communication["id"],
-            "tenant_id": communication.get("tenant_id"),
-            "contact": contacts_by_id.get(communication.get("contact_id")),
+            "client_id": communication.get("client_id"),
+            "candidate": candidates_by_id.get(communication.get("candidate_id")),
             "type": communication.get("notification_type"),
             "priority": str(communication.get("priority", "medium")).lower(),
             "status": str(communication.get("status", "unknown")).lower(),
@@ -267,40 +267,40 @@ class SupabaseNotificationService:
             "sent_at": communication.get("sent_at"),
         }
 
-    async def _load_reference_data(self, tenant_id: int, include_runtime: bool = False) -> dict[str, Any]:
-        tenants = await supabase_client.select("tenants", "id,name,is_active,created_at", filters={"id": f"eq.{tenant_id}"}, limit=1)
-        if not tenants:
-            raise ValueError("Tenant not found")
+    async def _load_reference_data(self, client_id: int, include_runtime: bool = False) -> dict[str, Any]:
+        clients = await supabase_client.select("clients", "id,name,is_active,created_at", filters={"id": f"eq.{client_id}"}, limit=1)
+        if not clients:
+            raise ValueError("Client not found")
 
         data = {
-            "tenant": tenants[0],
-            "contacts": await supabase_client.select("contacts", "id,tenant_id,name,email,phone,whatsapp_number,company,language", filters={"tenant_id": f"eq.{tenant_id}"}),
+            "client": clients[0],
+            "candidates": await supabase_client.select("candidates", "id,client_id,name,email,phone,whatsapp_number,company,language", filters={"client_id": f"eq.{client_id}"}),
             "channels": await supabase_client.select("channels", "id,name,priority,is_active", filters={"is_active": "eq.true"}),
-            "providers": await supabase_client.select("providers", "id,tenant_id,channel_id,name,priority,is_active", filters={"is_active": "eq.true"}),
-            "templates": await supabase_client.select("templates", "id,tenant_id,name,language,subject,content,version,is_active,notification_type,channel_id,created_at", filters={"tenant_id": f"eq.{tenant_id}", "is_active": "eq.true"}),
+            "providers": await supabase_client.select("providers", "id,client_id,channel_id,name,priority,is_active", filters={"is_active": "eq.true"}),
+            "templates": await supabase_client.select("templates", "id,client_id,name,language,subject,content,version,is_active,notification_type,channel_id,created_at", filters={"client_id": f"eq.{client_id}", "is_active": "eq.true"}),
         }
         if include_runtime:
             data["communications"] = await supabase_client.select(
                 "communications",
-                "id,tenant_id,contact_id,notification_type,channel_id,priority,status,template_id,idempotency_key,created_at,sent_at,retry_count",
-                filters={"tenant_id": f"eq.{tenant_id}", "order": "created_at.desc"},
+                "id,client_id,candidate_id,notification_type,channel_id,priority,status,template_id,idempotency_key,created_at,sent_at,retry_count",
+                filters={"client_id": f"eq.{client_id}", "order": "created_at.desc"},
             )
             data["attempts"] = await supabase_client.select("communication_attempts", "id,communication_id,attempt_number,status,error_message,error_code,provider_id,created_at")
             data["events"] = await supabase_client.select("notification_events", "id,communication_id,event_type,channel_id,status,metadata,created_at")
         return data
 
-    def _resolve_contact(self, payload: dict[str, Any], contacts: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
-        contact_id = payload.get("contact_id")
-        if contact_id is not None:
-            return next((row for row in contacts if row["id"] == int(contact_id)), None)
+    def _resolve_candidate(self, payload: dict[str, Any], candidates: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        candidate_id = payload.get("candidate_id")
+        if candidate_id is not None:
+            return next((row for row in candidates if row["id"] == int(candidate_id)), None)
         email = payload.get("email")
         phone = payload.get("phone")
         if email:
-            match = next((row for row in contacts if row.get("email") == email), None)
+            match = next((row for row in candidates if row.get("email") == email), None)
             if match:
                 return match
         if phone:
-            return next((row for row in contacts if row.get("phone") == phone or row.get("whatsapp_number") == phone), None)
+            return next((row for row in candidates if row.get("phone") == phone or row.get("whatsapp_number") == phone), None)
         return None
 
     def _select_channels(self, payload: dict[str, Any], channels: list[dict[str, Any]], templates: list[dict[str, Any]]) -> list[str]:
@@ -350,7 +350,7 @@ class SupabaseNotificationService:
                     return template
                 # ID provided but not found — log and fall through to type-based lookup
                 logger.warning(
-                    "Template id=%s not found in tenant templates, falling back to type/channel lookup",
+                    "Template id=%s not found in client templates, falling back to type/channel lookup",
                     template_id,
                 )
             except (ValueError, TypeError):
@@ -393,7 +393,7 @@ class SupabaseNotificationService:
 
     def _resolve_provider(self, channel_id: int, providers: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
         candidates = [row for row in providers if row.get("channel_id") == channel_id and row.get("is_active", True)]
-        candidates.sort(key=lambda item: (item.get("tenant_id") is None, item.get("priority", 999), item.get("id", 999999)))
+        candidates.sort(key=lambda item: (item.get("client_id") is None, item.get("priority", 999), item.get("id", 999999)))
         return candidates[0] if candidates else None
 
     def _render_message(self, payload: dict[str, Any], template: Optional[dict[str, Any]], render_context: dict[str, Any]) -> tuple[str, str]:
@@ -412,8 +412,8 @@ class SupabaseNotificationService:
     async def _check_duplicate(
         self,
         *,
-        tenant_id: int,
-        contact_id: int,
+        client_id: int,
+        candidate_id: int,
         notification_type: str,
         payload_data: dict[str, Any],
         idempotency_key: Optional[str],
@@ -421,10 +421,10 @@ class SupabaseNotificationService:
         if idempotency_key:
             rows = await supabase_client.select(
                 "communications",
-                "id,tenant_id,contact_id,notification_type,status,channel_id,created_at",
+                "id,client_id,candidate_id,notification_type,status,channel_id,created_at",
                 limit=1,
                 filters={
-                    "tenant_id": f"eq.{tenant_id}",
+                    "client_id": f"eq.{client_id}",
                     "idempotency_key": f"eq.{idempotency_key}",
                     "order": "created_at.desc",
                 },
@@ -440,7 +440,7 @@ class SupabaseNotificationService:
             redis = await get_redis_client()
             dedup = DeduplicationService(redis, ttl=settings.dedup_ttl_seconds)
             content = json.dumps(payload_data, sort_keys=True)
-            is_duplicate = await dedup.is_duplicate(str(contact_id), notification_type, content)
+            is_duplicate = await dedup.is_duplicate(str(candidate_id), notification_type, content)
             if is_duplicate:
                 return {
                     "status": "duplicate",
@@ -451,13 +451,13 @@ class SupabaseNotificationService:
             return None
         return None
 
-    async def _find_existing_by_idempotency(self, *, tenant_id: int, idempotency_key: str) -> Optional[dict[str, Any]]:
+    async def _find_existing_by_idempotency(self, *, client_id: int, idempotency_key: str) -> Optional[dict[str, Any]]:
         rows = await supabase_client.select(
             "communications",
-            "id,tenant_id,contact_id,notification_type,status,channel_id,created_at",
+            "id,client_id,candidate_id,notification_type,status,channel_id,created_at",
             limit=1,
             filters={
-                "tenant_id": f"eq.{tenant_id}",
+                "client_id": f"eq.{client_id}",
                 "idempotency_key": f"eq.{idempotency_key}",
                 "order": "created_at.desc",
             },
@@ -516,7 +516,7 @@ class SupabaseNotificationService:
         self,
         *,
         communication_id: int,
-        contact: dict[str, Any],
+        candidate: dict[str, Any],
         channel_name: str,
         provider: Optional[dict[str, Any]],
         rendered_subject: str,
@@ -550,12 +550,12 @@ class SupabaseNotificationService:
                     recipient=recipient,
                     subject=rendered_subject or None,
                     body=rendered_body,
-                    data={"body": rendered_body, "subject": rendered_subject, "contact_name": contact.get("name")},
+                    data={"body": rendered_body, "subject": rendered_subject, "candidate_name": candidate.get("name")},
                     metadata={
                         "notification_id": str(communication_id),
                         "priority": priority,
                         "channel": channel_name,
-                        "contact_id": contact.get("id")
+                        "candidate_id": candidate.get("id")
                     },
                 )
             )
@@ -688,37 +688,37 @@ class SupabaseNotificationService:
             metadata={"error": error_message, "error_code": error_code},
         )
 
-    def _resolve_recipient(self, channel_name: str, contact: dict[str, Any], payload: dict[str, Any]) -> str:
+    def _resolve_recipient(self, channel_name: str, candidate: dict[str, Any], payload: dict[str, Any]) -> str:
         if channel_name == "email":
-            return payload.get("email") or contact.get("email") or ""
+            return payload.get("email") or candidate.get("email") or ""
         if channel_name == "sms":
-            return payload.get("phone") or contact.get("phone") or ""
+            return payload.get("phone") or candidate.get("phone") or ""
         if channel_name == "voice":
-            return payload.get("phone") or contact.get("phone") or ""
+            return payload.get("phone") or candidate.get("phone") or ""
         if channel_name == "whatsapp":
-            return payload.get("whatsapp_number") or contact.get("whatsapp_number") or contact.get("phone") or ""
+            return payload.get("whatsapp_number") or candidate.get("whatsapp_number") or candidate.get("phone") or ""
         if channel_name == "push":
-            # Try payload first, then check if contact has device_token in metadata
+            # Try payload first, then check if candidate has device_token in metadata
             device_token = payload.get("device_token") or (payload.get("data") or {}).get("device_token")
-            if not device_token and contact.get("metadata"):
-                device_token = contact.get("metadata", {}).get("device_token")
+            if not device_token and candidate.get("metadata"):
+                device_token = candidate.get("metadata", {}).get("device_token")
             return device_token or ""
         if channel_name == "slack":
             return payload.get("slack_channel") or payload.get("slack_user") or settings.slack_channel_id or ""
         if channel_name == "in_app":
-            return str(contact.get("id"))
+            return str(candidate.get("id"))
         return payload.get("recipient") or ""
 
-    async def _resolve_push_recipient(self, contact: dict[str, Any], payload: dict[str, Any]) -> str:
+    async def _resolve_push_recipient(self, candidate: dict[str, Any], payload: dict[str, Any]) -> str:
         """Resolve push notification recipient by fetching device token from database."""
         # Try payload first
         device_token = payload.get("device_token") or (payload.get("data") or {}).get("device_token")
         if device_token:
             return device_token
         
-        # Check contact metadata
-        if contact.get("metadata"):
-            device_token = contact.get("metadata", {}).get("device_token")
+        # Check candidate metadata
+        if candidate.get("metadata"):
+            device_token = candidate.get("metadata", {}).get("device_token")
             if device_token:
                 return device_token
         
@@ -728,7 +728,7 @@ class SupabaseNotificationService:
                 "device_tokens",
                 "device_token,platform,last_used_at",
                 filters={
-                    "contact_id": f"eq.{contact['id']}",
+                    "candidate_id": f"eq.{candidate['id']}",
                     "is_active": "eq.true",
                     "order": "last_used_at.desc"
                 },

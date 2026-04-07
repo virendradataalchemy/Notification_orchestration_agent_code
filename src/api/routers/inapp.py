@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
-from src.api.dependencies import get_authenticated_tenant
-from src.models import Tenant
+from src.api.dependencies import get_authenticated_client
+from src.models import Client
 from src.providers.inapp_provider import get_user_notifications, mark_as_read, get_unread_count
 
 router = APIRouter(prefix="/inapp", tags=["inapp"])
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/inapp", tags=["inapp"])
 async def get_notifications(
     user_id: str,
     limit: int = 20,
-    tenant: Tenant = Depends(get_authenticated_tenant)
+    client: Client = Depends(get_authenticated_client)
 ):
     """Get in-app notifications for a user."""
     notifications = await get_user_notifications(user_id, limit)
@@ -27,7 +27,7 @@ async def get_notifications(
 async def mark_notification_read(
     user_id: str,
     notification_id: str,
-    tenant: Tenant = Depends(get_authenticated_tenant)
+    client: Client = Depends(get_authenticated_client)
 ):
     """Mark a notification as read."""
     success = await mark_as_read(user_id, notification_id)
@@ -41,7 +41,7 @@ async def mark_notification_read(
 @router.get("/unread-count/{user_id}")
 async def get_unread_count_endpoint(
     user_id: str,
-    tenant: Tenant = Depends(get_authenticated_tenant)
+    client: Client = Depends(get_authenticated_client)
 ):
     """Get unread notification count for a user."""
     count = await inapp_provider.get_unread_count(user_id)

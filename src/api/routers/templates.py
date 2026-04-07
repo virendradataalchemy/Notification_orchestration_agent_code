@@ -3,10 +3,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional, Dict, Any
 
-from src.api.dependencies import get_authenticated_tenant, verify_api_key
+from src.api.dependencies import get_authenticated_client, verify_api_key
 from src.api.schemas import TemplateCreate, TemplateResponse
 from src.core.supabase import supabase_client
-from src.models import Tenant
+from src.models import Client
 
 router = APIRouter(prefix="/templates", tags=["templates"])
 
@@ -24,7 +24,7 @@ async def _channel_name(channel_id: int) -> str:
 def _serialize(row: Dict[str, Any], channel: str = "unknown") -> Dict[str, Any]:
     return {
         "id": row.get("id"),
-        "tenant_id": row.get("tenant_id"),
+        "client_id": row.get("client_id"),
         "name": row.get("name"),
         "channel": channel,
         "language": row.get("language") or "en",
@@ -32,7 +32,7 @@ def _serialize(row: Dict[str, Any], channel: str = "unknown") -> Dict[str, Any]:
         "body": row.get("content") or row.get("body") or "",
         "version": row.get("version") or 1,
         "active": row.get("is_active", True),
-        "is_global": row.get("tenant_id") is None,
+        "is_global": row.get("client_id") is None,
         "created_at": row.get("created_at"),
     }
 
@@ -40,14 +40,14 @@ def _serialize(row: Dict[str, Any], channel: str = "unknown") -> Dict[str, Any]:
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template: TemplateCreate,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
     ch_id = await _channel_id(template.channel.value if hasattr(template.channel, "value") else template.channel)
     if not ch_id:
         raise HTTPException(status_code=400, detail=f"Channel '{template.channel}' not configured")
 
     rows = await supabase_client.insert("templates", {
-        "tenant_id": tenant.id,
+        "client_id": client.id,
         "name": template.name,
         "channel_id": ch_id,
         "language": template.language if hasattr(template, "language") else "en",
@@ -65,13 +65,13 @@ async def create_template(
 @router.get("/{template_id}", response_model=dict)
 async def get_template(
     template_id: str,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
     rows = await supabase_client.select(
         "templates",
-        "id,tenant_id,name,language,subject,content,version,is_active,channel_id,created_at",
+        "id,client_id,name,language,subject,content,version,is_active,channel_id,created_at",
         limit=1,
-        filters={"id": f"eq.{template_id}", "tenant_id": f"eq.{tenant.id}", "is_active": "eq.true"},
+        filters={"id": f"eq.{template_id}", "client_id": f"eq.{client.id}", "is_active": "eq.true"},
     )
     if not rows:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -83,12 +83,12 @@ async def get_template(
 @router.get("/", response_model=List[dict])
 async def list_templates(
     channel: Optional[str] = None,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
-    filters: Dict[str, str] = {"tenant_id": f"eq.{tenant.id}", "is_active": "eq.true"}
+    filters: Dict[str, str] = {"client_id": f"eq.{client.id}", "is_active": "eq.true"}
     rows = await supabase_client.select(
         "templates",
-        "id,tenant_id,name,language,subject,content,version,is_active,channel_id,created_at",
+        "id,client_id,name,language,subject,content,version,is_active,channel_id,created_at",
         filters=filters,
     )
     ch_cache: Dict[int, str] = {}
@@ -107,11 +107,11 @@ async def list_templates(
 async def update_template(
     template_id: str,
     template: TemplateCreate,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
     existing = await supabase_client.select(
         "templates", "id,version", limit=1,
-        filters={"id": f"eq.{template_id}", "tenant_id": f"eq.{tenant.id}"},
+        filters={"id": f"eq.{template_id}", "client_id": f"eq.{client.id}"},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -135,11 +135,11 @@ async def update_template(
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
     template_id: str,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
     existing = await supabase_client.select(
         "templates", "id", limit=1,
-        filters={"id": f"eq.{template_id}", "tenant_id": f"eq.{tenant.id}"},
+        filters={"id": f"eq.{template_id}", "client_id": f"eq.{client.id}"},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Template not found")

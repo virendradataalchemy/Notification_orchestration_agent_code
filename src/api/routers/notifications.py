@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.api.dependencies import get_authenticated_tenant, user_rate_limiter
+from src.api.dependencies import get_authenticated_client, user_rate_limiter
 from src.api.schemas import (
     BatchNotificationRequest,
     BatchNotificationResponse,
@@ -13,7 +13,7 @@ from src.api.schemas import (
     NotificationStatusResponse,
     SendNotificationRequest,
 )
-from src.models import Tenant
+from src.models import Client
 from src.services.supabase_notification_service import SupabaseNotificationService
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -51,11 +51,11 @@ def _notification_response_from_result(result: dict[str, Any]) -> NotificationRe
 )
 async def send_notification(
     request: SendNotificationRequest,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
     payload = request.model_dump()
     merged = {
-        "contact_id": payload["recipient"]["user_id"],
+        "candidate_id": payload["recipient"]["user_id"],
         "email": payload["recipient"].get("email"),
         "phone": payload["recipient"].get("phone"),
         "notification_type": payload["notification"]["type"],
@@ -68,7 +68,7 @@ async def send_notification(
         "idempotency_key": payload["notification"].get("idempotency_key"),
     }
     try:
-        return await service.send_notification(tenant.id, merged)
+        return await service.send_notification(client.id, merged)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
@@ -84,14 +84,14 @@ async def send_notification(
 )
 async def send_batch_notifications(
     request: BatchNotificationRequest,
-    tenant: Tenant = Depends(get_authenticated_tenant),
+    client: Client = Depends(get_authenticated_client),
 ):
     sent = []
     for recipient in request.recipients:
         result = await service.send_notification(
-            tenant.id,
+            client.id,
             {
-                "contact_id": recipient.user_id,
+                "candidate_id": recipient.user_id,
                 "email": recipient.email,
                 "phone": recipient.phone,
                 "notification_type": request.template_id,
@@ -103,7 +103,7 @@ async def send_batch_notifications(
         )
         sent.append(result)
     return BatchNotificationResponse(
-        batch_id=f"batch-{tenant.id}-{len(sent)}",
+        batch_id=f"batch-{client.id}-{len(sent)}",
         status="processing",
         total_recipients=len(sent),
         estimated_completion=request.schedule_at,
@@ -111,14 +111,14 @@ async def send_batch_notifications(
 
 
 @router.get("/demo/options")
-async def get_demo_options(tenant: Tenant = Depends(get_authenticated_tenant)):
-    return await service.get_demo_options(tenant.id)
+async def get_demo_options(client: Client = Depends(get_authenticated_client)):
+    return await service.get_demo_options(client.id)
 
 
 @router.post("/demo/send", status_code=status.HTTP_201_CREATED)
-async def send_demo_notification(payload: dict[str, Any], tenant: Tenant = Depends(get_authenticated_tenant)):
+async def send_demo_notification(payload: dict[str, Any], client: Client = Depends(get_authenticated_client)):
     try:
-        return await service.send_notification(tenant.id, payload)
+        return await service.send_notification(client.id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
@@ -127,23 +127,23 @@ async def send_demo_notification(payload: dict[str, Any], tenant: Tenant = Depen
 
 
 @router.get("/history")
-async def get_notification_history(limit: int = 20, tenant: Tenant = Depends(get_authenticated_tenant)):
-    return await service.get_history(tenant.id, limit=limit)
+async def get_notification_history(limit: int = 20, client: Client = Depends(get_authenticated_client)):
+    return await service.get_history(client.id, limit=limit)
 
 
 @router.get("/{notification_id}", response_model=dict)
-async def get_notification_status(notification_id: str, tenant: Tenant = Depends(get_authenticated_tenant)):
+async def get_notification_status(notification_id: str, client: Client = Depends(get_authenticated_client)):
     try:
         communication_id = int(notification_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid notification ID format") from exc
     try:
-        return await service.get_notification_status(tenant.id, communication_id)
+        return await service.get_notification_status(client.id, communication_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/user/{user_id}", response_model=List[dict])
-async def get_user_notifications(user_id: str, limit: int = 50, tenant: Tenant = Depends(get_authenticated_tenant)):
-    history = await service.get_history(tenant.id, limit=limit * 2)
-    return [item for item in history if str(item.get("recipient")) == str(user_id) or str(item.get("contact_name")) == str(user_id)][:limit]
+async def get_user_notifications(user_id: str, limit: int = 50, client: Client = Depends(get_authenticated_client)):
+    history = await service.get_history(client.id, limit=limit * 2)
+    return [item for item in history if str(item.get("recipient")) == str(user_id) or str(item.get("candidate_name")) == str(user_id)][:limit]

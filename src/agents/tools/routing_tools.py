@@ -196,7 +196,7 @@ async def check_quiet_hours(
 @tool
 async def send_notification_via_channel(
     user_id: str,
-    tenant_id: str,
+    client_id: str,
     channel: str,
     content: str,
     notification_type: str,
@@ -208,7 +208,7 @@ async def send_notification_via_channel(
 
     Args:
         user_id: The user's ID
-        tenant_id: The tenant's ID
+        client_id: The client's ID
         channel: Channel to use (email, sms, push, etc)
         content: Notification content
         notification_type: Type of notification
@@ -225,7 +225,7 @@ async def send_notification_via_channel(
             # Create notification record
             notification = Notification(
                 id=str(uuid.uuid4()),
-                tenant_id=tenant_id,
+                client_id=client_id,
                 user_id=user_id,
                 type=notification_type,
                 content=content,
