@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 from src.core import get_db, get_db_optional, get_redis_client, verify_token, supabase_client
-from src.core.supabase import CLIENTS_TABLE
+from src.core.supabase import ADMINS_TABLE, CLIENTS_TABLE
 from src.config import settings
 from src.models import Client
 import time
@@ -194,6 +194,56 @@ async def get_current_user(
     """Get current authenticated user."""
     # In production, fetch user info from API key
     return api_key
+
+
+async def get_authenticated_admin(
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing admin authentication token",
+        )
+
+    access_token = authorization.replace("Bearer ", "", 1)
+
+    try:
+        auth_user = await supabase_client.get_auth_user(access_token)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired admin session",
+        ) from exc
+
+    user_id = auth_user.get("id")
+    email = auth_user.get("email")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin session is missing a user id",
+        )
+
+    rows = await supabase_client.select(
+        ADMINS_TABLE,
+        "id,supabase_uid,email,name,is_active,created_at,updated_at",
+        limit=1,
+        filters={"supabase_uid": f"eq.{user_id}", "is_active": "eq.true"},
+    )
+    if not rows and email:
+        rows = await supabase_client.select(
+            ADMINS_TABLE,
+            "id,supabase_uid,email,name,is_active,created_at,updated_at",
+            limit=1,
+            filters={"email": f"eq.{email}", "is_active": "eq.true"},
+        )
+
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is not authorized as an admin",
+        )
+
+    return rows[0]
 
 
 class RateLimiter:

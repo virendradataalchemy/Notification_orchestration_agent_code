@@ -5,15 +5,18 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core import get_db_optional, supabase_client
+from src.api.dependencies import get_authenticated_admin
+from src.core.supabase import ADMINS_TABLE
 from src.models import Communication, CommunicationAttempt, Candidate, Provider, Template, Client
 from src.models.channel import Channel
 from src.models.notification import NotificationEvent
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(get_authenticated_admin)])
 templates = Jinja2Templates(directory="src/templates")
 
 
@@ -67,6 +70,73 @@ async def _load_supabase_admin_data() -> dict[str, Any]:
         "candidates": candidates,
         "attempts": attempts,
     }
+
+
+@router.get("/api/me")
+async def get_admin_session(admin: dict = Depends(get_authenticated_admin)) -> dict[str, Any]:
+    return {
+        "id": admin.get("id"),
+        "name": admin.get("name"),
+        "email": admin.get("email"),
+        "supabase_uid": admin.get("supabase_uid"),
+        "is_active": admin.get("is_active", True),
+    }
+
+
+class CreateAdminRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: Optional[str] = None
+    is_active: bool = True
+
+
+@router.get("/api/admins")
+async def list_admins(_: dict = Depends(get_authenticated_admin)) -> list[dict[str, Any]]:
+    rows = await supabase_client.select(
+        ADMINS_TABLE,
+        "id,supabase_uid,email,name,is_active,created_at,updated_at",
+        filters={"order": "created_at.desc"},
+    )
+    return rows
+
+
+@router.post("/api/admins", status_code=201)
+async def create_admin(
+    request: CreateAdminRequest,
+    _: dict = Depends(get_authenticated_admin),
+) -> dict[str, Any]:
+    existing = await supabase_client.select(
+        ADMINS_TABLE,
+        "id,supabase_uid,email,name,is_active,created_at,updated_at",
+        limit=1,
+        filters={"email": f"eq.{request.email}"},
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="An admin with this email already exists")
+
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+
+    try:
+        auth_user = await supabase_client.create_auth_user(
+            email=request.email,
+            password=request.password,
+            email_confirm=True,
+            user_metadata={"name": request.name or request.email.split("@")[0]},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to create Supabase auth user: {exc}") from exc
+
+    rows = await supabase_client.insert(
+        ADMINS_TABLE,
+        {
+            "supabase_uid": auth_user["id"],
+            "email": request.email,
+            "name": request.name,
+            "is_active": request.is_active,
+        },
+    )
+    return rows[0]
 
 
 @router.get("/dashboard", response_class=HTMLResponse)

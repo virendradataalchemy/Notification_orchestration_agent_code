@@ -14,6 +14,7 @@ CLIENTS_TABLE = "clients"
 CANDIDATES_TABLE = "candidates"
 COMMUNICATIONS_TABLE = "communications"
 CLIENT_PREFERENCES_TABLE = "client_preferences"
+ADMINS_TABLE = "admins"
 
 
 class SupabaseClient:
@@ -154,6 +155,54 @@ class SupabaseClient:
             "reachable": True,
             "sample_rows": len(rows),
         }
+
+    async def get_auth_user(self, access_token: str) -> dict[str, Any]:
+        if not self.configured:
+            raise RuntimeError("Supabase REST client is not configured")
+
+        headers = {
+            "apikey": self.api_key,
+            "Authorization": f"Bearer {access_token}",
+        }
+
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(
+                f"{self.base_url}/auth/v1/user",
+                headers=headers,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def create_auth_user(
+        self,
+        *,
+        email: str,
+        password: str,
+        email_confirm: bool = True,
+        user_metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        if not self.configured:
+            raise RuntimeError("Supabase REST client is not configured")
+
+        headers = self._headers()
+        headers["Content-Type"] = "application/json"
+
+        payload: dict[str, Any] = {
+            "email": email,
+            "password": password,
+            "email_confirm": email_confirm,
+        }
+        if user_metadata:
+            payload["user_metadata"] = user_metadata
+
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(
+                f"{self.base_url}/auth/v1/admin/users",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
 
     async def _retry_insert_on_primary_key_conflict(
         self,
