@@ -56,8 +56,9 @@ class PushProvider(NotificationProvider):
             # Just store the token and return success
             try:
                 candidate_id = message.metadata.get('candidate_id')
+                client_id = message.metadata.get('client_id')
                 if candidate_id and message.recipient:
-                    await self._store_device_token(candidate_id, message.recipient, platform='web')
+                    await self._store_device_token(candidate_id, message.recipient, client_id=client_id, platform='web')
                 
                 return ProviderResponse(
                     status=ProviderStatus.SUCCESS,
@@ -123,9 +124,9 @@ class PushProvider(NotificationProvider):
             # Store device token in database if we have candidate info
             try:
                 candidate_id = message.metadata.get('candidate_id')
+                client_id = message.metadata.get('client_id')
                 if candidate_id and message.recipient:
-                    await self._store_device_token(candidate_id, message.recipient)
-                    await self._store_device_token(candidate_id, message.recipient)
+                    await self._store_device_token(candidate_id, message.recipient, client_id=client_id)
             except Exception as db_error:
                 print(f"Warning: Failed to store device token: {db_error}")
 
@@ -156,26 +157,36 @@ class PushProvider(NotificationProvider):
                 error_message=str(e)
             )
 
-    async def _store_device_token(self, candidate_id: int, device_token: str, platform: str = "unknown"):
+    async def _store_device_token(
+        self,
+        candidate_id: int,
+        device_token: str,
+        *,
+        client_id: int | None = None,
+        platform: str = "unknown",
+    ):
         """Store device token in database."""
         try:
             # Check if token already exists
             existing = await supabase_client.select(
                 "device_tokens",
                 "id,is_active",
-                filters={"candidate_id": f"eq.{candidate_id}", "device_token": f"eq.{device_token}"},
+                filters={
+                    "user_id": f"eq.{candidate_id}",
+                    "token": f"eq.{device_token}",
+                    **({"client_id": f"eq.{client_id}"} if client_id is not None else {}),
+                },
                 limit=1
             )
             
             if existing:
-                # Update last_used_at
+                # Update last_active
                 await supabase_client.update(
                     "device_tokens",
                     {
-                        "last_used_at": datetime.utcnow().isoformat(),
+                        "last_active": datetime.utcnow().isoformat(),
                         "is_active": True,
                         "platform": platform,
-                        "updated_at": datetime.utcnow().isoformat()
                     },
                     filters={"id": f"eq.{existing[0]['id']}"}
                 )
@@ -193,13 +204,14 @@ class PushProvider(NotificationProvider):
                     "device_tokens",
                     {
                         "id": next_id,
-                        "candidate_id": candidate_id,
-                        "device_token": device_token,
+                        "client_id": client_id,
+                        "user_id": candidate_id,
+                        "token": device_token,
                         "platform": platform,
+                        "browser": None,
                         "is_active": True,
-                        "last_used_at": datetime.utcnow().isoformat(),
+                        "last_active": datetime.utcnow().isoformat(),
                         "created_at": datetime.utcnow().isoformat(),
-                        "updated_at": datetime.utcnow().isoformat()
                     }
                 )
         except Exception as e:

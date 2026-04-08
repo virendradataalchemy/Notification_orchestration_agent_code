@@ -1,0 +1,1 @@
+id,client_id,candidate_id,triggered_by_user_id,batch_id,notification_type,channel_id,priority,template_id,status,idempotency_key,scheduled_at,sent_at,retry_count,max_retries,created_at,updated_at,recording_url,recording_duration,recording_sid

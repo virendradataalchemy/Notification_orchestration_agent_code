@@ -1,0 +1,5 @@
+id,client_id,channel_id,name,priority,is_active,config_ref,created_at,updated_at
+1,,1,twilio_sms,1,True,,2026-03-26,2026-03-26
+2,,2,twilio_voice,1,True,,2026-03-26,2026-03-26
+3,,4,twilio_whatsapp,1,True,,2026-03-26,2026-03-26
+4,,5,sendgrid,1,True,,2026-03-26,2026-03-26

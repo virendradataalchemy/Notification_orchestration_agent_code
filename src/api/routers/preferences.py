@@ -11,12 +11,12 @@ from src.models import Client
 router = APIRouter(prefix="/preferences", tags=["preferences"])
 
 
-async def _get_or_none(user_id: str, client_id: int) -> Optional[Dict[str, Any]]:
+async def _get_or_none(client_id: int) -> Optional[Dict[str, Any]]:
     rows = await supabase_client.select(
         CLIENT_PREFERENCES_TABLE,
-        "id,user_id,client_id,preferred_channels,quiet_hours,unsubscribed,language,timezone",
+        "client_id,preferred_channels,quiet_hours,unsubscribed,language,timezone",
         limit=1,
-        filters={"user_id": f"eq.{user_id}", "client_id": f"eq.{client_id}"},
+        filters={"client_id": f"eq.{client_id}"},
     )
     return rows[0] if rows else None
 
@@ -37,11 +37,11 @@ async def get_user_preferences(
     user_id: str,
     client: Client = Depends(get_authenticated_client),
 ):
-    row = await _get_or_none(user_id, client.id)
+    row = await _get_or_none(client.id)
     if not row:
         return UserPreferenceResponse(**_default_prefs(user_id))
     return UserPreferenceResponse(
-        user_id=row["user_id"],
+        user_id=user_id,
         preferred_channels=row.get("preferred_channels"),
         quiet_hours=row.get("quiet_hours"),
         unsubscribed=row.get("unsubscribed"),
@@ -56,7 +56,7 @@ async def update_user_preferences(
     preferences: UserPreferenceUpdate,
     client: Client = Depends(get_authenticated_client),
 ):
-    existing = await _get_or_none(user_id, client.id)
+    existing = await _get_or_none(client.id)
     update_data: Dict[str, Any] = {}
     if preferences.preferred_channels is not None:
         update_data["preferred_channels"] = preferences.preferred_channels
@@ -71,15 +71,11 @@ async def update_user_preferences(
 
     if existing:
         rows = await supabase_client.update(
-            CLIENT_PREFERENCES_TABLE, update_data, filters={"id": f"eq.{existing['id']}"}
+            CLIENT_PREFERENCES_TABLE, update_data, filters={"client_id": f"eq.{client.id}"}
         )
         row = rows[0] if rows else {**existing, **update_data}
     else:
-        latest = await supabase_client.select(CLIENT_PREFERENCES_TABLE, "id", limit=1, filters={"order": "id.desc"})
-        next_id = int(latest[0]["id"]) + 1 if latest else 1
         rows = await supabase_client.insert(CLIENT_PREFERENCES_TABLE, {
-            "id": next_id,
-            "user_id": user_id,
             "client_id": client.id,
             "preferred_channels": preferences.preferred_channels,
             "quiet_hours": preferences.quiet_hours,
@@ -90,7 +86,7 @@ async def update_user_preferences(
         row = rows[0]
 
     return UserPreferenceResponse(
-        user_id=row.get("user_id", user_id),
+        user_id=user_id,
         preferred_channels=row.get("preferred_channels"),
         quiet_hours=row.get("quiet_hours"),
         unsubscribed=row.get("unsubscribed"),
@@ -105,27 +101,25 @@ async def unsubscribe_notification_type(
     notification_type: str,
     client: Client = Depends(get_authenticated_client),
 ):
-    existing = await _get_or_none(user_id, client.id)
+    existing = await _get_or_none(client.id)
     current_unsub = (existing or {}).get("unsubscribed") or []
     if notification_type not in current_unsub:
         current_unsub = current_unsub + [notification_type]
 
     if existing:
         rows = await supabase_client.update(
-            CLIENT_PREFERENCES_TABLE, {"unsubscribed": current_unsub}, filters={"id": f"eq.{existing['id']}"}
+            CLIENT_PREFERENCES_TABLE, {"unsubscribed": current_unsub}, filters={"client_id": f"eq.{client.id}"}
         )
         row = rows[0] if rows else {**existing, "unsubscribed": current_unsub}
     else:
-        latest = await supabase_client.select(CLIENT_PREFERENCES_TABLE, "id", limit=1, filters={"order": "id.desc"})
-        next_id = int(latest[0]["id"]) + 1 if latest else 1
         rows = await supabase_client.insert(CLIENT_PREFERENCES_TABLE, {
-            "id": next_id, "user_id": user_id, "client_id": client.id,
+            "client_id": client.id,
             "unsubscribed": current_unsub, "language": "en", "timezone": "UTC",
         })
         row = rows[0]
 
     return UserPreferenceResponse(
-        user_id=row.get("user_id", user_id),
+        user_id=user_id,
         preferred_channels=row.get("preferred_channels"),
         quiet_hours=row.get("quiet_hours"),
         unsubscribed=row.get("unsubscribed"),
@@ -140,19 +134,19 @@ async def resubscribe_notification_type(
     notification_type: str,
     client: Client = Depends(get_authenticated_client),
 ):
-    existing = await _get_or_none(user_id, client.id)
+    existing = await _get_or_none(client.id)
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User preferences not found")
 
     current_unsub = existing.get("unsubscribed") or []
     new_unsub = [t for t in current_unsub if t != notification_type]
     rows = await supabase_client.update(
-        CLIENT_PREFERENCES_TABLE, {"unsubscribed": new_unsub}, filters={"id": f"eq.{existing['id']}"}
+        CLIENT_PREFERENCES_TABLE, {"unsubscribed": new_unsub}, filters={"client_id": f"eq.{client.id}"}
     )
     row = rows[0] if rows else {**existing, "unsubscribed": new_unsub}
 
     return UserPreferenceResponse(
-        user_id=row.get("user_id", user_id),
+        user_id=user_id,
         preferred_channels=row.get("preferred_channels"),
         quiet_hours=row.get("quiet_hours"),
         unsubscribed=row.get("unsubscribed"),

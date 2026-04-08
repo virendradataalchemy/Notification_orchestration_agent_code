@@ -1,0 +1,12 @@
+id,client_id,name,email,phone,whatsapp_number,job_title,company,timezone,language,metadata,created_at,updated_at
+4,2,Prachi,gaur.prateek.1609@gmail.com,+918171671211,+918171671211,,,,en,,2026-03-27 05:51:00.874799,2026-03-27 05:51:00.874799
+5,1,Prateek,gaur.prateek.1609@gmail.com,+919893155055,+919893155055,,,,en,"{""is_candidate"": true, ""is_interview_stage"": true}",2026-03-29 06:38:26.442605,2026-03-29 06:38:26.442605
+6,1,Vijay,gaur.prateek.1609@gmail.com,+918171671211,+918171671211,,,,en,"{""is_candidate"": true, ""is_interview_stage"": false}",2026-03-29 06:38:26.442605,2026-03-29 06:38:26.442605
+8,2,Vijay,gaur.prateek.1609@gmail.com,+918171671211,+918171671211,,,,en,"{""is_candidate"": true, ""is_interview_stage"": false}",2026-03-29 06:38:26.442605,2026-03-29 06:38:26.442605
+7,2,Prateek,gaur.prateek.1609@gmail.com,+919893155055,+919893155055,,,,en,"{""is_candidate"": true, ""is_interview_stage"": true}",2026-03-29 06:38:26.442605,2026-03-29 06:38:26.442605
+2,2,Vijay,gaur.prateek.1609@gmail.com,+918171671211,+918171671211,,,,en,,2026-03-26 16:09:29.405523,2026-03-26 16:09:29.405523
+9,3,Muskan,edumichub@gmail.com,8171671211,9893155055,,,,en,,2026-04-02 07:44:52.16373,2026-04-02 07:44:52.16373
+10,1,EduMicHub,edumichub@gmail.com,+918171671211,,,,,en,,2026-04-02 07:49:44.096664,2026-04-02 07:49:44.096664
+11,2,EduMicHub,edumichub@gmail.com,+918171671211,,,,,en,,2026-04-02 07:49:44.590557,2026-04-02 07:49:44.590557
+3,1,Muskan,edumichub@gmail.com,+918171671211,+918171671211,,,,en,,2026-03-27 05:51:00.874799,2026-03-27 05:51:00.874799
+1,7,Prateek,gaur.prateek.1609@gmail.com,+918290942415,+918290942415,,,,en,,2026-03-26 16:09:29.405523,2026-03-26 16:09:29.405523

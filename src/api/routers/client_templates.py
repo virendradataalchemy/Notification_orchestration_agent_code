@@ -58,7 +58,7 @@ def _serialize_template(template: Template | dict) -> dict:
             "body": template.get("content") or template.get("body") or "",
             "version": template.get("version") or 1,
             "active": template.get("is_active", template.get("active", True)),
-            "is_global": template.get("client_id") is None,
+            "is_global": template.get("is_global", template.get("client_id") is None),
             "base_template_id": template.get("base_template_id"),
             "created_at": template.get("created_at") or datetime.utcnow(),
         }
@@ -268,22 +268,33 @@ async def list_client_templates(
         serialized_templates = [_serialize_template(template) for template in templates]
     else:
         _, channel_by_id = await _get_channel_lookup(db)
-        filters = {
-            "client_id": f"eq.{client.id}",
+        base_filters = {
             "is_active": "eq.true",
             "language": f"eq.{language}",
         }
+        filters = dict(base_filters)
+        if include_global:
+            filters["or"] = f"(client_id.eq.{client.id},client_id.is.null)"
+        else:
+            filters["client_id"] = f"eq.{client.id}"
         rows = await supabase_client.select(
             "templates",
             "id,client_id,name,language,subject,content,version,is_active,notification_type,created_at,channel_id",
             filters=filters,
         )
+        if include_global and not rows:
+            rows = await supabase_client.select(
+                "templates",
+                "id,client_id,name,language,subject,content,version,is_active,notification_type,created_at,channel_id",
+                filters=base_filters,
+            )
         serialized_templates = []
         for row in rows:
             channel_name = channel_by_id.get(row.get("channel_id"), "unknown")
             if channel and channel_name != channel.value:
                 continue
             row["channel"] = channel_name
+            row["is_global"] = row.get("client_id") != client.id
             serialized_templates.append(_serialize_template(row))
 
     global_count = sum(1 for t in serialized_templates if t["client_id"] is None)

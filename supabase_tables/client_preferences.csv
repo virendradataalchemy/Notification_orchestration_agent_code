@@ -1,0 +1,5 @@
+client_id,preferred_channels,quiet_hours,unsubscribed,language,timezone,created_at,updated_at
+6,"{""default"": [""whatsapp""]}","{""end"": ""08:00"", ""start"": ""22:00""}",,en,Asia/Kolkata,2026-04-07 08:18:13.885903,2026-04-07 08:18:13.885903
+7,"{""default"": [""voice""]}","{""end"": ""08:00"", ""start"": ""22:00""}",,en,UTC,2026-04-07 08:28:20.34505,2026-04-07 08:28:20.34505
+8,"{""default"": [""email"", ""push"", ""slack""]}","{""end"": ""08:00"", ""start"": ""22:00""}",,en,UTC,2026-04-07 17:50:41.492042,2026-04-07 17:50:41.492042
+13,"{""default"": [""email""]}","{""end"": ""08:00"", ""start"": ""15:00""}",,en,UTC,2026-04-07 18:05:15.792205,2026-04-07 18:05:15.792205

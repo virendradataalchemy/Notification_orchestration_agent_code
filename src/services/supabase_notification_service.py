@@ -555,7 +555,8 @@ class SupabaseNotificationService:
                         "notification_id": str(communication_id),
                         "priority": priority,
                         "channel": channel_name,
-                        "candidate_id": candidate.get("id")
+                        "candidate_id": candidate.get("id"),
+                        "client_id": candidate.get("client_id"),
                     },
                 )
             )
@@ -726,17 +727,18 @@ class SupabaseNotificationService:
         try:
             tokens = await supabase_client.select(
                 "device_tokens",
-                "device_token,platform,last_used_at",
+                "token,platform,last_active",
                 filters={
-                    "candidate_id": f"eq.{candidate['id']}",
+                    "client_id": f"eq.{candidate['client_id']}",
+                    "user_id": f"eq.{candidate['id']}",
                     "is_active": "eq.true",
-                    "order": "last_used_at.desc"
+                    "order": "last_active.desc"
                 },
                 limit=1
             )
             
             if tokens:
-                return tokens[0]["device_token"]
+                return tokens[0]["token"]
         except Exception as e:
             print(f"Error fetching device token: {e}")
         

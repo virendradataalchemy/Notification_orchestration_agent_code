@@ -37,8 +37,9 @@ async def register_device_token(
             "device_tokens",
             "id,is_active",
             filters={
-                "candidate_id": f"eq.{request.candidate_id}",
-                "device_token": f"eq.{request.device_token}"
+                "client_id": f"eq.{client.id}",
+                "user_id": f"eq.{request.candidate_id}",
+                "token": f"eq.{request.device_token}"
             },
             limit=1
         )
@@ -50,8 +51,7 @@ async def register_device_token(
                 {
                     "is_active": True,
                     "platform": request.platform,
-                    "last_used_at": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat()
+                    "last_active": datetime.utcnow().isoformat()
                 },
                 filters={"id": f"eq.{existing[0]['id']}"}
             )
@@ -75,13 +75,14 @@ async def register_device_token(
                 "device_tokens",
                 {
                     "id": next_id,
-                    "candidate_id": request.candidate_id,
-                    "device_token": request.device_token,
+                    "client_id": client.id,
+                    "user_id": request.candidate_id,
+                    "token": request.device_token,
                     "platform": request.platform,
+                    "browser": None,
                     "is_active": True,
-                    "last_used_at": datetime.utcnow().isoformat(),
+                    "last_active": datetime.utcnow().isoformat(),
                     "created_at": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat()
                 }
             )
             
@@ -117,8 +118,8 @@ async def get_candidate_tokens(
         
         tokens = await supabase_client.select(
             "device_tokens",
-            "id,device_token,platform,is_active,last_used_at,created_at",
-            filters={"candidate_id": f"eq.{candidate_id}"}
+            "id,token,platform,browser,is_active,last_active,created_at",
+            filters={"client_id": f"eq.{client.id}", "user_id": f"eq.{candidate_id}"}
         )
         
         return {
@@ -144,7 +145,7 @@ async def deactivate_device_token(
             "device_tokens",
             {
                 "is_active": False,
-                "updated_at": datetime.utcnow().isoformat()
+                "last_active": datetime.utcnow().isoformat()
             },
             filters={"id": f"eq.{token_id}"}
         )
