@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 import { ClientPortalShell } from "@/components/client-portal-shell";
 import { fetchJson } from "@/lib/client-portal";
+import { clientTemplateEditUrl, clientTemplateNewUrl } from "@/lib/client-routes";
 
 type TemplateRecord = {
   id: string | number;
@@ -75,7 +76,7 @@ export default function ClientTemplatesPage() {
       description="Manage your notification templates from the frontend portal. Filter by channel, include platform templates, and create client-specific variations here."
       actions={
         <Link
-          href={`/client/${clientId}/templates/create`}
+          href={clientTemplateNewUrl(clientId)}
           className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5"
         >
           Create Template
@@ -124,7 +125,7 @@ export default function ClientTemplatesPage() {
           <p className="mb-2 text-lg font-bold text-slate-800">No templates yet</p>
           <p className="mb-5 text-sm text-slate-500">Create your first client template to get started.</p>
           <Link
-            href={`/client/${clientId}/templates/create`}
+            href={clientTemplateNewUrl(clientId)}
             className="inline-flex rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white"
           >
             Create Template
@@ -148,7 +149,7 @@ export default function ClientTemplatesPage() {
                 </div>
                 <div className="flex gap-3">
                   <Link
-                    href={`/client/${clientId}/templates/create?templateId=${template.id}`}
+                    href={clientTemplateEditUrl(clientId, template.id)}
                     className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
                   >
                     Edit

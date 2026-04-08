@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 import { ClientPortalShell } from "@/components/client-portal-shell";
 import { fetchJson } from "@/lib/client-portal";
+import { clientTemplatesUrl } from "@/lib/client-routes";
 
 type TemplatePayload = {
   id: string | number;
@@ -122,7 +123,7 @@ export default function ClientTemplateCreatePage() {
       description="Build custom notification templates for your channels from the frontend portal."
       actions={
         <Link
-          href={`/client/${clientId}/templates`}
+          href={clientTemplatesUrl(clientId)}
           className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
         >
           Back to Templates

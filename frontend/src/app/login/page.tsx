@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { clientPortalUrl } from "@/lib/client-routes";
 import { ensureClientProfile } from "@/lib/clientProvisioning";
 
 export default function LoginPage() {
@@ -36,7 +37,7 @@ export default function LoginPage() {
         const clientData = await ensureClientProfile(authData.user);
         localStorage.setItem("access_token", authData.session?.access_token || "");
         localStorage.setItem("client_id", clientData.id.toString());
-        router.push(`/client/${clientData.id}`);
+        router.push(clientPortalUrl(clientData.id));
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Invalid login credentials"));

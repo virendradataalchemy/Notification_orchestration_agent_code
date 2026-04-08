@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { clientAnalyticsUrl, clientDemoUrl, clientPortalUrl, clientTemplatesUrl } from "@/lib/client-routes";
 import { supabase } from "@/lib/supabase";
 
 type ClientPortalShellProps = {
@@ -15,10 +16,10 @@ type ClientPortalShellProps = {
 };
 
 const navItems = [
-  { label: "Intelligent Portal", href: (id: string) => `/client/${id}` },
-  { label: "Templates", href: (id: string) => `/client/${id}/templates` },
-  { label: "Send Demo", href: (id: string) => `/client/${id}/send-demo` },
-  { label: "Analytics", href: (id: string) => `/client/${id}/analytics` },
+  { label: "Intelligent Portal", href: (id: string) => clientPortalUrl(id) },
+  { label: "Templates", href: (id: string) => clientTemplatesUrl(id) },
+  { label: "Send Demo", href: (id: string) => clientDemoUrl(id) },
+  { label: "Analytics", href: (id: string) => clientAnalyticsUrl(id) },
 ];
 
 export function ClientPortalShell({
@@ -40,7 +41,7 @@ export function ClientPortalShell({
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
         <div className="flex w-full items-center justify-between gap-4 px-6 py-4 xl:px-10">
           <div className="flex items-center gap-6">
-            <Link href={`/client/${clientId}`} className="text-lg font-bold tracking-tight text-slate-950">
+            <Link href={clientPortalUrl(clientId)} className="text-lg font-bold tracking-tight text-slate-950">
               Client Portal
             </Link>
             <nav className="hidden flex-wrap gap-2 md:flex">

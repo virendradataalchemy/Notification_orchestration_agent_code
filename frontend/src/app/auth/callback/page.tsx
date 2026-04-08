@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { clientPortalUrl } from "@/lib/client-routes";
 import { supabase } from "@/lib/supabase";
 import { ensureClientProfile } from "@/lib/clientProvisioning";
 
@@ -23,7 +24,7 @@ export default function AuthCallback() {
         const clientData = await ensureClientProfile(user);
         localStorage.setItem("access_token", session.access_token);
         localStorage.setItem("client_id", clientData.id.toString());
-        router.push(`/client/${clientData.id}`);
+        router.push(clientPortalUrl(clientData.id));
       } catch {
         router.push("/login?error=Backend sync failed while provisioning client profile");
       }
