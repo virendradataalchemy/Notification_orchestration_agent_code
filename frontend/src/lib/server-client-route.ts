@@ -3,17 +3,8 @@ import { headers } from "next/headers";
 export type ResolvedClientRoute = {
   id: string;
   name: string;
-  slug: string;
+  slug: string | null;
 };
-
-function fallbackSlug(name: string, id: string) {
-  const base = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return base || id;
-}
 
 async function appOrigin() {
   const headerStore = await headers();
@@ -36,7 +27,7 @@ export async function resolveClientRouteParam(clientParam: string): Promise<Reso
     return {
       id: String(bySlug.id),
       name: bySlug.name || `Client ${bySlug.id}`,
-      slug: bySlug.client_slug || fallbackSlug(bySlug.name || "", String(bySlug.id)),
+      slug: bySlug.client_slug || null,
     };
   }
 
@@ -46,7 +37,7 @@ export async function resolveClientRouteParam(clientParam: string): Promise<Reso
       return {
         id: String(byId.id),
         name: byId.name || `Client ${byId.id}`,
-        slug: byId.client_slug || fallbackSlug(byId.name || "", String(byId.id)),
+        slug: byId.client_slug || null,
       };
     }
   }
