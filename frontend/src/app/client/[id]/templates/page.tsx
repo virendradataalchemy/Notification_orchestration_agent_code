@@ -45,7 +45,7 @@ export default function ClientTemplatesPage() {
       try {
         const params = new URLSearchParams({ include_global: String(includeGlobal) });
         if (channelFilter) params.set("channel", channelFilter);
-        const data = await fetchJson<TemplatesResponse>(`/api/v1/client/templates/?${params.toString()}`, {
+        const data = await fetchJson<TemplatesResponse>(`/api/v1/client/templates?${params.toString()}`, {
           headers: { "X-Client-Id": clientId },
         });
         if (!active) return;
@@ -88,6 +88,7 @@ export default function ClientTemplatesPage() {
           <select
             value={channelFilter}
             onChange={(event) => setChannelFilter(event.target.value)}
+            suppressHydrationWarning
             className="ml-3 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none"
           >
             <option value="">All Channels</option>
@@ -103,6 +104,7 @@ export default function ClientTemplatesPage() {
             type="checkbox"
             checked={includeGlobal}
             onChange={(event) => setIncludeGlobal(event.target.checked)}
+            suppressHydrationWarning
             className="h-4 w-4 rounded"
           />
           Include Global Templates

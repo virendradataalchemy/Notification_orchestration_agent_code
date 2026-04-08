@@ -38,7 +38,7 @@ export default function ClientTemplateCreatePage() {
     const loadTemplate = async () => {
       if (!templateId) return;
       try {
-        const data = await fetchJson<{ templates: TemplatePayload[] }>(`/api/v1/client/templates/?include_global=true`, {
+        const data = await fetchJson<{ templates: TemplatePayload[] }>(`/api/v1/client/templates?include_global=true`, {
           headers: { "X-Client-Id": clientId },
         });
         if (!active) return;
@@ -93,7 +93,7 @@ export default function ClientTemplateCreatePage() {
     setError(null);
     setSuccess(null);
     try {
-      await fetchJson("/api/v1/client/templates/", {
+      await fetchJson("/api/v1/client/templates", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -137,7 +137,12 @@ export default function ClientTemplateCreatePage() {
             </Field>
             <div className="grid gap-5 md:grid-cols-2">
               <Field label="Channel">
-                <select value={channel} onChange={(event) => setChannel(event.target.value)} className={inputClassName}>
+                <select
+                  value={channel}
+                  onChange={(event) => setChannel(event.target.value)}
+                  suppressHydrationWarning
+                  className={inputClassName}
+                >
                   {["email", "sms", "slack", "whatsapp", "push"].map((option) => (
                     <option key={option} value={option}>
                       {option}
@@ -146,7 +151,12 @@ export default function ClientTemplateCreatePage() {
                 </select>
               </Field>
               <Field label="Language">
-                <select value={language} onChange={(event) => setLanguage(event.target.value)} className={inputClassName}>
+                <select
+                  value={language}
+                  onChange={(event) => setLanguage(event.target.value)}
+                  suppressHydrationWarning
+                  className={inputClassName}
+                >
                   {["en", "hi", "es", "fr", "de"].map((option) => (
                     <option key={option} value={option}>
                       {option}

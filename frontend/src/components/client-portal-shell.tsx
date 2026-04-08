@@ -57,6 +57,7 @@ export function ClientPortalShell({
           </div>
           <button
             onClick={handleSignOut}
+            suppressHydrationWarning
             className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
           >
             Sign Out
@@ -68,7 +69,6 @@ export function ClientPortalShell({
         <section className="mb-6 rounded-[28px] border border-slate-200 bg-white px-7 py-7 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-400">Client {clientId}</p>
               <h1 className="text-3xl font-bold tracking-tight text-slate-950">{title}</h1>
               {description ? <p className="mt-2 max-w-3xl text-sm text-slate-600">{description}</p> : null}
             </div>

@@ -94,6 +94,14 @@ async def _get_channel_lookup(db: AsyncSession | None) -> tuple[dict[str, int], 
 
 
 @router.post(
+    "",
+    response_model=TemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create client template",
+    description="Create a new template for your client. You can only create templates for your own client.",
+    include_in_schema=False,
+)
+@router.post(
     "/",
     response_model=TemplateResponse,
     status_code=status.HTTP_201_CREATED,
@@ -219,6 +227,13 @@ async def create_client_template(
 
 
 @router.get(
+    "",
+    response_model=ClientTemplateListResponse,
+    summary="List client templates",
+    description="List all templates available to your client (global + client-specific)",
+    include_in_schema=False,
+)
+@router.get(
     "/",
     response_model=ClientTemplateListResponse,
     summary="List client templates",
@@ -268,26 +283,32 @@ async def list_client_templates(
         serialized_templates = [_serialize_template(template) for template in templates]
     else:
         _, channel_by_id = await _get_channel_lookup(db)
-        base_filters = {
+        client_filters = {
             "is_active": "eq.true",
             "language": f"eq.{language}",
+            "client_id": f"eq.{client.id}",
         }
-        filters = dict(base_filters)
-        if include_global:
-            filters["or"] = f"(client_id.eq.{client.id},client_id.is.null)"
-        else:
-            filters["client_id"] = f"eq.{client.id}"
-        rows = await supabase_client.select(
+        client_rows = await supabase_client.select(
             "templates",
             "id,client_id,name,language,subject,content,version,is_active,notification_type,created_at,channel_id",
-            filters=filters,
+            filters=client_filters,
         )
-        if include_global and not rows:
-            rows = await supabase_client.select(
+
+        rows = list(client_rows)
+        if include_global:
+            shared_rows = await supabase_client.select(
                 "templates",
                 "id,client_id,name,language,subject,content,version,is_active,notification_type,created_at,channel_id",
-                filters=base_filters,
+                filters={
+                    "is_active": "eq.true",
+                    "language": f"eq.{language}",
+                },
             )
+            seen_ids = {row.get("id") for row in rows}
+            for row in shared_rows:
+                if row.get("id") in seen_ids:
+                    continue
+                rows.append(row)
         serialized_templates = []
         for row in rows:
             channel_name = channel_by_id.get(row.get("channel_id"), "unknown")
