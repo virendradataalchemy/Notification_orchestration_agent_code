@@ -29,9 +29,19 @@ type NotificationItem = {
   created_at?: string;
 };
 
-export default function ClientAnalyticsPage() {
+type ClientAnalyticsPageProps = {
+  clientIdProp?: string;
+  clientPathProp?: string;
+  initialClientName?: string;
+};
+
+export default function ClientAnalyticsPage({
+  clientIdProp,
+  clientPathProp,
+  initialClientName = "",
+}: ClientAnalyticsPageProps = {}) {
   const params = useParams<{ id: string }>();
-  const clientId = String(params.id);
+  const clientId = clientIdProp || String(params.id);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [activeChannel, setActiveChannel] = useState("");
@@ -81,7 +91,8 @@ export default function ClientAnalyticsPage() {
   return (
     <ClientPortalShell
       clientId={clientId}
-      title={overview?.client_name || `Client ${clientId} Analytics`}
+      clientPath={clientPathProp || clientId}
+      title={overview?.client_name || initialClientName || "Analytics"}
       description="Track delivery reliability, channel performance, and recent transmission ledger activity from the frontend analytics workspace."
     >
       {loading ? (

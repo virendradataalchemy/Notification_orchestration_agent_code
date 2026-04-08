@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolveClientRouteParam } from "@/lib/server-client-route";
 
 export default async function ClientsIndexRedirect({
   params,
@@ -6,5 +7,6 @@ export default async function ClientsIndexRedirect({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(`/clients/${id}/portal`);
+  const resolved = await resolveClientRouteParam(id);
+  redirect(`/clients/${resolved?.slug || id}/portal`);
 }

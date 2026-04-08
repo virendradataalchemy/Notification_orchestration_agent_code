@@ -64,7 +64,7 @@ export default function AdminDashboard() {
             {clients.map(client => {
               const isActive = client.status?.toLowerCase() === 'active';
               return (
-                <div key={client.id} onClick={() => router.push(clientPortalUrl(client.id))} className="bg-white p-6 border border-slate-200 hover:border-slate-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between min-h-[220px]">
+                <div key={client.id} onClick={() => router.push(clientPortalUrl(client.client_slug || client.id))} className="bg-white p-6 border border-slate-200 hover:border-slate-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between min-h-[220px]">
                   <div>
                     <div className="flex justify-between items-start mb-4">
                       <div>

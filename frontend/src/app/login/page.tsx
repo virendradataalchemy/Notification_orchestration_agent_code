@@ -37,7 +37,7 @@ export default function LoginPage() {
         const clientData = await ensureClientProfile(authData.user);
         localStorage.setItem("access_token", authData.session?.access_token || "");
         localStorage.setItem("client_id", clientData.id.toString());
-        router.push(clientPortalUrl(clientData.id));
+        router.push(clientPortalUrl(clientData.client_slug || clientData.id));
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Invalid login credentials"));

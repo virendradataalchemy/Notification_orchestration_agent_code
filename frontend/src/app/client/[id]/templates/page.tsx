@@ -28,11 +28,21 @@ type TemplatesResponse = {
   templates: TemplateRecord[];
 };
 
-export default function ClientTemplatesPage() {
+type ClientTemplatesPageProps = {
+  clientIdProp?: string;
+  clientPathProp?: string;
+  initialClientName?: string;
+};
+
+export default function ClientTemplatesPage({
+  clientIdProp,
+  clientPathProp,
+  initialClientName = "",
+}: ClientTemplatesPageProps = {}) {
   const params = useParams<{ id: string }>();
-  const clientId = String(params.id);
+  const clientId = clientIdProp || String(params.id);
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
-  const [clientName, setClientName] = useState<string>("");
+  const [clientName, setClientName] = useState<string>(initialClientName);
   const [channelFilter, setChannelFilter] = useState("");
   const [includeGlobal, setIncludeGlobal] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -72,7 +82,8 @@ export default function ClientTemplatesPage() {
   return (
     <ClientPortalShell
       clientId={clientId}
-      title={clientName || `Client ${clientId} Templates`}
+      clientPath={clientPathProp || clientId}
+      title={clientName ? `${clientName} Templates` : "Templates"}
       description="Manage your notification templates from the frontend portal. Filter by channel, include platform templates, and create client-specific variations here."
       actions={
         <Link

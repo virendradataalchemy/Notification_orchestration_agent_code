@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 
 type ClientPortalShellProps = {
   clientId: string;
+  clientPath?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
@@ -24,6 +25,7 @@ const navItems = [
 
 export function ClientPortalShell({
   clientId,
+  clientPath,
   title,
   description,
   actions,
@@ -41,14 +43,14 @@ export function ClientPortalShell({
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
         <div className="flex w-full items-center justify-between gap-4 px-6 py-4 xl:px-10">
           <div className="flex items-center gap-6">
-            <Link href={clientPortalUrl(clientId)} className="text-lg font-bold tracking-tight text-slate-950">
+            <Link href={clientPortalUrl(clientPath || clientId)} className="text-lg font-bold tracking-tight text-slate-950">
               Client Portal
             </Link>
             <nav className="hidden flex-wrap gap-2 md:flex">
               {navItems.map((item) => (
                 <Link
                   key={item.label}
-                  href={item.href(clientId)}
+                  href={item.href(clientPath || clientId)}
                   className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 >
                   {item.label}

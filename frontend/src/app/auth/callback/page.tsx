@@ -24,7 +24,7 @@ export default function AuthCallback() {
         const clientData = await ensureClientProfile(user);
         localStorage.setItem("access_token", session.access_token);
         localStorage.setItem("client_id", clientData.id.toString());
-        router.push(clientPortalUrl(clientData.id));
+        router.push(clientPortalUrl(clientData.client_slug || clientData.id));
       } catch {
         router.push("/login?error=Backend sync failed while provisioning client profile");
       }

@@ -33,6 +33,7 @@ def _serialize_client(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": row["id"],
         "name": row.get("name", f"Client {row['id']}"),
+        "client_slug": row.get("client_slug"),
         "status": "active" if row.get("is_active", True) else "inactive",
         "is_active": row.get("is_active", True),
         "created_at": row.get("created_at"),
@@ -44,6 +45,7 @@ def _serialize_created_client(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": row["id"],
         "name": row.get("name"),
+        "client_slug": row.get("client_slug"),
         "is_active": row.get("is_active", True),
         "status": "active" if row.get("is_active", True) else "inactive",
         "default_language": row.get("default_language", "en"),
@@ -128,7 +130,7 @@ async def _upsert_client_preferences(
 @router.get("/", response_model=List[dict])
 async def list_clients(client: Client = Depends(get_authenticated_client)):
     rows = await supabase_client.select(
-        CLIENTS_TABLE, "id,name,is_active,created_at,updated_at"
+        CLIENTS_TABLE, "id,name,client_slug,is_active,created_at,updated_at"
     )
     return [_serialize_client(r) for r in rows]
 
@@ -136,7 +138,7 @@ async def list_clients(client: Client = Depends(get_authenticated_client)):
 @router.get("/me", response_model=dict)
 async def get_current_client(client: Client = Depends(get_authenticated_client)):
     rows = await supabase_client.select(
-        CLIENTS_TABLE, "id,name,is_active,created_at,updated_at",
+        CLIENTS_TABLE, "id,name,client_slug,is_active,created_at,updated_at",
         limit=1, filters={"id": f"eq.{client.id}"},
     )
     if not rows:
@@ -147,7 +149,7 @@ async def get_current_client(client: Client = Depends(get_authenticated_client))
 @router.get("/{client_id}", response_model=dict)
 async def get_client(client_id: str, client: Client = Depends(get_authenticated_client)):
     rows = await supabase_client.select(
-        CLIENTS_TABLE, "id,name,is_active,created_at,updated_at",
+        CLIENTS_TABLE, "id,name,client_slug,is_active,created_at,updated_at",
         limit=1, filters={"id": f"eq.{client_id}"},
     )
     if not rows:
@@ -283,9 +285,35 @@ async def create_client(request: CreateClientRequest):
 async def get_client_by_supabase_uid(uid: str):
     """Retrieve client details using Supabase Auth UID."""
     rows = await supabase_client.select(
-        CLIENTS_TABLE, "id,name,is_active,created_at,updated_at",
+        CLIENTS_TABLE, "id,name,client_slug,is_active,created_at,updated_at",
         limit=1, filters={"supabase_uid": f"eq.{uid}"},
     )
     if not rows:
         raise HTTPException(status_code=404, detail="Client not found for this Supabase UID")
+    return _serialize_client(rows[0])
+
+
+@router.get("/by-id/{client_id}", response_model=dict)
+async def get_client_by_id(client_id: str):
+    rows = await supabase_client.select(
+        CLIENTS_TABLE,
+        "id,name,client_slug,is_active,created_at,updated_at",
+        limit=1,
+        filters={"id": f"eq.{client_id}"},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return _serialize_client(rows[0])
+
+
+@router.get("/by-slug/{client_slug}", response_model=dict)
+async def get_client_by_slug(client_slug: str):
+    rows = await supabase_client.select(
+        CLIENTS_TABLE,
+        "id,name,client_slug,is_active,created_at,updated_at",
+        limit=1,
+        filters={"client_slug": f"eq.{client_slug}"},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Client not found for this slug")
     return _serialize_client(rows[0])

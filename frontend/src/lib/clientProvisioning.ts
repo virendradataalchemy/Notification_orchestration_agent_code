@@ -1,6 +1,7 @@
 export type ClientProfile = {
   id: number;
   name?: string;
+  client_slug?: string | null;
 };
 
 type AuthLikeUser = {

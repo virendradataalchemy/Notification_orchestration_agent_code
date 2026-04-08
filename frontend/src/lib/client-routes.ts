@@ -1,23 +1,23 @@
-export function clientPortalUrl(clientId: string | number) {
-  return `/clients/${clientId}/portal`;
+export function clientPortalUrl(clientPath: string | number) {
+  return `/clients/${clientPath}/portal`;
 }
 
-export function clientAnalyticsUrl(clientId: string | number) {
-  return `/clients/${clientId}/analytics`;
+export function clientAnalyticsUrl(clientPath: string | number) {
+  return `/clients/${clientPath}/analytics`;
 }
 
-export function clientTemplatesUrl(clientId: string | number) {
-  return `/clients/${clientId}/templates`;
+export function clientTemplatesUrl(clientPath: string | number) {
+  return `/clients/${clientPath}/templates`;
 }
 
-export function clientTemplateNewUrl(clientId: string | number) {
-  return `/clients/${clientId}/templates/new`;
+export function clientTemplateNewUrl(clientPath: string | number) {
+  return `/clients/${clientPath}/templates/new`;
 }
 
-export function clientTemplateEditUrl(clientId: string | number, templateId: string | number) {
-  return `/clients/${clientId}/templates/new?templateId=${templateId}`;
+export function clientTemplateEditUrl(clientPath: string | number, templateId: string | number) {
+  return `/clients/${clientPath}/templates/new?templateId=${templateId}`;
 }
 
-export function clientDemoUrl(clientId: string | number) {
-  return `/clients/${clientId}/notifications/demo`;
+export function clientDemoUrl(clientPath: string | number) {
+  return `/clients/${clientPath}/notifications/demo`;
 }

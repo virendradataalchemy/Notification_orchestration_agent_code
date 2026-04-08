@@ -18,9 +18,19 @@ type TemplatePayload = {
   body: string;
 };
 
-export default function ClientTemplateCreatePage() {
+type ClientTemplateCreatePageProps = {
+  clientIdProp?: string;
+  clientPathProp?: string;
+  initialClientName?: string;
+};
+
+export default function ClientTemplateCreatePage({
+  clientIdProp,
+  clientPathProp,
+  initialClientName = "",
+}: ClientTemplateCreatePageProps = {}) {
   const params = useParams<{ id: string }>();
-  const clientId = String(params.id);
+  const clientId = clientIdProp || String(params.id);
   const searchParams = useSearchParams();
   const templateId = searchParams.get("templateId");
 
@@ -119,11 +129,12 @@ export default function ClientTemplateCreatePage() {
   return (
     <ClientPortalShell
       clientId={clientId}
-      title={templateId ? "Edit Template" : "Create Template"}
+      clientPath={clientPathProp || clientId}
+      title={templateId ? `Edit ${initialClientName ? `${initialClientName} ` : ""}Template` : `${initialClientName ? `${initialClientName} ` : ""}Create Template`}
       description="Build custom notification templates for your channels from the frontend portal."
       actions={
         <Link
-          href={clientTemplatesUrl(clientId)}
+          href={clientTemplatesUrl(clientPathProp || clientId)}
           className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
         >
           Back to Templates

@@ -9,12 +9,12 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/client/:id",
-        destination: "/clients/:id/portal",
+        destination: "/clients/:id",
         permanent: false,
       },
       {
         source: "/client/:id/orchestration",
-        destination: "/clients/:id/portal",
+        destination: "/clients/:id",
         permanent: false,
       },
       {

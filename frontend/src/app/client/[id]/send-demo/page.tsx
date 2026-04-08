@@ -35,9 +35,19 @@ type HistoryItem = {
   template_name?: string;
 };
 
-export default function ClientSendDemoPage() {
+type ClientSendDemoPageProps = {
+  clientIdProp?: string;
+  clientPathProp?: string;
+  initialClientName?: string;
+};
+
+export default function ClientSendDemoPage({
+  clientIdProp,
+  clientPathProp,
+  initialClientName = "",
+}: ClientSendDemoPageProps = {}) {
   const params = useParams<{ id: string }>();
-  const clientId = String(params.id);
+  const clientId = clientIdProp || String(params.id);
   const [options, setOptions] = useState<DemoOptions | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [candidateId, setCandidateId] = useState("");
@@ -154,7 +164,8 @@ export default function ClientSendDemoPage() {
   return (
     <ClientPortalShell
       clientId={clientId}
-      title="Interactive Channel Demo"
+      clientPath={clientPathProp || clientId}
+      title={initialClientName ? `${initialClientName} Demo` : "Interactive Channel Demo"}
       description="Send frontend-powered demo notifications using the same backend APIs as the legacy portal, but with a dedicated Next.js experience."
     >
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
