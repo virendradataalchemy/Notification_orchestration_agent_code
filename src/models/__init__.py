@@ -15,7 +15,7 @@ from .notification import (
     Priority,
     ChannelStatus,
 )
-from .template import Template
+from .template import Template, TemplateDepartment
 from .user_preference import UserPreference
 from .audit_log import AuditLog
 
@@ -37,6 +37,7 @@ __all__ = [
     "Priority",
     "ChannelStatus",
     "Template",
+    "TemplateDepartment",
     "UserPreference",
     "AuditLog",
 ]

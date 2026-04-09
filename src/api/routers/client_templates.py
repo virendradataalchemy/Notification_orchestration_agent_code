@@ -39,7 +39,7 @@ router = APIRouter(prefix="/client/templates", tags=["client-templates"])
 template_engine = ClientTemplateEngine()
 
 
-def _serialize_template(template: Template | dict) -> dict:
+def _serialize_template(template: Template | dict, current_client_id: int | None = None) -> dict:
     if isinstance(template, dict):
         channel_name = template.get("channel")
         if not channel_name:
@@ -58,7 +58,13 @@ def _serialize_template(template: Template | dict) -> dict:
             "body": template.get("content") or template.get("body") or "",
             "version": template.get("version") or 1,
             "active": template.get("is_active", template.get("active", True)),
-            "is_global": template.get("is_global", template.get("client_id") is None),
+            "is_global": template.get(
+                "is_global",
+                template.get("visibility") == "public"
+                and current_client_id is not None
+                and template.get("client_id") != current_client_id,
+            ),
+            "visibility": template.get("visibility") or "public",
             "base_template_id": template.get("base_template_id"),
             "created_at": template.get("created_at") or datetime.utcnow(),
         }
@@ -73,7 +79,8 @@ def _serialize_template(template: Template | dict) -> dict:
         "body": template.body,
         "version": template.version,
         "active": template.active,
-        "is_global": template.is_global,
+        "is_global": template.visibility == "public" and current_client_id is not None and template.client_id != current_client_id,
+        "visibility": template.visibility,
         "base_template_id": template.base_template_id,
         "created_at": template.created_at or datetime.utcnow(),
     }
@@ -199,12 +206,13 @@ async def create_client_template(
             version=1,
             is_active=True,
             notification_type=template.name,
+            visibility=template.visibility,
         )
 
         db.add(db_template)
         await db.commit()
         await db.refresh(db_template)
-        return _serialize_template(db_template)
+        return _serialize_template(db_template, client.id)
 
     rows = await supabase_client.insert(
         "templates",
@@ -219,11 +227,12 @@ async def create_client_template(
             "version": 1,
             "is_active": True,
             "notification_type": template.name,
+            "visibility": template.visibility,
         },
     )
     created = rows[0]
     created["channel"] = template.channel.value
-    return _serialize_template(created)
+    return _serialize_template(created, client.id)
 
 
 @router.get(
@@ -265,7 +274,7 @@ async def list_client_templates(
             conditions.append(
                 or_(
                     Template.client_id == client.id,
-                    Template.client_id.is_(None)
+                    Template.visibility == "public"
                 )
             )
         else:
@@ -280,7 +289,7 @@ async def list_client_templates(
 
         result = await db.execute(query)
         templates = result.scalars().all()
-        serialized_templates = [_serialize_template(template) for template in templates]
+        serialized_templates = [_serialize_template(template, client.id) for template in templates]
     else:
         _, channel_by_id = await _get_channel_lookup(db)
         client_filters = {
@@ -290,7 +299,7 @@ async def list_client_templates(
         }
         client_rows = await supabase_client.select(
             "templates",
-            "id,client_id,name,language,subject,content,version,is_active,notification_type,created_at,channel_id",
+            "id,client_id,name,language,subject,content,version,is_active,notification_type,visibility,created_at,channel_id",
             filters=client_filters,
         )
 
@@ -298,10 +307,11 @@ async def list_client_templates(
         if include_global:
             shared_rows = await supabase_client.select(
                 "templates",
-                "id,client_id,name,language,subject,content,version,is_active,notification_type,created_at,channel_id",
+                "id,client_id,name,language,subject,content,version,is_active,notification_type,visibility,created_at,channel_id",
                 filters={
                     "is_active": "eq.true",
                     "language": f"eq.{language}",
+                    "visibility": "eq.public",
                 },
             )
             seen_ids = {row.get("id") for row in rows}
@@ -315,10 +325,10 @@ async def list_client_templates(
             if channel and channel_name != channel.value:
                 continue
             row["channel"] = channel_name
-            row["is_global"] = row.get("client_id") != client.id
-            serialized_templates.append(_serialize_template(row))
+            row["is_global"] = row.get("visibility") == "public" and row.get("client_id") != client.id
+            serialized_templates.append(_serialize_template(row, client.id))
 
-    global_count = sum(1 for t in serialized_templates if t["client_id"] is None)
+    global_count = sum(1 for t in serialized_templates if t.get("visibility") == "public" and t["client_id"] != client.id)
     client_count = sum(1 for t in serialized_templates if t["client_id"] == client.id)
 
     return ClientTemplateListResponse(
@@ -426,12 +436,12 @@ async def get_client_template(
         )
         result = await db.execute(query)
         template = result.scalar_one_or_none()
-        serialized = _serialize_template(template) if template else None
+        serialized = _serialize_template(template, client.id) if template else None
     else:
         _, channel_by_id = await _get_channel_lookup(db)
         rows = await supabase_client.select(
             "templates",
-            "id,client_id,name,language,subject,content,version,is_active,notification_type,created_at,channel_id",
+            "id,client_id,name,language,subject,content,version,is_active,notification_type,visibility,created_at,channel_id",
             limit=1,
             filters={
                 "id": f"eq.{template_id}",
@@ -441,7 +451,7 @@ async def get_client_template(
         template = rows[0] if rows else None
         if template:
             template["channel"] = channel_by_id.get(template.get("channel_id"), "unknown")
-        serialized = _serialize_template(template) if template else None
+        serialized = _serialize_template(template, client.id) if template else None
 
     if not serialized:
         raise HTTPException(
@@ -514,6 +524,8 @@ async def update_client_template(
         db_template.name = update.name
     if update.active is not None:
         db_template.active = update.active
+    if update.visibility is not None:
+        db_template.visibility = update.visibility
 
     # Increment version
     db_template.version += 1
@@ -521,7 +533,7 @@ async def update_client_template(
     await db.commit()
     await db.refresh(db_template)
 
-    return _serialize_template(db_template)
+    return _serialize_template(db_template, client.id)
 
 
 @router.delete(

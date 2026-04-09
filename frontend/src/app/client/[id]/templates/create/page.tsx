@@ -16,6 +16,7 @@ type TemplatePayload = {
   language: string;
   subject?: string | null;
   body: string;
+  visibility?: "public" | "private";
 };
 
 type ClientTemplateCreatePageProps = {
@@ -39,6 +40,7 @@ export default function ClientTemplateCreatePage({
   const [language, setLanguage] = useState("en");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [preview, setPreview] = useState<{ rendered_subject?: string | null; rendered_body: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,7 @@ export default function ClientTemplateCreatePage({
           setLanguage(template.language);
           setSubject(template.subject || "");
           setBody(template.body);
+          setVisibility(template.visibility || "public");
         }
       } catch {
         // Keep form usable even if preload fails.
@@ -116,6 +119,7 @@ export default function ClientTemplateCreatePage({
           language,
           subject: subject || null,
           body,
+          visibility,
         }),
       });
       setSuccess("Template saved successfully.");
@@ -180,6 +184,30 @@ export default function ClientTemplateCreatePage({
             <Field label="Subject">
               <input value={subject} onChange={(event) => setSubject(event.target.value)} className={inputClassName} />
             </Field>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Visibility</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-700">
+                    {visibility === "public" ? "Public template" : "Private template"}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Public templates are available to every client. Private templates stay in this client workspace.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVisibility((current) => (current === "public" ? "private" : "public"))}
+                  className={`flex h-8 w-16 items-center rounded-full p-1 transition-colors ${visibility === "public" ? "bg-indigo-600" : "bg-slate-300"}`}
+                  aria-pressed={visibility === "public"}
+                  aria-label="Toggle template visibility"
+                >
+                  <span
+                    className={`h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${visibility === "public" ? "translate-x-8" : "translate-x-0"}`}
+                  />
+                </button>
+              </div>
+            </div>
             <Field label="Body">
               <textarea
                 value={body}

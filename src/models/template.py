@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,12 +23,15 @@ class Template(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notification_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    department: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False, default="public", server_default="public", index=True)
     created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
 
     client = relationship("Client", back_populates="templates")
     channel_ref = relationship("Channel", back_populates="templates")
     communications = relationship("Communication", back_populates="template")
+    departments = relationship("TemplateDepartment", back_populates="template", cascade="all, delete-orphan")
 
     @property
     def active(self) -> bool:
@@ -57,3 +60,15 @@ class Template(Base):
     @property
     def base_template_id(self) -> Optional[int]:
         return None
+
+
+class TemplateDepartment(Base):
+    __tablename__ = "template_departments"
+    __table_args__ = (UniqueConstraint("template_id", "department", name="uq_template_departments_template_department"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    template_id: Mapped[int] = mapped_column(ForeignKey("templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    department: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
+
+    template = relationship("Template", back_populates="departments")

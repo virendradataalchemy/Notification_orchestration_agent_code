@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from enum import Enum
 import uuid
@@ -154,6 +154,7 @@ class ClientTemplateCreate(BaseModel):
     body: str = Field(..., description="Template body with Jinja2 variables")
     base_template_id: Optional[str] = Field(None, description="Global template ID to inherit from")
     description: Optional[str] = Field(None, description="Template description")
+    visibility: Literal["public", "private"] = Field(default="public", description="Template visibility")
 
 
 class ClientTemplateUpdate(BaseModel):
@@ -163,6 +164,7 @@ class ClientTemplateUpdate(BaseModel):
     body: Optional[str] = None
     active: Optional[bool] = None
     description: Optional[str] = None
+    visibility: Optional[Literal["public", "private"]] = None
 
 
 class TemplatePreviewRequest(BaseModel):
@@ -200,6 +202,7 @@ class TemplateResponse(BaseModel):
     version: int
     active: bool
     is_global: bool
+    visibility: str = "public"
     base_template_id: Optional[str] = None
     created_at: Optional[datetime] = None
 

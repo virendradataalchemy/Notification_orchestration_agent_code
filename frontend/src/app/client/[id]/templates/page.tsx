@@ -20,6 +20,7 @@ type TemplateRecord = {
   version: number;
   active: boolean;
   is_global: boolean;
+  visibility?: "public" | "private";
 };
 
 type TemplatesResponse = {
@@ -154,6 +155,9 @@ export default function ClientTemplatesPage({
                     <Badge tone={template.is_global ? "amber" : "emerald"}>
                       {template.is_global ? "Global" : "Custom"}
                     </Badge>
+                    <Badge tone={template.visibility === "private" ? "slate" : "indigo"}>
+                      {template.visibility || "public"}
+                    </Badge>
                     <Badge>{template.language}</Badge>
                     <Badge>v{template.version}</Badge>
                   </div>
@@ -185,12 +189,13 @@ function Badge({
   tone = "indigo",
 }: {
   children: ReactNode;
-  tone?: "indigo" | "emerald" | "amber";
+  tone?: "indigo" | "emerald" | "amber" | "slate";
 }) {
   const toneMap = {
     indigo: "bg-indigo-50 text-indigo-700",
     emerald: "bg-emerald-50 text-emerald-700",
     amber: "bg-amber-50 text-amber-700",
+    slate: "bg-slate-100 text-slate-700",
   } as const;
 
   return <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${toneMap[tone]}`}>{children}</span>;
