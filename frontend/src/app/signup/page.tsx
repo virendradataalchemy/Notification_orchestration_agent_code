@@ -29,6 +29,7 @@ export default function SignupPage() {
   const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
   const [quietStart, setQuietStart] = useState("22");
   const [quietEnd, setQuietEnd] = useState("08");
+  const [activeQuietTime, setActiveQuietTime] = useState<"start" | "end">("start");
   const [channels, setChannels] = useState<{ [key: string]: boolean }>({
     email: true,
     sms: false,
@@ -53,6 +54,21 @@ export default function SignupPage() {
 
   const generateSlug = (value: string) =>
     value.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+
+  const formatQuietHour = (hour: string) => `${hour.padStart(2, "0")}:00`;
+
+  const selectQuietTime = (field: "start" | "end") => {
+    setQuietHoursEnabled(true);
+    setActiveQuietTime(field);
+  };
+
+  const setSelectedQuietHour = (hour: string) => {
+    if (activeQuietTime === "start") {
+      setQuietStart(hour);
+    } else {
+      setQuietEnd(hour);
+    }
+  };
 
   useEffect(() => {
     if (!slugEdited) {
@@ -198,7 +214,7 @@ export default function SignupPage() {
         client_slug: clientSlug || generateSlug(name),
         brand_color: brandColor,
         supabase_uid: supabaseUserId,
-        quiet_hours: quietHoursEnabled ? { start: `${quietStart}:00`, end: `${quietEnd}:00` } : undefined,
+        quiet_hours: quietHoursEnabled ? { start: formatQuietHour(quietStart), end: formatQuietHour(quietEnd) } : undefined,
       });
       window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
       setSuccess(`Welcome aboard! Account provisioned. Routing you in 2 seconds...`);
@@ -385,25 +401,34 @@ export default function SignupPage() {
                       />
                    </label>
                    <div>
-                      <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
-                          <span>Start Time (24h)</span>
-                          <span className="text-indigo-600">{quietStart}:00</span>
+                      <div className="mb-3 grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => selectQuietTime("start")}
+                          className={`rounded-md border px-3 py-2 text-left transition-colors ${activeQuietTime === "start" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600"}`}
+                        >
+                          <span className="block text-xs font-bold text-slate-500">Start Time (24h)</span>
+                          <span className="text-sm font-bold">{formatQuietHour(quietStart)}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectQuietTime("end")}
+                          className={`rounded-md border px-3 py-2 text-left transition-colors ${activeQuietTime === "end" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600"}`}
+                        >
+                          <span className="block text-xs font-bold text-slate-500">End Time (24h)</span>
+                          <span className="text-sm font-bold">{formatQuietHour(quietEnd)}</span>
+                        </button>
                       </div>
-                      <input 
-                        type="range" min="0" max="23" 
-                        value={quietStart} onChange={e => setQuietStart(e.target.value)} 
-                        disabled={!quietHoursEnabled}
-                        className="w-full accent-indigo-600 disabled:opacity-40"
-                      />
-                   </div>
-                   <div>
                       <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
-                          <span>End Time (24h)</span>
-                          <span className="text-indigo-600">{quietEnd}:00</span>
+                          <span>{activeQuietTime === "start" ? "Adjust start time" : "Adjust end time"}</span>
+                          <span className="text-indigo-600">{formatQuietHour(activeQuietTime === "start" ? quietStart : quietEnd)}</span>
                       </div>
-                      <input 
-                        type="range" min="0" max="23" 
-                        value={quietEnd} onChange={e => setQuietEnd(e.target.value)} 
+                      <input
+                        type="range"
+                        min="0"
+                        max="23"
+                        value={activeQuietTime === "start" ? quietStart : quietEnd}
+                        onChange={e => setSelectedQuietHour(e.target.value)}
                         disabled={!quietHoursEnabled}
                         className="w-full accent-indigo-600 disabled:opacity-40"
                       />
