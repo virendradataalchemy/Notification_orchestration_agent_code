@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { clientAnalyticsUrl, clientDemoUrl, clientPortalUrl, clientTemplatesUrl } from "@/lib/client-routes";
+import { clientAnalyticsUrl, clientDemoUrl, clientDepartmentsUrl, clientPortalUrl, clientTemplatesUrl } from "@/lib/client-routes";
 import { supabase } from "@/lib/supabase";
 
 type ClientPortalShellProps = {
@@ -19,6 +19,7 @@ type ClientPortalShellProps = {
 const navItems = [
   { label: "Intelligent Portal", href: (id: string) => clientPortalUrl(id) },
   { label: "Templates", href: (id: string) => clientTemplatesUrl(id) },
+  { label: "Departments", href: (id: string) => clientDepartmentsUrl(id) },
   { label: "Send Demo", href: (id: string) => clientDemoUrl(id) },
   { label: "Analytics", href: (id: string) => clientAnalyticsUrl(id) },
 ];

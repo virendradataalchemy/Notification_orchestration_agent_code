@@ -8,14 +8,32 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 from src.core import supabase_client
+from src.config.department_mapping import (
+    DEPARTMENT_LABELS,
+    get_department_role_emails,
+    resolve_template_department,
+)
+from src.services.supabase_notification_service import SupabaseNotificationService
 
 router = APIRouter(tags=["client-dashboard"])
 templates = Jinja2Templates(directory="src/templates")
+notification_service = SupabaseNotificationService()
+
+
+class DepartmentSendEmailRequest(BaseModel):
+    to_email: str
+    from_email: str
+    template_id: int | None = None
+    subject: str | None = None
+    body: str | None = None
+    notification_type: str | None = None
+    priority: str = "high"
 
 
 def _parse_dt(value: Any):
@@ -51,6 +69,48 @@ async def _load_dashboard_data() -> dict[str, Any]:
 
 def _channel_name_map(data: dict[str, Any]) -> dict[int, str]:
     return {row["id"]: row["name"] for row in data["channels"]}
+
+
+def _normalize_status(value: Any) -> str:
+    return str(value or "unknown").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+async def _ensure_candidate_for_email(client_id: int, email: str, fallback_name: str = "Department Recipient") -> int:
+    rows = await supabase_client.select(
+        "candidates",
+        "id,name,email",
+        limit=1,
+        filters={"client_id": f"eq.{client_id}", "email": f"eq.{email}"},
+    )
+    if rows:
+        return int(rows[0]["id"])
+
+    latest = await supabase_client.select("candidates", "id", limit=1, filters={"order": "id.desc"})
+    next_id = int(latest[0]["id"]) + 1 if latest else 1
+    now = datetime.utcnow().isoformat()
+    inserted = await supabase_client.insert(
+        "candidates",
+        {
+            "id": next_id,
+            "client_id": client_id,
+            "name": fallback_name,
+            "email": email,
+            "language": "en",
+            "metadata": {"department_contact": True, "created_via": "department_dashboard"},
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+    return int(inserted[0]["id"])
+
+
+async def _load_template_categories() -> dict[int, str]:
+    """Load template category mapping when the optional category column exists."""
+    try:
+        rows = await supabase_client.select("templates", "id,category")
+    except Exception:
+        return {}
+    return {int(row["id"]): str(row.get("category") or "") for row in rows if row.get("id") is not None}
 
 
 @router.get("/client-dashboard", response_class=HTMLResponse)
@@ -318,6 +378,256 @@ async def get_client_provider_health(client_id: str) -> Dict[str, Any]:
             "total": len(provider_stats),
         },
         "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+@router.get("/api/client-dashboard/client/{client_id}/departments")
+async def get_client_departments_dashboard(client_id: str, limit: int = 20) -> Dict[str, Any]:
+    """Build department cards and metrics from existing communication/event data."""
+    data = await _load_dashboard_data()
+    client_pk = int(client_id)
+    client = next((row for row in data["clients"] if row["id"] == client_pk), None)
+    if not client:
+        return {"error": "Client not found"}
+
+    channels_by_id = _channel_name_map(data)
+    template_categories = await _load_template_categories()
+    candidates_by_id = {row["id"]: row for row in data["candidates"] if row.get("client_id") == client_pk}
+    templates_by_id = {
+        row["id"]: row
+        for row in data["templates"]
+        if row.get("is_active", True) and row.get("client_id") in (None, client_pk)
+    }
+
+    events_by_comm: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for event in data["events"]:
+        comm_id = event.get("communication_id")
+        if comm_id is not None:
+            events_by_comm[comm_id].append(event)
+
+    role_emails = get_department_role_emails(client_pk)
+    departments: dict[str, Dict[str, Any]] = {
+        dept: {
+            "department": dept,
+            "label": label,
+            "role_emails": role_emails.get(dept, []),
+            "metrics": {
+                "total": 0,
+                "sent": 0,
+                "received": 0,
+                "opened": 0,
+                "failed": 0,
+                "in_progress": 0,
+            },
+            "templates": [],
+            "recent_mails": [],
+        }
+        for dept, label in DEPARTMENT_LABELS.items()
+    }
+
+    # Build template catalog by department from mapping rules.
+    for template in templates_by_id.values():
+        department = resolve_template_department(
+            client_pk,
+            template.get("id"),
+            template.get("name"),
+            template.get("notification_type"),
+            template_categories.get(int(template.get("id"))),
+        )
+        if department not in departments:
+            continue
+        departments[department]["templates"].append(
+            {
+                "id": template.get("id"),
+                "name": template.get("name"),
+                "notification_type": template.get("notification_type"),
+                "category": template_categories.get(int(template.get("id"))),
+                "channel": channels_by_id.get(template.get("channel_id"), "unknown"),
+                "subject": template.get("subject"),
+                "content": template.get("content"),
+            }
+        )
+
+    communications = [row for row in data["communications"] if row.get("client_id") == client_pk]
+    communications.sort(key=lambda row: row.get("created_at") or "", reverse=True)
+
+    for comm in communications:
+        template = templates_by_id.get(comm.get("template_id"))
+        department = resolve_template_department(
+            client_pk,
+            comm.get("template_id"),
+            (template or {}).get("name"),
+            comm.get("notification_type"),
+            template_categories.get(int(comm.get("template_id"))) if comm.get("template_id") is not None else None,
+        )
+        if department not in departments:
+            continue
+
+        item = departments[department]
+        metrics = item["metrics"]
+        metrics["total"] += 1
+
+        status = _normalize_status(comm.get("status"))
+        sent_statuses = {"sent", "delivered", "completed", "closed"}
+        failed_statuses = {"failed", "error", "undelivered"}
+        progress_statuses = {"queued", "opened", "in_progress", "ringing", "initiated"}
+
+        if status in sent_statuses:
+            metrics["sent"] += 1
+        if status in failed_statuses:
+            metrics["failed"] += 1
+        if status in progress_statuses:
+            metrics["in_progress"] += 1
+
+        opened_at = None
+        received = status in sent_statuses
+        opened = False
+        for event in events_by_comm.get(comm.get("id"), []):
+            event_type = _normalize_status(event.get("event_type"))
+            event_status = _normalize_status(event.get("status"))
+            if event_type in {"sent", "delivered", "opened"} or event_status in {"sent", "delivered", "opened"}:
+                received = True
+            if event_type == "opened" or event_status == "opened":
+                opened = True
+                opened_at = event.get("created_at") or opened_at
+
+        if received:
+            metrics["received"] += 1
+        if opened:
+            metrics["opened"] += 1
+
+        if len(item["recent_mails"]) < limit:
+            candidate = candidates_by_id.get(comm.get("candidate_id"), {})
+            item["recent_mails"].append(
+                {
+                    "communication_id": comm.get("id"),
+                    "mail_type": comm.get("notification_type"),
+                    "template_id": comm.get("template_id"),
+                    "template_name": (template or {}).get("name"),
+                    "template_category": template_categories.get(int(comm.get("template_id"))) if comm.get("template_id") is not None else None,
+                    "channel": channels_by_id.get(comm.get("channel_id"), "unknown"),
+                    "status": status,
+                    "direction": "received" if received else "sent",
+                    "recipient": candidate.get("email") or candidate.get("phone") or candidate.get("whatsapp_number") or "N/A",
+                    "subject": (template or {}).get("subject"),
+                    "created_at": comm.get("created_at"),
+                    "opened_at": opened_at,
+                }
+            )
+
+    for dept in departments.values():
+        dept["templates"].sort(key=lambda row: (str(row.get("name") or "").lower(), row.get("id") or 0))
+
+    return {
+        "client_id": client_pk,
+        "client_name": client.get("name"),
+        "generated_at": datetime.utcnow().isoformat(),
+        "departments": [departments["hr"], departments["it"], departments["finance"]],
+        "use_cases": [
+            {
+                "key": "new_candidate_setup",
+                "title": "Candidate Added -> HR informs IT",
+                "description": "After candidate creation, HR triggers setup mail to IT for resource preparation.",
+                "teams": ["HR", "IT"],
+            },
+            {
+                "key": "attendance_payroll",
+                "title": "Attendance Record -> HR to Finance",
+                "description": "Attendance details are captured and forwarded so Finance can process paychecks.",
+                "teams": ["IT", "HR", "Finance"],
+            },
+        ],
+    }
+
+
+@router.get("/api/client-dashboard/client/{client_id}/departments/{department_key}")
+async def get_client_department_detail(client_id: str, department_key: str, limit: int = 30) -> Dict[str, Any]:
+    """Return details for a single department card."""
+    normalized = department_key.strip().lower()
+    if normalized not in DEPARTMENT_LABELS:
+        return {"error": "Department not found"}
+
+    aggregate = await get_client_departments_dashboard(client_id=client_id, limit=limit)
+    if aggregate.get("error"):
+        return aggregate
+
+    departments = aggregate.get("departments", [])
+    selected = next((item for item in departments if item.get("department") == normalized), None)
+    if not selected:
+        return {"error": "Department not found"}
+
+    return {
+        "client_id": aggregate.get("client_id"),
+        "client_name": aggregate.get("client_name"),
+        "generated_at": aggregate.get("generated_at"),
+        "department": selected,
+        "use_cases": [
+            item
+            for item in aggregate.get("use_cases", [])
+            if DEPARTMENT_LABELS[normalized] in item.get("teams", [])
+        ],
+    }
+
+
+@router.post("/api/client-dashboard/client/{client_id}/departments/{department_key}/send-email")
+async def send_department_email(client_id: str, department_key: str, payload: DepartmentSendEmailRequest) -> Dict[str, Any]:
+    """Send internal department email directly from dashboard using configured providers."""
+    normalized = department_key.strip().lower()
+    if normalized not in DEPARTMENT_LABELS:
+        raise HTTPException(status_code=404, detail="Department not found")
+
+    client_pk = int(client_id)
+    to_email = payload.to_email.strip().lower()
+    if not to_email:
+        raise HTTPException(status_code=400, detail="to_email is required")
+
+    from_email = payload.from_email.strip().lower()
+    fallback_name = to_email.split("@")[0].replace(".", " ").title() if "@" in to_email else "Department Recipient"
+    candidate_id = await _ensure_candidate_for_email(client_pk, to_email, fallback_name=fallback_name)
+
+    template_rows = []
+    if payload.template_id is not None:
+        template_rows = await supabase_client.select(
+            "templates",
+            "id,name,subject,content,notification_type,channel_id,category",
+            limit=1,
+            filters={"id": f"eq.{payload.template_id}"},
+        )
+
+    template = template_rows[0] if template_rows else None
+    body = (payload.body or (template or {}).get("content") or "").strip()
+    subject = (payload.subject or (template or {}).get("subject") or f"{DEPARTMENT_LABELS[normalized]} Update").strip()
+    notification_type = (payload.notification_type or (template or {}).get("notification_type") or f"{normalized}_internal_mail").strip()
+
+    if not body:
+        raise HTTPException(status_code=400, detail="Email body is required")
+
+    send_result = await notification_service.send_notification(
+        client_pk,
+        {
+            "candidate_id": candidate_id,
+            "email": to_email,
+            "template_id": payload.template_id,
+            "notification_type": notification_type,
+            "priority": payload.priority,
+            "channels": ["email"],
+            "subject": subject,
+            "body": body,
+            "data": {
+                "department": normalized,
+                "from_email": from_email,
+                "to_email": to_email,
+                "source": "department_dashboard",
+            },
+        },
+    )
+
+    return {
+        "status": "queued",
+        "department": normalized,
+        "to_email": to_email,
+        "from_email": from_email,
+        "result": send_result,
     }
 
 
