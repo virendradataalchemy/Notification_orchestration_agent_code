@@ -57,13 +57,21 @@ export default function SignupPage() {
 
   const formatQuietHour = (hour: string) => `${hour.padStart(2, "0")}:00`;
 
+  const parseQuietHour = (value: string) => {
+    const hour = Number.parseInt(value.split(":")[0] || "0", 10);
+    if (Number.isNaN(hour)) {
+      return "0";
+    }
+    return String(Math.min(23, Math.max(0, hour)));
+  };
+
   const selectQuietTime = (field: "start" | "end") => {
     setQuietHoursEnabled(true);
     setActiveQuietTime(field);
   };
 
-  const setSelectedQuietHour = (hour: string) => {
-    if (activeQuietTime === "start") {
+  const setSelectedQuietHour = (hour: string, field = activeQuietTime) => {
+    if (field === "start") {
       setQuietStart(hour);
     } else {
       setQuietEnd(hour);
@@ -402,22 +410,48 @@ export default function SignupPage() {
                    </label>
                    <div>
                       <div className="mb-3 grid grid-cols-2 gap-3">
-                        <button
-                          type="button"
+                        <div
+                          role="button"
+                          tabIndex={0}
                           onClick={() => selectQuietTime("start")}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              selectQuietTime("start");
+                            }
+                          }}
                           className={`rounded-md border px-3 py-2 text-left transition-colors ${activeQuietTime === "start" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600"}`}
                         >
                           <span className="block text-xs font-bold text-slate-500">Start Time (24h)</span>
-                          <span className="text-sm font-bold">{formatQuietHour(quietStart)}</span>
-                        </button>
-                        <button
-                          type="button"
+                          <input
+                            type="time"
+                            step="3600"
+                            value={formatQuietHour(quietStart)}
+                            onFocus={() => selectQuietTime("start")}
+                            onChange={(event) => setSelectedQuietHour(parseQuietHour(event.target.value), "start")}
+                            className="mt-1 w-full bg-transparent text-sm font-bold outline-none"
+                          />
+                        </div>
+                        <div
+                          role="button"
+                          tabIndex={0}
                           onClick={() => selectQuietTime("end")}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              selectQuietTime("end");
+                            }
+                          }}
                           className={`rounded-md border px-3 py-2 text-left transition-colors ${activeQuietTime === "end" ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600"}`}
                         >
                           <span className="block text-xs font-bold text-slate-500">End Time (24h)</span>
-                          <span className="text-sm font-bold">{formatQuietHour(quietEnd)}</span>
-                        </button>
+                          <input
+                            type="time"
+                            step="3600"
+                            value={formatQuietHour(quietEnd)}
+                            onFocus={() => selectQuietTime("end")}
+                            onChange={(event) => setSelectedQuietHour(parseQuietHour(event.target.value), "end")}
+                            className="mt-1 w-full bg-transparent text-sm font-bold outline-none"
+                          />
+                        </div>
                       </div>
                       <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
                           <span>{activeQuietTime === "start" ? "Adjust start time" : "Adjust end time"}</span>

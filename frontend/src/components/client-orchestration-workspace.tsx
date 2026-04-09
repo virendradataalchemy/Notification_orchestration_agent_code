@@ -48,8 +48,6 @@ const RECIPIENT_FIELD_COPY: Record<RecipientField, { label: string; placeholder:
   slack_channel: { label: "Slack", placeholder: "C0123456789, U0123456789, or #alerts" },
 };
 
-const DEFAULT_DIRECT_CHANNELS = ["sms", "whatsapp", "email", "slack"];
-
 export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWorkspaceProps) {
   const [message, setMessage] = useState("");
   const [userId, setUserId] = useState("");
@@ -59,7 +57,7 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
     whatsapp_number: "",
     slack_channel: "",
   });
-  const [clientPreferredChannels, setClientPreferredChannels] = useState<string[]>(DEFAULT_DIRECT_CHANNELS);
+  const [clientPreferredChannels, setClientPreferredChannels] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [stage, setStage] = useState(0);
   const [result, setResult] = useState<OrchestrationResult | null>(null);
@@ -77,7 +75,7 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
 
     const loadClientPreferences = async () => {
       try {
-        const preferences = await fetchJson<ClientPreferences>("/preferences/orchestration-recipient", {
+        const preferences = await fetchJson<ClientPreferences>("/api/v1/clients/me/preferences", {
           headers: {
             "X-Client-Id": clientId,
           },
@@ -86,10 +84,10 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
 
         const preferred = preferences.preferred_channels;
         const nextChannels = Array.isArray(preferred) ? preferred : preferred?.default;
-        setClientPreferredChannels(nextChannels?.length ? nextChannels : DEFAULT_DIRECT_CHANNELS);
+        setClientPreferredChannels(nextChannels ?? []);
       } catch {
         if (!cancelled) {
-          setClientPreferredChannels(DEFAULT_DIRECT_CHANNELS);
+          setClientPreferredChannels([]);
         }
       }
     };
@@ -227,20 +225,26 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
 
             <div>
               <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Direct Recipient Details</label>
-              <div className="grid gap-4 md:grid-cols-2">
-                {recipientFields.map((field) => (
-                  <div key={field}>
-                    <label className="mb-2 block text-xs font-bold text-slate-500">{RECIPIENT_FIELD_COPY[field].label}</label>
-                    <input
-                      value={directRecipients[field]}
-                      onChange={(event) => setDirectRecipients({ ...directRecipients, [field]: event.target.value })}
-                      placeholder={RECIPIENT_FIELD_COPY[field].placeholder}
-                      disabled={Boolean(userId.trim())}
-                      className="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
-                    />
-                  </div>
-                ))}
-              </div>
+              {recipientFields.length ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {recipientFields.map((field) => (
+                    <div key={field}>
+                      <label className="mb-2 block text-xs font-bold text-slate-500">{RECIPIENT_FIELD_COPY[field].label}</label>
+                      <input
+                        value={directRecipients[field]}
+                        onChange={(event) => setDirectRecipients({ ...directRecipients, [field]: event.target.value })}
+                        placeholder={RECIPIENT_FIELD_COPY[field].placeholder}
+                        disabled={Boolean(userId.trim())}
+                        className="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                  No direct recipient channels are selected for this client.
+                </div>
+              )}
               <p className="mt-2 text-xs leading-5 text-slate-500">
                 These boxes follow this client&apos;s preferred channels. They are used only when the user id is blank.
               </p>

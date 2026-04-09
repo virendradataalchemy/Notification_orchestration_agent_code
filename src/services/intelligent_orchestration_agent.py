@@ -87,6 +87,7 @@ class IntelligentOrchestrationAgent:
             template_selection = await self.llm_service.select_template(
                 message_content, self.client_id, templates
             )
+            template_selection = self._attach_template_name(template_selection, templates)
             logger.info(f"Template selected: {template_selection}")
 
             # Fetch user context
@@ -198,6 +199,16 @@ class IntelligentOrchestrationAgent:
         ordered_channels = list(dict.fromkeys([*client_channels, *priority_order, *available_direct_channels]))
         return [channel for channel in ordered_channels if recipient_channels.get(channel)]
 
+    def _attach_template_name(self, template_selection: Dict[str, Any], templates: list[Dict[str, Any]]) -> Dict[str, Any]:
+        template_id = template_selection.get('template_id')
+        template = next((tmpl for tmpl in templates if tmpl.get('id') == template_id), None)
+        if not template:
+            return template_selection
+        return {
+            **template_selection,
+            'template_name': template.get('subject') or template.get('name') or 'Unnamed',
+        }
+
     async def _fetch_templates(self) -> list[Dict[str, Any]]:
         """Fetch active templates — client-specific first, fall back to all templates."""
         def _serialize(rows):
@@ -205,6 +216,7 @@ class IntelligentOrchestrationAgent:
                 {
                     'id': t['id'],
                     'name': t.get('name', 'Unnamed'),
+                    'subject': t.get('subject'),
                     'notification_type': t.get('notification_type', 'general'),
                     'description': '',
                     'content': t.get('content', ''),
@@ -216,7 +228,7 @@ class IntelligentOrchestrationAgent:
         try:
             rows = await supabase_client.select(
                 "templates",
-                "id,name,notification_type,content,channel_id",
+                "id,name,subject,notification_type,content,channel_id",
                 filters={"client_id": f"eq.{self.client_id}", "is_active": "eq.true"},
             )
             if rows:
@@ -226,7 +238,7 @@ class IntelligentOrchestrationAgent:
             logger.info(f"No templates for client {self.client_id}, using platform-wide templates")
             all_rows = await supabase_client.select(
                 "templates",
-                "id,name,notification_type,content,channel_id",
+                "id,name,subject,notification_type,content,channel_id",
                 filters={"is_active": "eq.true"},
             )
             return _serialize(all_rows)
@@ -441,8 +453,12 @@ class IntelligentOrchestrationAgent:
                     )
                 )
                 if response.status == ProviderStatus.SUCCESS:
-                    logger.info(f"Successfully delivered directly via {channel}")
-                    return {'status': 'sent', 'channel': channel, 'message': f'Delivered via {channel}'}
+                    provider_status = response.metadata.get('status') if response.metadata else None
+                    message = f'Accepted by {channel}'
+                    if provider_status:
+                        message = f'{message}; provider status: {provider_status}'
+                    logger.info(f"Successfully accepted direct delivery via {channel}: {message}")
+                    return {'status': 'sent', 'channel': channel, 'message': message}
                 logger.warning(f"Direct channel {channel} failed: {response.error_message or response.status}")
             except Exception as e:
                 logger.error(f"Direct delivery failed via {channel}: {e}")

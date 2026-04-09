@@ -146,6 +146,30 @@ async def get_current_client(client: Client = Depends(get_authenticated_client))
     return _serialize_client(rows[0])
 
 
+@router.get("/me/preferences", response_model=dict)
+async def get_current_client_preferences(client: Client = Depends(get_authenticated_client)):
+    rows = await supabase_client.select(
+        CLIENT_PREFERENCES_TABLE,
+        "preferred_channels,quiet_hours,language,timezone",
+        limit=1,
+        filters={"client_id": f"eq.{client.id}"},
+    )
+    if not rows:
+        return {
+            "preferred_channels": {"default": []},
+            "quiet_hours": None,
+            "language": client.default_language or "en",
+            "timezone": "UTC",
+        }
+    row = rows[0]
+    return {
+        "preferred_channels": row.get("preferred_channels") or {"default": []},
+        "quiet_hours": row.get("quiet_hours"),
+        "language": row.get("language") or client.default_language or "en",
+        "timezone": row.get("timezone") or "UTC",
+    }
+
+
 @router.get("/{client_id}", response_model=dict)
 async def get_client(client_id: str, client: Client = Depends(get_authenticated_client)):
     rows = await supabase_client.select(
