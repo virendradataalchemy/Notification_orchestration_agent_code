@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import { fetchJson } from "@/lib/client-portal";
@@ -27,17 +27,91 @@ type ClientOrchestrationWorkspaceProps = {
   clientId: string;
 };
 
+type RecipientField = "email" | "phone" | "whatsapp_number" | "slack_channel";
+
+type ClientPreferences = {
+  preferred_channels?: string[] | { default?: string[] } | null;
+};
+
+const DIRECT_CHANNEL_FIELDS: Record<string, RecipientField> = {
+  email: "email",
+  sms: "phone",
+  voice: "phone",
+  whatsapp: "whatsapp_number",
+  slack: "slack_channel",
+};
+
+const RECIPIENT_FIELD_COPY: Record<RecipientField, { label: string; placeholder: string }> = {
+  email: { label: "Email ID", placeholder: "person@example.com" },
+  phone: { label: "Mobile Number", placeholder: "+919876543210" },
+  whatsapp_number: { label: "WhatsApp Number", placeholder: "+919876543210" },
+  slack_channel: { label: "Slack", placeholder: "C0123456789, U0123456789, or #alerts" },
+};
+
+const DEFAULT_DIRECT_CHANNELS = ["sms", "whatsapp", "email", "slack"];
+
 export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWorkspaceProps) {
   const [message, setMessage] = useState("");
   const [userId, setUserId] = useState("");
+  const [directRecipients, setDirectRecipients] = useState<Record<RecipientField, string>>({
+    email: "",
+    phone: "",
+    whatsapp_number: "",
+    slack_channel: "",
+  });
+  const [clientPreferredChannels, setClientPreferredChannels] = useState<string[]>(DEFAULT_DIRECT_CHANNELS);
   const [running, setRunning] = useState(false);
   const [stage, setStage] = useState(0);
   const [result, setResult] = useState<OrchestrationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const recipientFields = useMemo(() => {
+    const fields = clientPreferredChannels
+      .map((channel) => DIRECT_CHANNEL_FIELDS[channel])
+      .filter((field): field is RecipientField => Boolean(field));
+    return Array.from(new Set(fields));
+  }, [clientPreferredChannels]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadClientPreferences = async () => {
+      try {
+        const preferences = await fetchJson<ClientPreferences>("/preferences/orchestration-recipient", {
+          headers: {
+            "X-Client-Id": clientId,
+          },
+        });
+        if (cancelled) return;
+
+        const preferred = preferences.preferred_channels;
+        const nextChannels = Array.isArray(preferred) ? preferred : preferred?.default;
+        setClientPreferredChannels(nextChannels?.length ? nextChannels : DEFAULT_DIRECT_CHANNELS);
+      } catch {
+        if (!cancelled) {
+          setClientPreferredChannels(DEFAULT_DIRECT_CHANNELS);
+        }
+      }
+    };
+
+    loadClientPreferences();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
+
   const runPipeline = async () => {
     if (!message.trim()) {
       setError("Please enter message content");
+      return;
+    }
+    const trimmedUserId = userId.trim();
+    const recipientPayload = Object.fromEntries(
+      recipientFields.map((field) => [field, directRecipients[field].trim()]).filter(([, value]) => value)
+    );
+    if (!trimmedUserId && !Object.keys(recipientPayload).length) {
+      setError("Please enter a user id or at least one recipient contact");
       return;
     }
 
@@ -60,7 +134,8 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
         },
         body: JSON.stringify({
           message_content: message,
-          user_id: userId.trim() || "test_user",
+          user_id: trimmedUserId || undefined,
+          ...(trimmedUserId ? {} : recipientPayload),
         }),
       });
 
@@ -77,6 +152,12 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
   const resetWorkspace = () => {
     setMessage("");
     setUserId("");
+    setDirectRecipients({
+      email: "",
+      phone: "",
+      whatsapp_number: "",
+      slack_channel: "",
+    });
     setStage(0);
     setResult(null);
     setError(null);
@@ -97,7 +178,7 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
             {[
               ["Message Input", "Add the outbound content you want processed."],
-              ["Candidate Target", "Attach a candidate or user id if available."],
+              ["Recipient Target", "Use a user id when available, or send to direct contact details."],
               ["AI Delivery", "Review routing, urgency, and channel decisions."],
             ].map(([title, body]) => (
               <div key={title} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -124,13 +205,16 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Candidate / User ID</label>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Candidate / User ID Optional</label>
                 <input
                   value={userId}
                   onChange={(event) => setUserId(event.target.value)}
-                  placeholder="Enter candidate id or user id"
+                  placeholder="Use this first when available"
                   className="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500"
                 />
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  If this is filled, the pipeline uses it as the main recipient target.
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Pipeline Stages</p>
@@ -139,6 +223,27 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
                   start the flow.
                 </p>
               </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Direct Recipient Details</label>
+              <div className="grid gap-4 md:grid-cols-2">
+                {recipientFields.map((field) => (
+                  <div key={field}>
+                    <label className="mb-2 block text-xs font-bold text-slate-500">{RECIPIENT_FIELD_COPY[field].label}</label>
+                    <input
+                      value={directRecipients[field]}
+                      onChange={(event) => setDirectRecipients({ ...directRecipients, [field]: event.target.value })}
+                      placeholder={RECIPIENT_FIELD_COPY[field].placeholder}
+                      disabled={Boolean(userId.trim())}
+                      className="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                These boxes follow this client&apos;s preferred channels. They are used only when the user id is blank.
+              </p>
             </div>
 
             <div className="flex flex-wrap gap-3">

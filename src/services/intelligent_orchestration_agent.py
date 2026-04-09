@@ -39,9 +39,10 @@ class IntelligentOrchestrationAgent:
     async def orchestrate_send(
         self,
         message_content: str,
-        user_id: str,
+        user_id: Optional[str],
         idempotency_key: Optional[str] = None,
-        custom_variables: Optional[Dict[str, Any]] = None
+        custom_variables: Optional[Dict[str, Any]] = None,
+        recipient_overrides: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Orchestrate end-to-end notification processing.
@@ -59,8 +60,10 @@ class IntelligentOrchestrationAgent:
         start_time = time.time()
         
         try:
-            logger.info(f"Starting orchestration for user {user_id}, client {self.client_id}")
-            validation_error = self._validate_input(message_content, user_id)
+            direct_recipients = self._clean_recipient_overrides(recipient_overrides)
+            target_label = user_id or "direct recipients"
+            logger.info(f"Starting orchestration for {target_label}, client {self.client_id}")
+            validation_error = self._validate_input(message_content, user_id, direct_recipients)
             if validation_error:
                 return self._error_response(validation_error, start_time)
 
@@ -88,7 +91,7 @@ class IntelligentOrchestrationAgent:
 
             # Fetch user context
             user_context = await self._fetch_user_context(user_id)
-            logger.info(f"User context fetched for {user_id}")
+            logger.info(f"User context fetched for {target_label}")
 
             # Analyze urgency
             urgency = await self.llm_service.analyze_content_urgency(message_content)
@@ -105,6 +108,14 @@ class IntelligentOrchestrationAgent:
                 message_content, urgency, user_context, template_info, provider_health
             )
             logger.info(f"Priority order: {priority_decision['priority_order']}")
+            priority_decision['priority_order'] = self._filter_priority_for_direct_recipients(
+                priority_decision['priority_order'],
+                user_id,
+                direct_recipients,
+                user_context,
+            )
+            if not priority_decision['priority_order']:
+                return self._error_response("No contact details match the selected client channels", start_time)
 
             # Render template
             rendered_content = await self._render_template(
@@ -116,6 +127,7 @@ class IntelligentOrchestrationAgent:
                 priority_decision['priority_order'],
                 rendered_content,
                 user_id,
+                direct_recipients,
                 urgency,
                 template_selection.get('template_id'),
                 idempotency_key,
@@ -142,14 +154,49 @@ class IntelligentOrchestrationAgent:
             logger.error(f"Orchestration failed: {e}", exc_info=True)
             return self._error_response(str(e), start_time)
 
-    def _validate_input(self, message_content: str, user_id: str) -> Optional[str]:
+    def _validate_input(
+        self,
+        message_content: str,
+        user_id: Optional[str],
+        direct_recipients: Dict[str, str],
+    ) -> Optional[str]:
         if not message_content:
             return "message_content is required"
         if len(message_content) > 10000:
             return "message_content exceeds 10000 characters"
-        if not user_id:
-            return "user_id is required"
+        if not user_id and not direct_recipients:
+            return "Provide a user_id or at least one direct contact detail"
         return None
+
+    def _clean_recipient_overrides(self, recipient_overrides: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        if not recipient_overrides:
+            return {}
+        return {
+            key: str(value).strip()
+            for key, value in recipient_overrides.items()
+            if value is not None and str(value).strip()
+        }
+
+    def _filter_priority_for_direct_recipients(
+        self,
+        priority_order: list[str],
+        user_id: Optional[str],
+        direct_recipients: Dict[str, str],
+        user_context: Dict[str, Any],
+    ) -> list[str]:
+        if user_id:
+            return priority_order
+        recipient_channels = {
+            "email": bool(direct_recipients.get("email")),
+            "sms": bool(direct_recipients.get("phone")),
+            "voice": bool(direct_recipients.get("phone")),
+            "whatsapp": bool(direct_recipients.get("whatsapp_number")),
+            "slack": bool(direct_recipients.get("slack_channel")),
+        }
+        client_channels = user_context.get('client_preferred_channels') or []
+        available_direct_channels = [channel for channel, has_recipient in recipient_channels.items() if has_recipient]
+        ordered_channels = list(dict.fromkeys([*client_channels, *priority_order, *available_direct_channels]))
+        return [channel for channel in ordered_channels if recipient_channels.get(channel)]
 
     async def _fetch_templates(self) -> list[Dict[str, Any]]:
         """Fetch active templates — client-specific first, fall back to all templates."""
@@ -187,7 +234,7 @@ class IntelligentOrchestrationAgent:
             logger.error(f"Failed to fetch templates: {e}")
             return []
 
-    async def _fetch_user_context(self, user_id: str) -> Dict[str, Any]:
+    async def _fetch_user_context(self, user_id: Optional[str]) -> Dict[str, Any]:
         """Fetch client preferences from the client_preferences table using client_id."""
         default = {
             'preferred_channels': {'default': ['email', 'push']},
@@ -283,12 +330,21 @@ class IntelligentOrchestrationAgent:
         self,
         priority_order: list[str],
         content: str,
-        user_id: str,
+        user_id: Optional[str],
+        direct_recipients: Dict[str, str],
         urgency: str,
         template_id: Optional[int],
         idempotency_key: Optional[str],
     ) -> Dict[str, Any]:
         """Execute delivery via SupabaseNotificationService in priority order."""
+        if not user_id:
+            return await self._execute_direct_delivery_pipeline(
+                priority_order,
+                content,
+                direct_recipients,
+                urgency,
+            )
+
         from src.services.supabase_notification_service import SupabaseNotificationService
         svc = SupabaseNotificationService()
 
@@ -316,6 +372,7 @@ class IntelligentOrchestrationAgent:
                         "email": candidate_details.get("email"),
                         "phone": candidate_details.get("phone"),
                         "whatsapp_number": candidate_details.get("whatsapp_number"),
+                        "slack_channel": direct_recipients.get("slack_channel"),
                         "channels": [channel],
                         "notification_type": urgency,
                         "priority": urgency,
@@ -337,6 +394,62 @@ class IntelligentOrchestrationAgent:
 
         logger.error("All delivery channels failed")
         return {'status': 'failed', 'channel': None, 'message': 'All delivery channels failed'}
+
+    async def _execute_direct_delivery_pipeline(
+        self,
+        priority_order: list[str],
+        content: str,
+        direct_recipients: Dict[str, str],
+        urgency: str,
+    ) -> Dict[str, Any]:
+        """Deliver to explicit contact fields without resolving a Supabase candidate."""
+        from src.providers import get_provider_for_channel
+        from src.providers.base import Message, ProviderStatus
+
+        recipient_by_channel = {
+            "email": direct_recipients.get("email"),
+            "sms": direct_recipients.get("phone"),
+            "voice": direct_recipients.get("phone"),
+            "whatsapp": direct_recipients.get("whatsapp_number"),
+            "slack": direct_recipients.get("slack_channel"),
+        }
+
+        for channel in priority_order:
+            recipient = recipient_by_channel.get(channel)
+            if not recipient:
+                continue
+
+            try:
+                logger.info(f"Attempting direct delivery via {channel}")
+                provider = get_provider_for_channel(channel)
+                if not provider:
+                    logger.warning(f"Direct delivery provider not configured for {channel}")
+                    continue
+
+                response = await provider.send(
+                    Message(
+                        recipient=recipient,
+                        subject="Notification",
+                        body=content,
+                        data={"body": content},
+                        metadata={
+                            "priority": urgency,
+                            "channel": channel,
+                            "client_id": self.client_id,
+                            "direct_recipient": True,
+                        },
+                    )
+                )
+                if response.status == ProviderStatus.SUCCESS:
+                    logger.info(f"Successfully delivered directly via {channel}")
+                    return {'status': 'sent', 'channel': channel, 'message': f'Delivered via {channel}'}
+                logger.warning(f"Direct channel {channel} failed: {response.error_message or response.status}")
+            except Exception as e:
+                logger.error(f"Direct delivery failed via {channel}: {e}")
+                continue
+
+        logger.error("All direct delivery channels failed")
+        return {'status': 'failed', 'channel': None, 'message': 'All direct delivery channels failed'}
 
     def _error_response(self, error: str, start_time: float) -> Dict[str, Any]:
         """Build error response."""

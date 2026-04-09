@@ -19,7 +19,11 @@ templates = Jinja2Templates(directory="src/templates")
 class OrchestrationRequest(BaseModel):
     """Request schema for orchestration."""
     message_content: str = Field(..., max_length=10000, description="Message content to send")
-    user_id: str = Field(..., description="User ID to send notification to")
+    user_id: Optional[str] = Field(None, description="Optional user ID to send notification to")
+    email: Optional[str] = Field(None, description="Direct email recipient when user_id is not provided")
+    phone: Optional[str] = Field(None, description="Direct mobile recipient when user_id is not provided")
+    whatsapp_number: Optional[str] = Field(None, description="Direct WhatsApp recipient when user_id is not provided")
+    slack_channel: Optional[str] = Field(None, description="Direct Slack channel or user recipient when user_id is not provided")
     idempotency_key: Optional[str] = Field(None, description="Optional key for deduplication")
     custom_variables: Optional[Dict[str, Any]] = Field(None, description="Optional custom variables for template")
 
@@ -59,9 +63,15 @@ async def orchestrate_send(
 
         result = await agent.orchestrate_send(
             message_content=request.message_content,
-            user_id=request.user_id,
+            user_id=request.user_id.strip() if request.user_id else None,
             idempotency_key=request.idempotency_key,
             custom_variables=request.custom_variables,
+            recipient_overrides={
+                "email": request.email,
+                "phone": request.phone,
+                "whatsapp_number": request.whatsapp_number,
+                "slack_channel": request.slack_channel,
+            },
         )
 
         if result.get('status') == 'error':
