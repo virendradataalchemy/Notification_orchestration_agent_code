@@ -13,8 +13,8 @@ export default async function ClientPortalRoute({
   if (!resolved) {
     redirect("/login");
   }
-  if (slug !== resolved.slug) {
-    redirect(`/clients/${resolved.slug}/portal`);
+  if (slug !== (resolved.slug || resolved.id)) {
+    redirect(`/clients/${resolved.slug || resolved.id}/portal`);
   }
-  return <ClientDashboardPage clientIdProp={resolved.id} clientPathProp={resolved.slug} />;
+  return <ClientDashboardPage clientIdProp={resolved.id} clientPathProp={resolved.slug || resolved.id} />;
 }

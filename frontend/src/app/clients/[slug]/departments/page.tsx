@@ -11,11 +11,16 @@ export default async function ClientsDepartmentsRoute({
   const { slug } = await params;
   const resolved = await resolveClientRouteParam(slug);
   if (!resolved) {
-    redirect("/login");
+    // Can't resolve client — send back to portal rather than login
+    redirect(`/clients/${slug}/portal`);
   }
-  if (slug !== resolved.slug) {
-    redirect(`/clients/${resolved.slug}/departments`);
+  const canonicalPath = resolved.slug || resolved.id;
+  if (slug !== canonicalPath) {
+    redirect(`/clients/${canonicalPath}/departments`);
+  }
+  if (resolved.id !== "1") {
+    redirect(`/clients/${canonicalPath}/portal`);
   }
 
-  return <ClientDepartmentsPage clientIdProp={resolved.id} clientPathProp={resolved.slug} initialClientName={resolved.name} />;
+  return <ClientDepartmentsPage clientIdProp={resolved.id} clientPathProp={canonicalPath} initialClientName={resolved.name} />;
 }

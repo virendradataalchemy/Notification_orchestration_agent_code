@@ -17,11 +17,11 @@ type ClientPortalShellProps = {
 };
 
 const navItems = [
-  { label: "Intelligent Portal", href: (id: string) => clientPortalUrl(id) },
-  { label: "Templates", href: (id: string) => clientTemplatesUrl(id) },
-  { label: "Departments", href: (id: string) => clientDepartmentsUrl(id) },
-  { label: "Send Demo", href: (id: string) => clientDemoUrl(id) },
-  { label: "Analytics", href: (id: string) => clientAnalyticsUrl(id) },
+  { label: "Intelligent Portal", href: (id: string) => clientPortalUrl(id), onlyClientId: null },
+  { label: "Templates", href: (id: string) => clientTemplatesUrl(id), onlyClientId: null },
+  { label: "Departments", href: (id: string) => clientDepartmentsUrl(id), onlyClientId: "1" },
+  { label: "Send Demo", href: (id: string) => clientDemoUrl(id), onlyClientId: null },
+  { label: "Analytics", href: (id: string) => clientAnalyticsUrl(id), onlyClientId: null },
 ];
 
 export function ClientPortalShell({
@@ -48,15 +48,17 @@ export function ClientPortalShell({
               Client Portal
             </Link>
             <nav className="hidden flex-wrap gap-2 md:flex">
-              {navItems.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href(clientPath || clientId)}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {navItems
+                .filter((item) => item.onlyClientId === null || item.onlyClientId === clientId)
+                .map((item) => (
+                  <Link
+                    key={item.label}
+                    href={item.href(clientPath || clientId)}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
             </nav>
           </div>
           <button
