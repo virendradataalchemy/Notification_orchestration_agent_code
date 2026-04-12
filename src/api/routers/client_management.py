@@ -8,6 +8,7 @@ import logging
 
 from src.api.dependencies import get_authenticated_client
 from src.core.supabase import CLIENT_PREFERENCES_TABLE, CLIENTS_TABLE, supabase_client
+from src.core.cache import cached
 from src.models import Client
 
 logger = logging.getLogger(__name__)
@@ -306,6 +307,7 @@ async def create_client(request: CreateClientRequest):
 
 
 @router.get("/by-supabase/{uid}", response_model=dict)
+@cached("client_by_uid", ttl=1800)  # 30 min
 async def get_client_by_supabase_uid(uid: str):
     """Retrieve client details using Supabase Auth UID."""
     rows = await supabase_client.select(
@@ -318,6 +320,7 @@ async def get_client_by_supabase_uid(uid: str):
 
 
 @router.get("/by-id/{client_id}", response_model=dict)
+@cached("client_by_id", ttl=1800)  # 30 min
 async def get_client_by_id(client_id: str):
     rows = await supabase_client.select(
         CLIENTS_TABLE,
@@ -331,6 +334,7 @@ async def get_client_by_id(client_id: str):
 
 
 @router.get("/by-slug/{client_slug}", response_model=dict)
+@cached("client_by_slug", ttl=1800)  # 30 min
 async def get_client_by_slug(client_slug: str):
     rows = await supabase_client.select(
         CLIENTS_TABLE,

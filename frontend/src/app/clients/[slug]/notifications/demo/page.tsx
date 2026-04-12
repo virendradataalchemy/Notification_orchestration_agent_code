@@ -13,8 +13,9 @@ export default async function ClientDemoRoute({
   if (!resolved) {
     redirect("/login");
   }
-  if (slug !== resolved.slug) {
-    redirect(`/clients/${resolved.slug}/notifications/demo`);
+  const canonical = resolved.slug || resolved.id;
+  if (slug !== canonical) {
+    redirect(`/clients/${canonical}/notifications/demo`);
   }
-  return <ClientSendDemoPage clientIdProp={resolved.id} clientPathProp={resolved.slug} initialClientName={resolved.name} />;
+  return <ClientSendDemoPage clientIdProp={resolved.id} clientPathProp={canonical} initialClientName={resolved.name} />;
 }

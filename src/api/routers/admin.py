@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import asyncio
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -10,6 +13,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core import get_db_optional, supabase_client
+from src.core.cache import cached, invalidate_pattern
 from src.api.dependencies import get_authenticated_admin
 from src.core.supabase import ADMINS_TABLE
 from src.models import Communication, CommunicationAttempt, Candidate, Provider, Template, Client
@@ -49,19 +53,16 @@ def _client_summary(client: Client) -> dict[str, Any]:
     }
 
 
+@cached("admin_data", ttl=600)  # 10 min
 async def _load_supabase_admin_data() -> dict[str, Any]:
-    clients = await supabase_client.select(
-        "clients",
-        "id,name,is_active,created_at,updated_at,default_language,client_slug",
+    clients, communications, channels, providers, candidates, attempts = await asyncio.gather(
+        supabase_client.select("clients", "id,name,is_active,created_at,updated_at,default_language,client_slug"),
+        supabase_client.select("communications", "id,client_id,candidate_id,notification_type,priority,status,channel_id,created_at,updated_at"),
+        supabase_client.select("channels", "id,name"),
+        supabase_client.select("providers", "id,client_id,channel_id,name,is_active"),
+        supabase_client.select("candidates", "id,client_id,name,email"),
+        supabase_client.select("communication_attempts", "id,communication_id,attempt_number,status,provider_id"),
     )
-    communications = await supabase_client.select(
-        "communications",
-        "id,client_id,candidate_id,notification_type,priority,status,channel_id,created_at,updated_at",
-    )
-    channels = await supabase_client.select("channels", "id,name")
-    providers = await supabase_client.select("providers", "id,client_id,channel_id,name,is_active")
-    candidates = await supabase_client.select("candidates", "id,client_id,name,email")
-    attempts = await supabase_client.select("communication_attempts", "id,communication_id,attempt_number,status,provider_id")
     return {
         "clients": clients,
         "communications": communications,

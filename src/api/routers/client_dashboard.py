@@ -4,6 +4,7 @@ Multi-client dashboard API backed by Supabase REST and the exported live schema.
 
 from __future__ import annotations
 
+import asyncio
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
@@ -14,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from src.core import supabase_client
+from src.core.cache import cached, invalidate_pattern
 from src.config.department_mapping import (
     DEPARTMENT_LABELS,
     get_department_role_emails,
@@ -47,23 +49,38 @@ def _parse_dt(value: Any):
     return None
 
 
+@cached("dashboard_data", ttl=300)  # 5 min — covers all dashboard endpoints
 async def _load_dashboard_data() -> dict[str, Any]:
-    return {
-        "clients": await supabase_client.select("clients", "id,name,is_active,created_at"),
-        "channels": await supabase_client.select("channels", "id,name,priority,is_active"),
-        "communications": await supabase_client.select(
+    (
+        clients, channels, communications, candidates,
+        templates, providers, events, attempts, slots,
+    ) = await asyncio.gather(
+        supabase_client.select("clients", "id,name,is_active,created_at"),
+        supabase_client.select("channels", "id,name,priority,is_active"),
+        supabase_client.select(
             "communications",
             "id,client_id,candidate_id,notification_type,channel_id,priority,status,template_id,idempotency_key,created_at,sent_at,retry_count",
         ),
-        "candidates": await supabase_client.select("candidates", "id,client_id,name,email,phone,whatsapp_number"),
-        "templates": await supabase_client.select(
+        supabase_client.select("candidates", "id,client_id,name,email,phone,whatsapp_number"),
+        supabase_client.select(
             "templates",
             "id,client_id,name,language,subject,content,version,is_active,notification_type,channel_id,created_at",
         ),
-        "providers": await supabase_client.select("providers", "id,client_id,channel_id,name,priority,is_active,created_at,config_ref"),
-        "events": await supabase_client.select("notification_events", "id,communication_id,event_type,channel_id,status,metadata,created_at"),
-        "attempts": await supabase_client.select("communication_attempts", "id,communication_id,attempt_number,status,error_message,provider_id,created_at"),
-        "slots": await supabase_client.select("slots", "id,client_id,label,slot_time,duration_mins,slot_type,offered_via_channel_id,created_at"),
+        supabase_client.select("providers", "id,client_id,channel_id,name,priority,is_active,created_at,config_ref"),
+        supabase_client.select("notification_events", "id,communication_id,event_type,channel_id,status,metadata,created_at"),
+        supabase_client.select("communication_attempts", "id,communication_id,attempt_number,status,error_message,provider_id,created_at"),
+        supabase_client.select("slots", "id,client_id,label,slot_time,duration_mins,slot_type,offered_via_channel_id,created_at"),
+    )
+    return {
+        "clients": clients,
+        "channels": channels,
+        "communications": communications,
+        "candidates": candidates,
+        "templates": templates,
+        "providers": providers,
+        "events": events,
+        "attempts": attempts,
+        "slots": slots,
     }
 
 
@@ -104,6 +121,7 @@ async def _ensure_candidate_for_email(client_id: int, email: str, fallback_name:
     return int(inserted[0]["id"])
 
 
+@cached("template_categories", ttl=600)  # 10 min — rarely changes
 async def _load_template_categories() -> dict[int, str]:
     """Load template category mapping when the optional category column exists."""
     try:
@@ -621,6 +639,9 @@ async def send_department_email(client_id: str, department_key: str, payload: De
             },
         },
     )
+
+    # Invalidate dashboard cache so next load reflects the new communication
+    await invalidate_pattern("dashboard_data*")
 
     return {
         "status": "queued",

@@ -29,11 +29,11 @@ CLIENT_TEMPLATE_DEPARTMENT_MAP: dict[int, dict[int, str]] = {
 
 # Tenant-specific role inboxes shown on the dashboard cards.
 CLIENT_DEPARTMENT_ROLE_EMAILS: dict[int, dict[str, list[str]]] = {
-    # 1: {
-    #     "hr": ["hr@tenant.com"],
-    #     "it": ["it@tenant.com"],
-    #     "finance": ["finance@tenant.com"],
-    # },
+    1: {
+        "hr": ["prachikushwaha.dataalchemy@gmail.com", "+919893155055"],
+        "it": ["prateekgaur.prateek.1609@gmail.com", "+918290942415"],
+        "finance": [],
+    },
 }
 
 DEPARTMENT_KEYWORDS: dict[str, tuple[str, ...]] = {

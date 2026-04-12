@@ -1,5 +1,11 @@
 export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  // Only apply default caching for GET requests
+  const isGet = !init?.method || init.method.toUpperCase() === "GET";
+  const options: RequestInit = init ?? (isGet ? {
+    next: { revalidate: 60 },
+  } : {});
+
+  const response = await fetch(url, options);
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {

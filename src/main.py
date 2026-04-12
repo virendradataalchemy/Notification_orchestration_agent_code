@@ -98,23 +98,29 @@ app.add_middleware(
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all HTTP requests."""
+    """Log all HTTP requests and add cache headers for read endpoints."""
     start_time = datetime.utcnow()
 
-    # Process request
     response = await call_next(request)
 
-    # Calculate duration
     duration = (datetime.utcnow() - start_time).total_seconds()
-
-    # Log request
     logger.info(
         f"{request.method} {request.url.path} - "
         f"Status: {response.status_code} - "
         f"Duration: {duration:.3f}s"
     )
 
-    # Add rate limit headers if present
+    # Add Cache-Control headers for safe GET endpoints
+    if request.method == "GET" and response.status_code == 200:
+        path = request.url.path
+        if any(path.startswith(p) for p in (
+            "/api/client-dashboard/",
+            "/api/v1/clients/by-",
+            "/admin/api/clients",
+            "/admin/api/dashboard",
+        )):
+            response.headers.setdefault("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
+
     if hasattr(request.state, 'rate_limit_remaining'):
         response.headers['X-RateLimit-Remaining'] = str(request.state.rate_limit_remaining)
         response.headers['X-RateLimit-Reset'] = str(request.state.rate_limit_reset)
