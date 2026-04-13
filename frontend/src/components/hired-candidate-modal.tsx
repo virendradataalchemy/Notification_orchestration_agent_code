@@ -5,11 +5,12 @@ import { useEffect, useRef, useState } from "react";
 type FormState = { name: string; phone: string; email: string };
 const empty: FormState = { name: "", phone: "", email: "" };
 
-export function HiredCandidateModal() {
+export function HiredCandidateModal({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(empty);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -25,21 +26,42 @@ export function HiredCandidateModal() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    // TODO: wire up to API
-    await new Promise((r) => setTimeout(r, 600));
-    setSubmitting(false);
-    setSuccess(true);
-    setTimeout(() => {
-      setOpen(false);
-      setSuccess(false);
-      setForm(empty);
-    }, 1200);
+    setError(null);
+    
+    try {
+      const response = await fetch("/api/v1/pipeline/onboard-candidate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: clientId,
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text() || "Failed to trigger pipeline");
+      }
+
+      setSuccess(true);
+      setTimeout(() => {
+        setOpen(false);
+        setSuccess(false);
+        setForm(empty);
+      }, 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
+        suppressHydrationWarning
         className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 active:scale-95"
       >
         + Hired Candidate

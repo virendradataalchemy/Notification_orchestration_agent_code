@@ -7,6 +7,7 @@ from datetime import datetime
 
 from src.config import settings
 from src.core import init_db, init_redis, close_redis
+from src.core.logger import setup_logging
 from src.middleware import ClientAuthMiddleware
 from src.services.usage_tracker import initialize_usage_tracker
 from src.api.routers import (
@@ -29,12 +30,10 @@ from src.api.routers.twilio_webhooks import router as twilio_webhooks_router
 from src.api.routers.orchestration import router as orchestration_router
 from src.api.routers.inapp import router as inapp_router
 from src.api.routers.device_tokens import router as device_tokens_router
+from src.api.routers.pipeline import router as pipeline_router
 
 # Configure logging
-logging.basicConfig(
-    level=getattr(logging, settings.log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+setup_logging(log_level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 
@@ -105,9 +104,7 @@ async def log_requests(request: Request, call_next):
 
     duration = (datetime.utcnow() - start_time).total_seconds()
     logger.info(
-        f"{request.method} {request.url.path} - "
-        f"Status: {response.status_code} - "
-        f"Duration: {duration:.3f}s"
+        f"{request.method:<6} {request.url.path:<45} → {response.status_code}  ({duration:.3f}s)"
     )
 
     # Add Cache-Control headers for safe GET endpoints
@@ -172,6 +169,7 @@ app.include_router(twilio_webhooks_router)  # Twilio webhooks for call recording
 app.include_router(client_management_router, prefix=settings.api_prefix)
 app.include_router(usage_router, prefix=settings.api_prefix)
 app.include_router(tracking_router, prefix=settings.api_prefix)  # Tracking, logs, and unsubscribe
+app.include_router(pipeline_router, prefix=settings.api_prefix)
 
 
 if __name__ == "__main__":

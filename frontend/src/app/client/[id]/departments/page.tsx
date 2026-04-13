@@ -121,7 +121,7 @@ export default function ClientDepartmentsPage({
       clientPath={clientPath}
       title={payload?.client_name ? `${payload.client_name} Departments` : initialClientName ? `${initialClientName} Departments` : "Departments"}
       description="Department-level dashboards for HR, IT, and Finance with auto-updated internal communication metrics and template categorization by template id mapping."
-      actions={<HiredCandidateModal />}
+      actions={<HiredCandidateModal clientId={clientId} />}
     >
       {loading ? (
         <section className="rounded-[28px] border border-slate-200 bg-white/80 p-6 shadow-sm">

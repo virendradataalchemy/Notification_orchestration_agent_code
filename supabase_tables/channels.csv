@@ -1,8 +1,0 @@
-id,name,priority,is_active,created_at
-1,sms,1,True,2026-03-26
-2,voice,2,True,2026-03-26
-3,push,3,True,2026-03-26
-4,whatsapp,4,True,2026-03-26
-5,email,5,True,2026-03-26
-6,webhook,6,True,2026-03-26
-7,in_app,7,True,2026-03-26

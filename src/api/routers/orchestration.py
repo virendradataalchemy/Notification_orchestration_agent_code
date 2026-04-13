@@ -80,6 +80,17 @@ async def orchestrate_send(
                 detail=result.get('error', 'Orchestration failed')
             )
 
+        channel   = result.get("channel_used", "?")
+        template  = (result.get("selected_template") or {}).get("template_name", "?")
+        urgency   = result.get("urgency", "?")
+        recipient = request.email or request.phone or request.user_id or "?"
+        logger.info(
+            f"🤖  LLM  client={client.id}  to={recipient}  "
+            f"channel={channel}  template={template!r}  "
+            f"urgency={urgency}  status={result.get('delivery_status')}  "
+            f"{result.get('processing_time_ms')}ms"
+        )
+
         return OrchestrationResponse(
             status=result['status'],
             selected_template=result.get('selected_template'),

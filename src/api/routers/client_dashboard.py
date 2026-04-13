@@ -123,12 +123,19 @@ async def _ensure_candidate_for_email(client_id: int, email: str, fallback_name:
 
 @cached("template_categories", ttl=600)  # 10 min — rarely changes
 async def _load_template_categories() -> dict[int, str]:
-    """Load template category mapping when the optional category column exists."""
+    """Load template→department mapping from template_departments table."""
     try:
-        rows = await supabase_client.select("templates", "id,category")
+        rows = await supabase_client.select("template_departments", "template_id,department")
     except Exception:
         return {}
-    return {int(row["id"]): str(row.get("category") or "") for row in rows if row.get("id") is not None}
+    # If a template has multiple departments, prefer non-general
+    result: dict[int, str] = {}
+    for row in rows:
+        tid = int(row["template_id"])
+        dept = str(row.get("department") or "")
+        if tid not in result or result[tid] == "general":
+            result[tid] = dept
+    return result
 
 
 @router.get("/client-dashboard", response_class=HTMLResponse)
@@ -591,6 +598,10 @@ async def get_client_department_detail(client_id: str, department_key: str, limi
     }
 
 
+import logging as _logging
+_dept_logger = _logging.getLogger("dept.mail")
+
+
 @router.post("/api/client-dashboard/client/{client_id}/departments/{department_key}/send-email")
 async def send_department_email(client_id: str, department_key: str, payload: DepartmentSendEmailRequest) -> Dict[str, Any]:
     """Send internal department email directly from dashboard using configured providers."""
@@ -624,6 +635,13 @@ async def send_department_email(client_id: str, department_key: str, payload: De
     if not body:
         raise HTTPException(status_code=400, detail="Email body is required")
 
+    dept_label = DEPARTMENT_LABELS[normalized]
+    template_name = (template or {}).get("name", "manual")
+    _dept_logger.info(
+        f"📧  {dept_label:<6} → {to_email}  |  from: {from_email}  |  "
+        f"template: {template_name!r}  |  subject: {subject!r}"
+    )
+
     send_result = await notification_service.send_notification(
         client_pk,
         {
@@ -646,6 +664,10 @@ async def send_department_email(client_id: str, department_key: str, payload: De
 
     # Invalidate dashboard cache so next load reflects the new communication
     await invalidate_pattern("dashboard_data*")
+
+    _dept_logger.info(
+        f"✅  Queued  {dept_label} → {to_email}  |  type: {notification_type}  |  priority: {payload.priority}"
+    )
 
     return {
         "status": "queued",
