@@ -13,8 +13,9 @@ export default async function ClientTemplateNewRoute({
   if (!resolved) {
     redirect("/login");
   }
-  if (slug !== resolved.slug) {
-    redirect(`/clients/${resolved.slug}/templates/new`);
+  const canonical = resolved.slug || resolved.id;
+  if (slug !== canonical) {
+    redirect(`/clients/${canonical}/templates/new`);
   }
-  return <ClientTemplateCreatePage clientIdProp={resolved.id} clientPathProp={resolved.slug} initialClientName={resolved.name} />;
+  return <ClientTemplateCreatePage clientIdProp={resolved.id} clientPathProp={canonical} initialClientName={resolved.name} />;
 }

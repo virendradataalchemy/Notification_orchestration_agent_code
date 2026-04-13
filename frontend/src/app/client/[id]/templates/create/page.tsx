@@ -41,6 +41,7 @@ export default function ClientTemplateCreatePage({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [category, setCategory] = useState<"general" | "hr" | "it">("general");
   const [preview, setPreview] = useState<{ rendered_subject?: string | null; rendered_body: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +121,7 @@ export default function ClientTemplateCreatePage({
           subject: subject || null,
           body,
           visibility,
+          category,
         }),
       });
       setSuccess("Template saved successfully.");
@@ -160,9 +162,7 @@ export default function ClientTemplateCreatePage({
                   className={inputClassName}
                 >
                   {["email", "sms", "slack", "whatsapp", "push"].map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
+                    <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
               </Field>
@@ -174,13 +174,24 @@ export default function ClientTemplateCreatePage({
                   className={inputClassName}
                 >
                   {["en", "hi", "es", "fr", "de"].map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
+                    <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
               </Field>
             </div>
+
+            <Field label="Department / Category">
+              <select
+                value={category}
+                onChange={(event) => setCategory(event.target.value as "general" | "hr" | "it")}
+                suppressHydrationWarning
+                className={inputClassName}
+              >
+                <option value="general">General</option>
+                <option value="hr">HR</option>
+                <option value="it">IT</option>
+              </select>
+            </Field>
             <Field label="Subject">
               <input value={subject} onChange={(event) => setSubject(event.target.value)} className={inputClassName} />
             </Field>

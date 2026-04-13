@@ -17,11 +17,11 @@ type ClientPortalShellProps = {
 };
 
 const navItems = [
+  { label: "Dashboard", href: (id: string) => clientAnalyticsUrl(id), onlyClientId: null },
   { label: "Intelligent Portal", href: (id: string) => clientPortalUrl(id), onlyClientId: null },
   { label: "Templates", href: (id: string) => clientTemplatesUrl(id), onlyClientId: null },
   { label: "Departments", href: (id: string) => clientDepartmentsUrl(id), onlyClientId: "1" },
   { label: "Send Demo", href: (id: string) => clientDemoUrl(id), onlyClientId: null },
-  { label: "Analytics", href: (id: string) => clientAnalyticsUrl(id), onlyClientId: null },
 ];
 
 export function ClientPortalShell({

@@ -155,6 +155,7 @@ class ClientTemplateCreate(BaseModel):
     base_template_id: Optional[str] = Field(None, description="Global template ID to inherit from")
     description: Optional[str] = Field(None, description="Template description")
     visibility: Literal["public", "private"] = Field(default="public", description="Template visibility")
+    category: Optional[str] = Field(None, description="Department category: hr, it, general")
 
 
 class ClientTemplateUpdate(BaseModel):

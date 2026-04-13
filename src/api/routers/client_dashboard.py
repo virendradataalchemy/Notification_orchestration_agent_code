@@ -18,7 +18,7 @@ from src.core import supabase_client
 from src.core.cache import cached, invalidate_pattern
 from src.config.department_mapping import (
     DEPARTMENT_LABELS,
-    get_department_role_emails,
+    fetch_department_role_emails,
     resolve_template_department,
 )
 from src.services.supabase_notification_service import SupabaseNotificationService
@@ -423,7 +423,7 @@ async def get_client_departments_dashboard(client_id: str, limit: int = 20) -> D
         if comm_id is not None:
             events_by_comm[comm_id].append(event)
 
-    role_emails = get_department_role_emails(client_pk)
+    role_emails = await fetch_department_role_emails(client_pk)
     departments: dict[str, Dict[str, Any]] = {
         dept: {
             "department": dept,
@@ -443,17 +443,27 @@ async def get_client_departments_dashboard(client_id: str, limit: int = 20) -> D
         for dept, label in DEPARTMENT_LABELS.items()
     }
 
-    # Build template catalog by department from mapping rules.
+    # Build template catalog by department — only include templates whose
+    # category matches the department itself or is "general".
     for template in templates_by_id.values():
+        template_id = template.get("id")
+        raw_category = template_categories.get(int(template_id)) if template_id is not None else None
+        category = (raw_category or "").strip().lower()
+
         department = resolve_template_department(
             client_pk,
-            template.get("id"),
+            template_id,
             template.get("name"),
             template.get("notification_type"),
-            template_categories.get(int(template.get("id"))),
+            raw_category,
         )
         if department not in departments:
             continue
+
+        # Only show templates that belong to this dept or are general
+        if category not in (department, "general", ""):
+            continue
+
         departments[department]["templates"].append(
             {
                 "id": template.get("id"),
@@ -540,19 +550,13 @@ async def get_client_departments_dashboard(client_id: str, limit: int = 20) -> D
         "client_id": client_pk,
         "client_name": client.get("name"),
         "generated_at": datetime.utcnow().isoformat(),
-        "departments": [departments["hr"], departments["it"], departments["finance"]],
+        "departments": [departments["hr"], departments["it"]],
         "use_cases": [
             {
                 "key": "new_candidate_setup",
                 "title": "Candidate Added -> HR informs IT",
                 "description": "After candidate creation, HR triggers setup mail to IT for resource preparation.",
                 "teams": ["HR", "IT"],
-            },
-            {
-                "key": "attendance_payroll",
-                "title": "Attendance Record -> HR to Finance",
-                "description": "Attendance details are captured and forwarded so Finance can process paychecks.",
-                "teams": ["IT", "HR", "Finance"],
             },
         ],
     }
@@ -802,3 +806,51 @@ async def get_client_service_showcase(client_id: str) -> Dict[str, Any]:
             "metrics": f"/client-detail/{client_pk}",
         },
     }
+
+
+@router.get("/api/client-dashboard/client/{client_id}/department-templates/{department_key}")
+async def get_department_templates(client_id: str, department_key: str) -> Dict[str, Any]:
+    """Return templates filtered by department via template_departments table."""
+    normalized = department_key.strip().lower()
+    if normalized not in DEPARTMENT_LABELS:
+        raise HTTPException(status_code=404, detail="Department not found")
+
+    client_pk = int(client_id)
+
+    # Get template IDs for this department (and general)
+    dept_rows, general_rows, channels = await asyncio.gather(
+        supabase_client.select(
+            "template_departments", "template_id",
+            filters={"department": f"eq.{normalized}"},
+        ),
+        supabase_client.select(
+            "template_departments", "template_id",
+            filters={"department": "eq.general"},
+        ),
+        supabase_client.select("channels", "id,name"),
+    )
+
+    template_ids = list({int(r["template_id"]) for r in dept_rows + general_rows})
+    if not template_ids:
+        return {"templates": []}
+
+    channel_by_id = {c["id"]: c["name"] for c in channels}
+
+    # Fetch matching templates for this client or public ones
+    all_templates = []
+    for tid in template_ids:
+        rows = await supabase_client.select(
+            "templates",
+            "id,client_id,name,language,subject,content,version,is_active,notification_type,visibility,channel_id",
+            filters={"id": f"eq.{tid}", "is_active": "eq.true"},
+        )
+        for row in rows:
+            cid = row.get("client_id")
+            vis = row.get("visibility", "public")
+            if cid == client_pk or vis == "public":
+                row["channel"] = channel_by_id.get(row.get("channel_id"), "unknown")
+                row["body"] = row.get("content") or ""
+                row["is_global"] = cid != client_pk
+                all_templates.append(row)
+
+    return {"templates": all_templates}

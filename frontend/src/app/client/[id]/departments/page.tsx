@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { ClientPortalShell } from "@/components/client-portal-shell";
 import { fetchJson, formatTimeAgo } from "@/lib/client-portal";
 import { clientDepartmentUrl } from "@/lib/client-routes";
+import { HiredCandidateModal } from "@/components/hired-candidate-modal";
 
 type DepartmentKey = "hr" | "it" | "finance";
 
@@ -120,6 +121,7 @@ export default function ClientDepartmentsPage({
       clientPath={clientPath}
       title={payload?.client_name ? `${payload.client_name} Departments` : initialClientName ? `${initialClientName} Departments` : "Departments"}
       description="Department-level dashboards for HR, IT, and Finance with auto-updated internal communication metrics and template categorization by template id mapping."
+      actions={<HiredCandidateModal />}
     >
       {loading ? (
         <section className="rounded-[28px] border border-slate-200 bg-white/80 p-6 shadow-sm">
@@ -131,25 +133,6 @@ export default function ClientDepartmentsPage({
         </section>
       ) : (
         <div className="space-y-6">
-          <section className="rounded-[28px] border border-slate-200 bg-white/80 p-6 shadow-sm">
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Internal Workflows</p>
-            <div className="grid gap-4 md:grid-cols-2">
-              {(payload?.use_cases || []).map((item) => (
-                <article key={item.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                  <h2 className="text-base font-bold text-slate-900">{item.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {item.teams.map((team) => (
-                      <span key={team} className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">
-                        {team}
-                      </span>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
           <div className="grid gap-6 lg:grid-cols-3">
             {(payload?.departments || []).map((department) => (
               <Link
@@ -162,9 +145,11 @@ export default function ClientDepartmentsPage({
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Department</p>
                     <h3 className="text-2xl font-bold tracking-tight text-slate-900">{department.label}</h3>
                   </div>
-                  <span className="rounded-full border border-white/70 bg-white/80 px-3 py-1 text-xs font-bold text-slate-700">
-                    {department.metrics.total} mails
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-white/70 bg-white/80 px-3 py-1 text-xs font-bold text-slate-700">
+                      {department.metrics.total} mails
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mb-4 grid grid-cols-2 gap-2 text-sm">
@@ -176,58 +161,7 @@ export default function ClientDepartmentsPage({
                   <MetricPill label="Templates" value={department.templates.length} />
                 </div>
 
-                <div className="mb-4 rounded-2xl border border-white/70 bg-white/80 p-3">
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Role Inboxes</p>
-                  {department.role_emails.length ? (
-                    <div className="flex flex-wrap gap-2">
-                      {department.role_emails.map((mail) => (
-                        <span key={mail} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {mail}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500">No inbox configured yet in static tenant config.</p>
-                  )}
-                </div>
-
-                <div className="mb-4 rounded-2xl border border-white/70 bg-white/80 p-3">
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Template Categories</p>
-                  {department.templates.length ? (
-                    <div className="space-y-2">
-                      {department.templates.slice(0, 4).map((template) => (
-                        <div key={template.id} className="rounded-xl bg-slate-50 px-3 py-2">
-                          <p className="text-xs font-semibold text-slate-800">#{template.id} {template.name || "Unnamed"}</p>
-                          <p className="text-xs text-slate-500">{template.notification_type || "general"} • {template.channel || "unknown"}</p>
-                          {template.category ? <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Category: {template.category}</p> : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500">No mapped templates in this department.</p>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-white/70 bg-white/80 p-3">
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Recent Mail Activity</p>
-                  {department.recent_mails.length ? (
-                    <div className="space-y-2">
-                      {department.recent_mails.slice(0, 5).map((mail) => (
-                        <div key={`${mail.communication_id}-${mail.template_id || "none"}`} className="rounded-xl bg-slate-50 px-3 py-2">
-                          <p className="text-xs font-bold uppercase tracking-wide text-slate-700">
-                            {mail.direction} • {mail.channel}
-                          </p>
-                          <p className="text-xs font-semibold text-slate-800">{mail.mail_type || mail.template_name || "General Mail"}</p>
-                          {mail.template_category ? <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Category: {mail.template_category}</p> : null}
-                          <p className="text-xs text-slate-500">{mail.recipient}</p>
-                          <p className="text-xs text-slate-500">{formatTimeAgo(mail.created_at)} • {mail.status}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500">No mail activity yet for this department.</p>
-                  )}
-                </div>
+                <p className="text-xs font-semibold text-slate-500">View details →</p>
               </Link>
             ))}
           </div>

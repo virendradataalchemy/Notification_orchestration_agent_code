@@ -80,15 +80,17 @@ export default function ClientTemplatesPage({
     [templates],
   );
 
+  const clientPath = clientPathProp || clientId;
+
   return (
     <ClientPortalShell
       clientId={clientId}
-      clientPath={clientPathProp || clientId}
+      clientPath={clientPath}
       title={clientName ? `${clientName} Templates` : "Templates"}
       description="Manage your notification templates from the frontend portal. Filter by channel, include platform templates, and create client-specific variations here."
       actions={
         <Link
-          href={clientTemplateNewUrl(clientId)}
+          href={clientTemplateNewUrl(clientPath)}
           className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5"
         >
           Create Template
@@ -137,7 +139,7 @@ export default function ClientTemplatesPage({
           <p className="mb-2 text-lg font-bold text-slate-800">No templates yet</p>
           <p className="mb-5 text-sm text-slate-500">Create your first client template to get started.</p>
           <Link
-            href={clientTemplateNewUrl(clientId)}
+            href={clientTemplateNewUrl(clientPath)}
             className="inline-flex rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white"
           >
             Create Template
@@ -164,7 +166,7 @@ export default function ClientTemplatesPage({
                 </div>
                 <div className="flex gap-3">
                   <Link
-                    href={clientTemplateEditUrl(clientId, template.id)}
+                    href={clientTemplateEditUrl(clientPath, template.id)}
                     className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
                   >
                     Edit

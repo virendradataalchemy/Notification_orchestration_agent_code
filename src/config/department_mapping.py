@@ -11,7 +11,6 @@ from typing import Any
 DEPARTMENT_LABELS: dict[str, str] = {
     "hr": "HR",
     "it": "IT",
-    "finance": "Finance",
 }
 
 # Global template-id mapping across tenants.
@@ -32,7 +31,6 @@ CLIENT_DEPARTMENT_ROLE_EMAILS: dict[int, dict[str, list[str]]] = {
     1: {
         "hr": ["prachikushwaha.dataalchemy@gmail.com", "+919893155055"],
         "it": ["prateekgaur.prateek.1609@gmail.com", "+918290942415"],
-        "finance": [],
     },
 }
 
@@ -109,10 +107,30 @@ def resolve_template_department(
 
 
 def get_department_role_emails(client_id: int) -> dict[str, list[str]]:
-    """Return configured role inboxes for a tenant."""
+    """Return configured role inboxes for a tenant (static fallback)."""
     configured = CLIENT_DEPARTMENT_ROLE_EMAILS.get(client_id, {})
     return {
         "hr": configured.get("hr", []),
         "it": configured.get("it", []),
-        "finance": configured.get("finance", []),
     }
+
+
+async def fetch_department_role_emails(client_id: int) -> dict[str, list[str]]:
+    """Fetch role emails from the users table in DB, keyed by role."""
+    from src.core.supabase import supabase_client
+    try:
+        rows = await supabase_client.select(
+            "users",
+            "email,role",
+            filters={"client_id": f"eq.{client_id}", "is_active": "eq.true"},
+        )
+    except Exception:
+        return get_department_role_emails(client_id)
+
+    result: dict[str, list[str]] = {"hr": [], "it": []}
+    for row in rows:
+        role = (row.get("role") or "").strip().lower()
+        email = (row.get("email") or "").strip()
+        if role in result and email:
+            result[role].append(email)
+    return result

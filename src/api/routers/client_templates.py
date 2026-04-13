@@ -67,6 +67,7 @@ def _serialize_template(template: Template | dict, current_client_id: int | None
             "visibility": template.get("visibility") or "public",
             "base_template_id": template.get("base_template_id"),
             "created_at": template.get("created_at") or datetime.utcnow(),
+            "category": template.get("category"),
         }
 
     return {
@@ -228,6 +229,7 @@ async def create_client_template(
             "is_active": True,
             "notification_type": template.name,
             "visibility": template.visibility,
+            "category": getattr(template, "category", None),
         },
     )
     created = rows[0]
@@ -327,6 +329,24 @@ async def list_client_templates(
             row["channel"] = channel_name
             row["is_global"] = row.get("visibility") == "public" and row.get("client_id") != client.id
             serialized_templates.append(_serialize_template(row, client.id))
+
+        # Enrich with category from template_departments table
+        if serialized_templates:
+            template_ids = [str(t["id"]) for t in serialized_templates]
+            try:
+                dept_rows = await supabase_client.select(
+                    "template_departments",
+                    "template_id,department",
+                )
+                dept_map: dict[int, str] = {}
+                for dr in dept_rows:
+                    tid = int(dr["template_id"])
+                    if tid not in dept_map:
+                        dept_map[tid] = dr["department"]
+                for t in serialized_templates:
+                    t["category"] = dept_map.get(int(t["id"]), "general")
+            except Exception:
+                pass
 
     global_count = sum(1 for t in serialized_templates if t.get("visibility") == "public" and t["client_id"] != client.id)
     client_count = sum(1 for t in serialized_templates if t["client_id"] == client.id)
