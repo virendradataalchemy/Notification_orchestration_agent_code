@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from src.core import supabase_client
-from src.core.cache import cached, invalidate_pattern
+from src.core.cache import cached, invalidate_cache, invalidate_pattern
 from src.config.department_mapping import (
     DEPARTMENT_LABELS,
     fetch_department_role_emails,
@@ -49,18 +49,16 @@ def _parse_dt(value: Any):
     return None
 
 
-@cached("dashboard_data", ttl=300)  # 5 min — covers all dashboard endpoints
+@cached("dashboard_data", ttl=5)  # 5 sec (reduced for real-time testing)
 async def _load_dashboard_data() -> dict[str, Any]:
     (
-        clients, channels, communications, candidates,
+        clients, channels, communications, payloads, candidates,
         templates, providers, events, attempts, slots,
     ) = await asyncio.gather(
         supabase_client.select("clients", "id,name,is_active,created_at"),
         supabase_client.select("channels", "id,name,priority,is_active"),
-        supabase_client.select(
-            "communications",
-            "id,client_id,candidate_id,notification_type,channel_id,priority,status,template_id,idempotency_key,created_at,sent_at,retry_count",
-        ),
+        supabase_client.select("communications", "id,client_id,candidate_id,notification_type,channel_id,priority,status,template_id,idempotency_key,created_at,sent_at,retry_count"),
+        supabase_client.select("communication_payloads", "communication_id,key,value", filters={"key": "eq.body"}),
         supabase_client.select("candidates", "id,client_id,name,email,phone,whatsapp_number"),
         supabase_client.select(
             "templates",
@@ -75,6 +73,7 @@ async def _load_dashboard_data() -> dict[str, Any]:
         "clients": clients,
         "channels": channels,
         "communications": communications,
+        "payloads": payloads,
         "candidates": candidates,
         "templates": templates,
         "providers": providers,
@@ -430,6 +429,13 @@ async def get_client_departments_dashboard(client_id: str, limit: int = 20) -> D
         if comm_id is not None:
             events_by_comm[comm_id].append(event)
 
+    payloads_by_comm: dict[int, str] = {}
+    if "payloads" in data:
+        for payload in data["payloads"]:
+            comm_id = payload.get("communication_id")
+            if comm_id is not None and payload.get("key") == "body":
+                payloads_by_comm[comm_id] = payload.get("value", "")
+
     role_emails = await fetch_department_role_emails(client_pk)
     departments: dict[str, Dict[str, Any]] = {
         dept: {
@@ -531,8 +537,10 @@ async def get_client_departments_dashboard(client_id: str, limit: int = 20) -> D
         if opened:
             metrics["opened"] += 1
 
+        candidate = candidates_by_id.get(comm.get("candidate_id"), {})
+        recipient_email = candidate.get("email") or candidate.get("phone") or candidate.get("whatsapp_number") or "N/A"
+
         if len(item["recent_mails"]) < limit:
-            candidate = candidates_by_id.get(comm.get("candidate_id"), {})
             item["recent_mails"].append(
                 {
                     "communication_id": comm.get("id"),
@@ -543,12 +551,95 @@ async def get_client_departments_dashboard(client_id: str, limit: int = 20) -> D
                     "channel": channels_by_id.get(comm.get("channel_id"), "unknown"),
                     "status": status,
                     "direction": "received" if received else "sent",
-                    "recipient": candidate.get("email") or candidate.get("phone") or candidate.get("whatsapp_number") or "N/A",
+                    "recipient": recipient_email,
                     "subject": (template or {}).get("subject"),
                     "created_at": comm.get("created_at"),
                     "opened_at": opened_at,
                 }
             )
+
+        # Cross-post to recipient department if the to-address is a role inbox of another dept
+        for other_dept, other_role_emails in role_emails.items():
+            if other_dept == department:
+                continue
+            if recipient_email not in other_role_emails:
+                continue
+            other_item = departments.get(other_dept)
+            if not other_item:
+                continue
+            other_metrics = other_item["metrics"]
+            other_metrics["total"] += 1
+            other_metrics["received"] += 1
+            if status in sent_statuses:
+                other_metrics["sent"] += 1
+            if status in failed_statuses:
+                other_metrics["failed"] += 1
+            if status in progress_statuses:
+                other_metrics["in_progress"] += 1
+            if opened:
+                other_metrics["opened"] += 1
+            if len(other_item["recent_mails"]) < limit:
+                other_item["recent_mails"].append(
+                    {
+                        "communication_id": comm.get("id"),
+                        "mail_type": comm.get("notification_type"),
+                        "template_id": comm.get("template_id"),
+                        "template_name": (template or {}).get("name"),
+                        "template_category": template_categories.get(int(comm.get("template_id"))) if comm.get("template_id") is not None else None,
+                        "channel": channels_by_id.get(comm.get("channel_id"), "unknown"),
+                        "status": status,
+                        "direction": "received",
+                        "recipient": recipient_email,
+                        "subject": (template or {}).get("subject"),
+                        "body": payloads_by_comm.get(comm.get("id")),
+                        "created_at": comm.get("created_at"),
+                        "opened_at": opened_at,
+                    }
+                )
+
+        # Cross-post based on explicit internal pipeline notification_type
+        # hr_to_it_internal → sender=hr, receiver=it; it_to_hr_internal → sender=it, receiver=hr
+        INTERNAL_CROSS_POST = {
+            "hr_to_it_internal": ("hr", "it"),
+            "it_to_hr_internal": ("it", "hr"),
+        }
+        comm_ntype = (comm.get("notification_type") or "").lower()
+        if comm_ntype in INTERNAL_CROSS_POST:
+            sender_dept, receiver_dept = INTERNAL_CROSS_POST[comm_ntype]
+            mail_entry = {
+                "communication_id": comm.get("id"),
+                "mail_type": comm_ntype,
+                "template_id": comm.get("template_id"),
+                "template_name": (template or {}).get("name"),
+                "template_category": template_categories.get(int(comm.get("template_id"))) if comm.get("template_id") is not None else None,
+                "channel": channels_by_id.get(comm.get("channel_id"), "unknown"),
+                "status": status,
+                "recipient": recipient_email,
+                "subject": (template or {}).get("subject"),
+                "body": payloads_by_comm.get(comm.get("id")),
+                "created_at": comm.get("created_at"),
+                "opened_at": opened_at,
+            }
+            for cross_dept, cross_direction in [(sender_dept, "sent"), (receiver_dept, "received")]:
+                if cross_dept == department or cross_dept not in departments:
+                    continue
+                c_item = departments[cross_dept]
+                c_metrics = c_item["metrics"]
+                c_metrics["total"] += 1
+                if cross_direction == "sent":
+                    c_metrics["sent"] += 1
+                else:
+                    c_metrics["received"] += 1
+                    if status in sent_statuses:
+                        c_metrics["sent"] += 1
+                if status in failed_statuses:
+                    c_metrics["failed"] += 1
+                if status in progress_statuses:
+                    c_metrics["in_progress"] += 1
+                if opened:
+                    c_metrics["opened"] += 1
+                if len(c_item["recent_mails"]) < limit:
+                    c_item["recent_mails"].append({**mail_entry, "direction": cross_direction})
 
     for dept in departments.values():
         dept["templates"].sort(key=lambda row: (str(row.get("name") or "").lower(), row.get("id") or 0))
@@ -662,8 +753,9 @@ async def send_department_email(client_id: str, department_key: str, payload: De
         },
     )
 
-    # Invalidate dashboard cache so next load reflects the new communication
+    # Invalidate caches so next load reflects the new communication
     await invalidate_pattern("dashboard_data*")
+    await invalidate_cache("template_categories")
 
     _dept_logger.info(
         f"✅  Queued  {dept_label} → {to_email}  |  type: {notification_type}  |  priority: {payload.priority}"
@@ -676,6 +768,14 @@ async def send_department_email(client_id: str, department_key: str, payload: De
         "from_email": from_email,
         "result": send_result,
     }
+
+
+@router.post("/api/client-dashboard/cache/clear")
+async def clear_dashboard_cache() -> Dict[str, str]:
+    """Force-clear the in-memory dashboard and template caches."""
+    await invalidate_pattern("dashboard_data*")
+    await invalidate_cache("template_categories")
+    return {"status": "cleared"}
 
 
 @router.get("/api/client-dashboard/client/{client_id}/deduplication-stats")

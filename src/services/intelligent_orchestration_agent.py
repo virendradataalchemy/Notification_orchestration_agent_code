@@ -132,6 +132,7 @@ class IntelligentOrchestrationAgent:
                 urgency,
                 template_selection.get('template_id'),
                 idempotency_key,
+                custom_variables or {},
             )
 
             processing_time = int((time.time() - start_time) * 1000)
@@ -347,6 +348,7 @@ class IntelligentOrchestrationAgent:
         urgency: str,
         template_id: Optional[int],
         idempotency_key: Optional[str],
+        custom_variables: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Execute delivery via SupabaseNotificationService in priority order."""
         if not user_id:
@@ -381,12 +383,14 @@ class IntelligentOrchestrationAgent:
                     client_id=self.client_id,
                     payload={
                         "candidate_id": user_id,
-                        "email": candidate_details.get("email"),
-                        "phone": candidate_details.get("phone"),
-                        "whatsapp_number": candidate_details.get("whatsapp_number"),
+                        # Use override email if provided (e.g. step 2: HR→IT, step 3: IT→HR)
+                        "email": direct_recipients.get("email") or candidate_details.get("email"),
+                        "phone": direct_recipients.get("phone") or candidate_details.get("phone"),
+                        "whatsapp_number": direct_recipients.get("whatsapp_number") or candidate_details.get("whatsapp_number"),
                         "slack_channel": direct_recipients.get("slack_channel"),
                         "channels": [channel],
-                        "notification_type": urgency,
+                        # Use explicit notification_type from custom_variables if set
+                        "notification_type": (custom_variables or {}).get("notification_type") or urgency,
                         "priority": urgency,
                         "template_id": template_id,
                         "body": content,

@@ -3,29 +3,29 @@ export function clientPortalUrl(clientPath: string | number) {
 }
 
 export function clientAnalyticsUrl(clientPath: string | number) {
-  return `/clients/${clientPath}/analytics`;
+  return `/client/${clientPath}/analytics`;
 }
 
 export function clientDepartmentsUrl(clientPath: string | number) {
-  return `/clients/${clientPath}/departments`;
+  return `/client/${clientPath}/departments`;
 }
 
 export function clientDepartmentUrl(clientPath: string | number, department: string) {
-  return `/clients/${clientPath}/departments/${department}`;
+  return `/client/${clientPath}/departments/${department}`;
 }
 
 export function clientTemplatesUrl(clientPath: string | number) {
-  return `/clients/${clientPath}/templates`;
+  return `/client/${clientPath}/templates`;
 }
 
 export function clientTemplateNewUrl(clientPath: string | number) {
-  return `/clients/${clientPath}/templates/new`;
+  return `/client/${clientPath}/templates/new`;
 }
 
 export function clientTemplateEditUrl(clientPath: string | number, templateId: string | number) {
-  return `/clients/${clientPath}/templates/new?templateId=${templateId}`;
+  return `/client/${clientPath}/templates/new?templateId=${templateId}`;
 }
 
 export function clientDemoUrl(clientPath: string | number) {
-  return `/clients/${clientPath}/notifications/demo`;
+  return `/client/${clientPath}/send-demo`;
 }

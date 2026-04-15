@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 
 type FormState = { name: string; phone: string; email: string };
@@ -61,7 +59,6 @@ export function HiredCandidateModal({ clientId }: { clientId: string }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        suppressHydrationWarning
         className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 active:scale-95"
       >
         + Hired Candidate
@@ -112,6 +109,7 @@ export function HiredCandidateModal({ clientId }: { clientId: string }) {
               >
                 {submitting ? "Submitting..." : "Submit"}
               </button>
+              {error && <p className="text-xs text-red-600">{error}</p>}
             </form>
           )}
         </div>

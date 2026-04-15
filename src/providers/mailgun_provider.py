@@ -59,8 +59,7 @@ class MailgunProvider(NotificationProvider):
             }
 
             # Add HTML if body contains HTML tags
-            body_lower = body_text.lower()
-            if '<html' in body_lower or '<p>' in body_lower:
+            if self._is_html(body_text):
                 data["html"] = body_text
 
             # Add CC recipients if provided
@@ -151,6 +150,13 @@ class MailgunProvider(NotificationProvider):
         # Basic email validation regex
         email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(email_pattern, recipient))
+
+    def _is_html(self, body: str) -> bool:
+        """Check if message body contains HTML tags."""
+        if not body:
+            return False
+        # Match common HTML tags
+        return bool(re.search(r'<(/?[a-z]+[a-z0-9]*\b[^>]*)>', body.lower()))
 
     async def send_batch(self, messages: List[Message]) -> List[ProviderResponse]:
         """

@@ -1,7 +1,4 @@
-"use client";
-
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 
 import { clientAnalyticsUrl, clientDemoUrl, clientDepartmentsUrl, clientPortalUrl, clientTemplatesUrl } from "@/lib/client-routes";
@@ -32,11 +29,11 @@ export function ClientPortalShell({
   actions,
   children,
 }: ClientPortalShellProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    navigate("/login");
   };
 
   return (
@@ -44,7 +41,7 @@ export function ClientPortalShell({
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
         <div className="flex w-full items-center justify-between gap-4 px-6 py-4 xl:px-10">
           <div className="flex items-center gap-6">
-            <Link href={clientPortalUrl(clientPath || clientId)} className="text-lg font-bold tracking-tight text-slate-950">
+            <Link to={clientPortalUrl(clientPath || clientId)} className="text-lg font-bold tracking-tight text-slate-950">
               Client Portal
             </Link>
             <nav className="hidden flex-wrap gap-2 md:flex">
@@ -53,7 +50,7 @@ export function ClientPortalShell({
                 .map((item) => (
                   <Link
                     key={item.label}
-                    href={item.href(clientPath || clientId)}
+                    to={item.href(clientPath || clientId)}
                     className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                   >
                     {item.label}
@@ -63,7 +60,6 @@ export function ClientPortalShell({
           </div>
           <button
             onClick={handleSignOut}
-            suppressHydrationWarning
             className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
           >
             Sign Out

@@ -59,8 +59,8 @@ class EmailProvider(NotificationProvider):
                     Message={
                         'Subject': {'Data': message.subject or "Notification"},
                         'Body': {
-                            'Html': {'Data': message.body} if '<html' in message.body.lower() else {},
-                            'Text': {'Data': message.body} if '<html' not in message.body.lower() else {}
+                            'Html': {'Data': message.body} if self._is_html(message.body) else {},
+                            'Text': {'Data': message.body} if not self._is_html(message.body) else {}
                         }
                     }
                 )
@@ -98,7 +98,7 @@ class EmailProvider(NotificationProvider):
         msg['To'] = message.recipient
 
         # Add body
-        if '<html' in message.body.lower():
+        if self._is_html(message.body):
             msg.attach(MIMEText(message.body, 'html'))
         else:
             msg.attach(MIMEText(message.body, 'plain'))
@@ -148,6 +148,13 @@ class EmailProvider(NotificationProvider):
         """
         email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(email_regex, recipient))
+
+    def _is_html(self, body: str) -> bool:
+        """Check if message body contains HTML tags."""
+        if not body:
+            return False
+        # Match common HTML tags
+        return bool(re.search(r'<(/?[a-z]+[a-z0-9]*\b[^>]*)>', body.lower()))
 
     def supports_channel(self) -> str:
         """Returns 'email'."""

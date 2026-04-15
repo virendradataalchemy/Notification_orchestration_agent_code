@@ -110,7 +110,8 @@ async def onboard_candidate(payload: OnboardCandidateRequest) -> dict[str, Any]:
                 user_id=str(candidate_id),
                 recipient_overrides={"email": it_email},
                 custom_variables={
-                    "type": "internal_request", 
+                    "type": "internal_request",
+                    "notification_type": "hr_to_it_internal",
                     "sender_email": hr_email,
                     **common_vars
                 }
@@ -128,7 +129,8 @@ async def onboard_candidate(payload: OnboardCandidateRequest) -> dict[str, Any]:
                 user_id=str(candidate_id),
                 recipient_overrides={"email": hr_email},
                 custom_variables={
-                    "type": "internal_response", 
+                    "type": "internal_response",
+                    "notification_type": "it_to_hr_internal",
                     "sender_email": it_email,
                     **common_vars
                 }
