@@ -61,6 +61,14 @@ class SMSProvider(NotificationProvider):
             if not body_text:
                 body_text = message.data.get('message', '') or f"SMS: {message.subject or 'Notification'}"
 
+            # Strip HTML tags for SMS — SMS only supports plain text
+            import re
+            body_text = re.sub(r'<[^>]+>', '', body_text)          # remove tags
+            body_text = re.sub(r'&[a-z]+;', ' ', body_text)        # decode entities
+            body_text = re.sub(r'\s+', ' ', body_text).strip()     # collapse whitespace
+            # Truncate to 1600 chars (Twilio limit)
+            body_text = body_text[:1600]
+
             # Send SMS in thread pool since Twilio client is sync
             loop = asyncio.get_running_loop()
             twilio_message = await loop.run_in_executor(

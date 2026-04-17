@@ -9,9 +9,11 @@ import ClientPortalResolver from './pages/client/ClientPortalResolver';
 import ClientDashboardPage from './pages/client/ClientDashboardPage';
 import AnalyticsPage from './pages/client/AnalyticsPage';
 import TemplatesPage from './pages/client/TemplatesPage';
+import TemplateCreatePage from './pages/client/TemplateCreatePage';
 import DepartmentsPage from './pages/client/DepartmentsPage';
 import DepartmentDetailPage from './pages/client/DepartmentDetailPage';
 import SendDemoPage from './pages/client/SendDemoPage';
+import ClientSettingsPage from './pages/client/ClientSettingsPage';
 
 function App() {
   return (
@@ -28,9 +30,11 @@ function App() {
           <Route index element={<ClientDashboardPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="templates" element={<TemplatesPage />} />
+          <Route path="templates/new" element={<TemplateCreatePage />} />
           <Route path="departments" element={<DepartmentsPage />} />
           <Route path="departments/:department" element={<DepartmentDetailPage />} />
           <Route path="send-demo" element={<SendDemoPage />} />
+          <Route path="settings" element={<ClientSettingsPage />} />
         </Route>
 
         {/* Slug-based portal alias */}
@@ -38,9 +42,11 @@ function App() {
           <Route path="portal" element={<ClientDashboardPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="templates" element={<TemplatesPage />} />
+          <Route path="templates/new" element={<TemplateCreatePage />} />
           <Route path="departments" element={<DepartmentsPage />} />
           <Route path="departments/:department" element={<DepartmentDetailPage />} />
           <Route path="notifications/demo" element={<SendDemoPage />} />
+          <Route path="settings" element={<ClientSettingsPage />} />
         </Route>
       </Routes>
     </Router>

@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     twilio_whatsapp_number: Optional[str] = None
 
     # Azure
-    azure_client_id: Optional[str] = None
+    azure_tenant_id: Optional[str] = None
     azure_client_id: Optional[str] = None
     azure_client_secret: Optional[str] = None
 
@@ -170,12 +170,14 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         """Get CORS allowed origins."""
         if self.app_env == "development":
-            return ["*", "http://localhost:3000"]
+            return ["*"]
         return [
             "https://yourdomain.com",
             "https://app.yourdomain.com",
             "http://localhost:3000",
+            "http://localhost:5173",
             "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
         ]
 
 

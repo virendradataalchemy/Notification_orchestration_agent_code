@@ -58,6 +58,8 @@ async def send_notification(
         "candidate_id": payload["recipient"]["user_id"],
         "email": payload["recipient"].get("email"),
         "phone": payload["recipient"].get("phone"),
+        "device_tokens": payload["recipient"].get("device_tokens") or [],
+        "slack_user": payload["recipient"].get("slack_id"),
         "notification_type": payload["notification"]["type"],
         "priority": payload["notification"]["priority"],
         "channels": payload["notification"]["channels"],

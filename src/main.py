@@ -22,9 +22,10 @@ from src.api.routers import (
     usage_router,
     client_dashboard_router,
     client_templates_router,
-    client_portal_router,
     client_auth_router,
     tracking_router,
+    client_portal_router,
+    integration_router,
 )
 from src.api.routers.twilio_webhooks import router as twilio_webhooks_router
 from src.api.routers.orchestration import router as orchestration_router
@@ -141,13 +142,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-@app.get("/", response_class=HTMLResponse)
-async def landing_page():
-    """Serve the authentication landing page."""
-    import os
-    landing_path = os.path.join(os.path.dirname(__file__), "templates", "landing.html")
-    with open(landing_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+from fastapi.staticfiles import StaticFiles
+import os
 
 
 # Include routers
@@ -169,7 +165,31 @@ app.include_router(twilio_webhooks_router)  # Twilio webhooks for call recording
 app.include_router(client_management_router, prefix=settings.api_prefix)
 app.include_router(usage_router, prefix=settings.api_prefix)
 app.include_router(tracking_router, prefix=settings.api_prefix)  # Tracking, logs, and unsubscribe
+app.include_router(integration_router, prefix=settings.api_prefix)  # External B2B integration API
 app.include_router(pipeline_router, prefix=settings.api_prefix)
+
+
+# Serve React frontend after API routes so the SPA catch-all does not shadow them.
+frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.exists(frontend_dist):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    @app.get("/{full_path:path}", response_class=HTMLResponse)
+    async def serve_frontend(request: Request, full_path: str):
+        """Serve the React frontend for all non-API routes."""
+        if full_path.startswith(("api/", "admin/api/", "docs", "redoc", "openapi.json")):
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"detail": "Not Found"},
+            )
+
+        index_path = os.path.join(frontend_dist, "index.html")
+        with open(index_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+else:
+    @app.get("/", response_class=JSONResponse)
+    async def root():
+        return {"message": "Notification Orchestration API. Frontend not built."}
 
 
 if __name__ == "__main__":

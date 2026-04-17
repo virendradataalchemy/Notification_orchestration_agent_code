@@ -274,7 +274,7 @@ class SupabaseNotificationService:
 
         data = {
             "client": clients[0],
-            "candidates": await supabase_client.select("candidates", "id,client_id,name,email,phone,whatsapp_number,company,language", filters={"client_id": f"eq.{client_id}"}),
+            "candidates": await supabase_client.select("candidates", "id,client_id,name,email,phone,whatsapp_number,company,language,metadata", filters={"client_id": f"eq.{client_id}"}),
             "channels": await supabase_client.select("channels", "id,name,priority,is_active", filters={"is_active": "eq.true"}),
             "providers": await supabase_client.select("providers", "id,client_id,channel_id,name,priority,is_active", filters={"is_active": "eq.true"}),
             "templates": await supabase_client.select("templates", "id,client_id,name,language,subject,content,version,is_active,notification_type,channel_id,created_at", filters={"client_id": f"eq.{client_id}", "is_active": "eq.true"}),
@@ -544,6 +544,24 @@ class SupabaseNotificationService:
                 "error": "Provider not configured",
             }
 
+        if not recipient:
+            error_message = self._missing_recipient_error(channel_name)
+            await self._record_failure(
+                communication_id=communication_id,
+                channel_id=channel_id,
+                provider_id=provider.get("id") if provider else None,
+                error_message=error_message,
+                error_code="MISSING_RECIPIENT",
+            )
+            return {
+                "communication_id": communication_id,
+                "channel": channel_name,
+                "provider": provider_name or normalized_provider or "unknown",
+                "status": "failed",
+                "message_id": None,
+                "error": error_message,
+            }
+
         try:
             response = await provider_instance.send(
                 Message(
@@ -712,16 +730,26 @@ class SupabaseNotificationService:
 
     async def _resolve_push_recipient(self, candidate: dict[str, Any], payload: dict[str, Any]) -> str:
         """Resolve push notification recipient by fetching device token from database."""
-        # Try payload first
-        device_token = payload.get("device_token") or (payload.get("data") or {}).get("device_token")
-        if device_token:
-            return device_token
+        payload_data = payload.get("data") or {}
+
+        # Try explicit push token inputs first.
+        direct_tokens = self._extract_push_tokens(
+            payload.get("device_tokens"),
+            payload_data.get("device_tokens"),
+            payload.get("device_token"),
+            payload_data.get("device_token"),
+        )
+        if direct_tokens:
+            return direct_tokens[0]
         
         # Check candidate metadata
         if candidate.get("metadata"):
-            device_token = candidate.get("metadata", {}).get("device_token")
-            if device_token:
-                return device_token
+            metadata_tokens = self._extract_push_tokens(
+                candidate.get("metadata", {}).get("device_tokens"),
+                candidate.get("metadata", {}).get("device_token"),
+            )
+            if metadata_tokens:
+                return metadata_tokens[0]
         
         # Fetch from device_tokens table
         try:
@@ -743,6 +771,28 @@ class SupabaseNotificationService:
             print(f"Error fetching device token: {e}")
         
         return ""
+
+    def _extract_push_tokens(self, *values: Any) -> list[str]:
+        tokens: list[str] = []
+        for value in values:
+            if isinstance(value, str):
+                cleaned = value.strip()
+                if cleaned:
+                    tokens.append(cleaned)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, str):
+                        cleaned = item.strip()
+                        if cleaned:
+                            tokens.append(cleaned)
+
+        # Preserve order while removing duplicates.
+        return list(dict.fromkeys(tokens))
+
+    def _missing_recipient_error(self, channel_name: str) -> str:
+        if channel_name == "push":
+            return "No active push device token found for this candidate"
+        return f"No recipient available for channel '{channel_name}'"
 
     def _normalize_provider_name(self, provider_name: Optional[str]) -> Optional[str]:
         mapping = {

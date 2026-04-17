@@ -6,8 +6,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +19,6 @@ from src.models.channel import Channel
 from src.models.notification import NotificationEvent
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(get_authenticated_admin)])
-templates = Jinja2Templates(directory="src/templates")
 
 
 def _parse_dt(value: Any) -> Optional[datetime]:
@@ -140,15 +137,7 @@ async def create_admin(
     return rows[0]
 
 
-@router.get("/dashboard", response_class=HTMLResponse)
-async def admin_dashboard(request: Request):
-    return templates.TemplateResponse(request, "admin_dashboard.html")
-
-
-@router.get("/client-detail-modern/{client_id}", response_class=HTMLResponse)
-async def client_detail_modern(request: Request, client_id: str):
-    """Modern client detail dashboard"""
-    return templates.TemplateResponse(request, "client_detail_modern.html", {"client_id": client_id})
+# HTML routes removed - logic moved to React frontend
 
 
 

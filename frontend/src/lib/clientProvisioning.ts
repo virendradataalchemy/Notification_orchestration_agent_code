@@ -27,21 +27,29 @@ function deriveClientName(user: AuthLikeUser) {
 }
 
 export async function fetchClientBySupabaseUid(userId: string): Promise<ClientProfile | null> {
-  const res = await fetch(`/api/v1/clients/by-supabase/${userId}`);
-  if (!res.ok) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000); // 5s timeout
+    const res = await fetch(`/api/v1/clients/by-supabase/${userId}`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch {
     return null;
   }
-  return res.json();
 }
 
 export async function ensureClientProfile(user: AuthLikeUser): Promise<ClientProfile> {
   const existing = await fetchClientBySupabaseUid(user.id);
-  if (existing) {
-    return existing;
-  }
+  if (existing) return existing;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
   const res = await fetch("/api/v1/clients/create", {
     method: "POST",
+    signal: controller.signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: deriveClientName(user),
@@ -50,17 +58,16 @@ export async function ensureClientProfile(user: AuthLikeUser): Promise<ClientPro
       supabase_uid: user.id,
     }),
   });
+  clearTimeout(timer);
 
+  const text = await res.text();
   if (!res.ok) {
     let message = `Failed to provision client profile (${res.status}).`;
-    try {
-      const err = await res.json();
-      message = err.detail || err.message || message;
-    } catch {
-      // Keep the fallback message.
-    }
+    try { const err = JSON.parse(text); message = err.detail || err.message || message; } catch { /* keep fallback */ }
     throw new Error(message);
   }
 
-  return res.json();
+  try { return JSON.parse(text); } catch {
+    throw new Error("Invalid response from server during client provisioning.");
+  }
 }

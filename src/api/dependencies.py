@@ -1,6 +1,9 @@
+import hashlib
+import time
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status, Header, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
@@ -8,7 +11,6 @@ from src.core import get_db, get_db_optional, get_redis_client, verify_token, su
 from src.core.supabase import ADMINS_TABLE, CLIENTS_TABLE
 from src.config import settings
 from src.models import Client
-import time
 
 security = HTTPBearer()
 
@@ -27,31 +29,45 @@ def _client_from_row(row: dict) -> Client:
     )
 
 
-async def verify_api_key(x_api_key: Optional[str] = Header(None)) -> Optional[str]:
+async def verify_api_key(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
+) -> Optional[str]:
     """Verify API key from header."""
+    api_key_to_check = x_api_key
+    if not api_key_to_check and authorization and authorization.startswith("Bearer sk_"):
+        api_key_to_check = authorization.replace("Bearer ", "", 1)
+
     # In debug mode, allow requests without API key
-    if settings.debug and not x_api_key:
+    if settings.debug and not api_key_to_check:
         return None
 
-    if not x_api_key:
+    if not api_key_to_check:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing API key"
         )
 
-    # In production, verify against database
-    # For now, check if key is provided
-    if not x_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key"
-        )
+    hashed_key = hashlib.sha256(api_key_to_check.encode()).hexdigest()
 
-    return x_api_key
+    if supabase_client.configured:
+        rows = await supabase_client.select(
+            CLIENTS_TABLE,
+            "id",
+            limit=1,
+            filters={"api_key_hash": f"eq.{hashed_key}", "is_active": "eq.true"},
+        )
+        if not rows:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key"
+            )
+
+    return api_key_to_check
 
 
 async def get_authenticated_client(
-    x_api_key: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     authorization: Optional[str] = Header(None),
     x_client_id: Optional[str] = Header(None),
     db: AsyncSession | None = Depends(get_db_optional)
@@ -104,9 +120,44 @@ async def get_authenticated_client(
 
         return client
 
-    # Try JWT authentication first (Authorization header)
+    api_key_to_check = x_api_key
+    if not api_key_to_check and authorization and authorization.startswith("Bearer sk_"):
+        api_key_to_check = authorization.replace("Bearer ", "", 1)
+
+    # Try API key authentication first (X-API-Key or Bearer sk_...)
+    if api_key_to_check:
+        hashed_key = hashlib.sha256(api_key_to_check.encode()).hexdigest()
+        client = None
+
+        if db is not None:
+            query = select(Client).where(
+                Client.api_key_hash == hashed_key,
+                Client.is_active == True
+            )
+            result = await db.execute(query)
+            client = result.scalar_one_or_none()
+        elif supabase_client.configured:
+            rows = await supabase_client.select(
+                CLIENTS_TABLE,
+                "id,name,default_language,logo_url,brand_color,is_active,client_slug,created_at,updated_at",
+                limit=1,
+                filters={
+                    "api_key_hash": f"eq.{hashed_key}",
+                    "is_active": "eq.true",
+                },
+            )
+            client = _client_from_row(rows[0]) if rows else None
+
+        if not client:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key or client is inactive"
+            )
+        return client
+
+    # Try JWT authentication (frontend UI/dashboard)
     if authorization and authorization.startswith("Bearer "):
-        token = authorization.replace("Bearer ", "")
+        token = authorization.replace("Bearer ", "", 1)
         payload = verify_token(token)
 
         if payload is None:
@@ -129,7 +180,6 @@ async def get_authenticated_client(
                 detail="Invalid client ID in token"
             ) from exc
 
-        # Look up client by ID from JWT
         client = None
         if db is not None:
             query = select(Client).where(
@@ -158,17 +208,10 @@ async def get_authenticated_client(
 
         return client
 
-    # Try API key authentication (X-API-Key header)
-    if x_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key authentication is not available for the live Supabase client schema"
-        )
-
     # No authentication provided
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Missing authentication. Provide X-Client-Id (dev), X-API-Key, or Authorization Bearer token"
+        detail="Missing authentication. Provide X-API-Key, or Authorization Bearer token"
     )
 
 

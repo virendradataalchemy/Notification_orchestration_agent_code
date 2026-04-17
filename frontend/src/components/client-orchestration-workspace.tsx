@@ -31,6 +31,11 @@ type ClientPreferences = {
   preferred_channels?: string[] | { default?: string[] } | null;
 };
 
+type ClientProfile = {
+  api_key_prefix?: string | null;
+  client_slug?: string | null;
+};
+
 const DIRECT_CHANNEL_FIELDS: Record<string, RecipientField> = {
   email: "email",
   sms: "phone",
@@ -56,6 +61,7 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
     slack_channel: "",
   });
   const [clientPreferredChannels, setClientPreferredChannels] = useState<string[]>([]);
+  const [apiKeyPrefix, setApiKeyPrefix] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [stage, setStage] = useState(0);
   const [result, setResult] = useState<OrchestrationResult | null>(null);
@@ -92,10 +98,45 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
 
     loadClientPreferences();
 
+    const loadClientProfile = async () => {
+      try {
+        const profile = await fetchJson<ClientProfile>("/api/v1/clients/me", {
+          headers: {
+            "X-Client-Id": clientId,
+          },
+        });
+        if (!cancelled) {
+          setApiKeyPrefix(profile.api_key_prefix || null);
+        }
+      } catch {
+        if (!cancelled) {
+          setApiKeyPrefix(null);
+        }
+      }
+    };
+
+    loadClientProfile();
+
     return () => {
       cancelled = true;
     };
   }, [clientId]);
+
+  const integrationExample = useMemo(() => {
+    const authValue = apiKeyPrefix ? `${apiKeyPrefix}_YOUR_SECRET_SUFFIX` : "sk_live_YOUR_CLIENT_ID_YOUR_SECRET_SUFFIX";
+    return [
+      `curl -X POST "https://yourdomain.com/api/v1/integration/trigger" \\`,
+      `  -H "Authorization: Bearer ${authValue}" \\`,
+      `  -H "Content-Type: application/json" \\`,
+      `  -d '{`,
+      `    "message": "Hello world from API!",`,
+      `    "candidate_id": 123,`,
+      `    "overrides": {`,
+      `      "email": "customer@example.com"`,
+      `    }`,
+      `  }'`,
+    ].join("\n");
+  }, [apiKeyPrefix]);
 
   const runPipeline = async () => {
     if (!message.trim()) {
@@ -262,6 +303,21 @@ export function ClientOrchestrationWorkspace({ clientId }: ClientOrchestrationWo
               >
                 Clear
               </button>
+            </div>
+
+            <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-900 px-5 py-5 text-white shadow-sm">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Developer API Integration</p>
+                <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-[10px] font-bold text-emerald-400">LIVE</span>
+              </div>
+              <p className="mb-4 text-sm text-slate-300">
+                Trigger this orchestration pipeline directly from your application using your API key.
+                {apiKeyPrefix ? ` Current key prefix: ${apiKeyPrefix}` : " Generate and save your client API key during signup to use this."}
+              </p>
+
+              <div className="relative overflow-x-auto rounded-lg bg-black/50 p-4 font-mono text-xs text-slate-300">
+                <pre><code>{integrationExample}</code></pre>
+              </div>
             </div>
           </div>
         </section>

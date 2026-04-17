@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
 const PENDING_SIGNUP_KEY = "pending_client_signup";
+const PENDING_API_KEY_STORAGE = "pending_client_api_key";
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -41,6 +42,10 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
+  const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null);
+  const [apiKeyPrefix, setApiKeyPrefix] = useState<string | null>(null);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
 
   const getErrorMessage = (err: unknown, fallback: string) => {
     if (err instanceof Error && err.message) {
@@ -105,7 +110,58 @@ export default function SignupPage() {
         }
       });
     }
+
+    const pendingApiKey = window.sessionStorage.getItem(PENDING_API_KEY_STORAGE);
+    if (pendingApiKey) {
+      try {
+        const parsed = JSON.parse(pendingApiKey);
+        if (parsed.apiKey) {
+          setRevealedApiKey(parsed.apiKey);
+          setApiKeyPrefix(parsed.apiKeyPrefix || null);
+        }
+      } catch {
+        // Ignore invalid pending API key state.
+      }
+    }
   }, []);
+
+  const persistPendingApiKey = (apiKey?: string | null, keyPrefix?: string | null) => {
+    if (!apiKey) return;
+    window.sessionStorage.setItem(
+      PENDING_API_KEY_STORAGE,
+      JSON.stringify({ apiKey, apiKeyPrefix: keyPrefix || null })
+    );
+    setRevealedApiKey(apiKey);
+    setApiKeyPrefix(keyPrefix || null);
+  };
+
+  const clearPendingApiKey = () => {
+    window.sessionStorage.removeItem(PENDING_API_KEY_STORAGE);
+  };
+
+  const handleProvisioningResponse = (data: any) => {
+    if (data?.api_key) {
+      persistPendingApiKey(data.api_key, data.api_key_prefix || null);
+    }
+    return data;
+  };
+
+  const handleCopyApiKey = async () => {
+    if (!revealedApiKey) return;
+    try {
+      await navigator.clipboard.writeText(revealedApiKey);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  };
+
+  const closeApiKeyModal = () => {
+    setShowApiKeyModal(false);
+    setCopyStatus("idle");
+    clearPendingApiKey();
+    navigate("/login");
+  };
 
   const provisionClientProfile = async (payload: {
     name: string;
@@ -142,7 +198,7 @@ export default function SignupPage() {
       throw new Error(message);
     }
 
-    return res.json();
+    return handleProvisioningResponse(await res.json());
   };
 
   const handleNext = async (e: React.FormEvent) => {
@@ -212,7 +268,7 @@ export default function SignupPage() {
     const preferred_channels = Object.keys(channels).filter(c => channels[c]);
 
     try {
-      await provisionClientProfile({
+      const provisioned = await provisionClientProfile({
         name,
         default_language: language,
         preferred_channels,
@@ -222,7 +278,15 @@ export default function SignupPage() {
         quiet_hours: quietHoursEnabled ? { start: formatQuietHour(quietStart), end: formatQuietHour(quietEnd) } : undefined,
       });
       window.sessionStorage.removeItem(PENDING_SIGNUP_KEY);
-      setSuccess(`Welcome aboard! Account provisioned. Routing you in 2 seconds...`);
+      if (provisioned?.api_key || revealedApiKey) {
+        if (provisioned?.api_key) {
+          persistPendingApiKey(provisioned.api_key, provisioned.api_key_prefix || null);
+        }
+        setSuccess("Account provisioned successfully. Copy your API key before continuing.");
+        setShowApiKeyModal(true);
+        return;
+      }
+      setSuccess("Welcome aboard! Account provisioned. Routing you in 2 seconds...");
       setTimeout(() => navigate('/login'), 2000);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Network error connecting to API."));
@@ -550,6 +614,49 @@ export default function SignupPage() {
              </div>
          </div>
       </div>
+
+      {showApiKeyModal && revealedApiKey ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-6">
+          <div className="w-full max-w-xl rounded-[28px] border border-slate-200 bg-white p-7 shadow-2xl">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-indigo-500">One-Time API Key</p>
+            <h3 className="text-2xl font-extrabold tracking-tight text-slate-950">Copy this key now</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              This is the only time the full API key will be shown. Save it somewhere secure before continuing.
+            </p>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              {apiKeyPrefix ? (
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Prefix: {apiKeyPrefix}</p>
+              ) : null}
+              <pre className="whitespace-pre-wrap break-all text-sm font-semibold text-slate-900">{revealedApiKey}</pre>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleCopyApiKey}
+                className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-indigo-700"
+              >
+                Copy API Key
+              </button>
+              <button
+                type="button"
+                onClick={closeApiKeyModal}
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                I have saved it
+              </button>
+            </div>
+
+            {copyStatus === "copied" ? (
+              <p className="mt-3 text-sm font-semibold text-emerald-600">API key copied to clipboard.</p>
+            ) : null}
+            {copyStatus === "failed" ? (
+              <p className="mt-3 text-sm font-semibold text-red-600">Clipboard copy failed. Please copy it manually.</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -10,8 +10,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from src.core import supabase_client
@@ -24,7 +22,6 @@ from src.config.department_mapping import (
 from src.services.supabase_notification_service import SupabaseNotificationService
 
 router = APIRouter(tags=["client-dashboard"])
-templates = Jinja2Templates(directory="src/templates")
 notification_service = SupabaseNotificationService()
 
 
@@ -137,19 +134,7 @@ async def _load_template_categories() -> dict[int, str]:
     return result
 
 
-@router.get("/client-dashboard", response_class=HTMLResponse)
-async def client_dashboard_page(request: Request):
-    return templates.TemplateResponse(request, "client_dashboard.html")
-
-
-@router.get("/client-detail/{client_id}", response_class=HTMLResponse)
-async def client_detail_page(request: Request, client_id: str):
-    return templates.TemplateResponse(request, "client_detail.html", {"client_id": client_id})
-
-
-@router.get("/client-detail-enhanced/{client_id}", response_class=HTMLResponse)
-async def client_detail_enhanced_page(request: Request, client_id: str):
-    return templates.TemplateResponse(request, "client_detail_enhanced.html", {"client_id": client_id})
+# HTML routes removed - logic moved to React frontend
 
 
 @router.get("/api/client-dashboard/stats")

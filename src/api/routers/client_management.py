@@ -30,6 +30,13 @@ class UpdateClientRequest(BaseModel):
     is_active: Optional[bool] = None
 
 
+class UpdateClientPreferencesRequest(BaseModel):
+    preferred_channels: Optional[list[str]] = None
+    quiet_hours: Optional[Dict[str, str]] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
+
+
 def _serialize_client(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": row["id"],
@@ -37,13 +44,16 @@ def _serialize_client(row: Dict[str, Any]) -> Dict[str, Any]:
         "client_slug": row.get("client_slug"),
         "status": "active" if row.get("is_active", True) else "inactive",
         "is_active": row.get("is_active", True),
+        "default_language": row.get("default_language"),
+        "brand_color": row.get("brand_color"),
+        "api_key_prefix": row.get("api_key_prefix"),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
 
 
 def _serialize_created_client(row: Dict[str, Any]) -> Dict[str, Any]:
-    return {
+    payload = {
         "id": row["id"],
         "name": row.get("name"),
         "client_slug": row.get("client_slug"),
@@ -52,6 +62,11 @@ def _serialize_created_client(row: Dict[str, Any]) -> Dict[str, Any]:
         "default_language": row.get("default_language", "en"),
         "created_at": row.get("created_at"),
     }
+    if row.get("api_key_prefix"):
+        payload["api_key_prefix"] = row.get("api_key_prefix")
+    if row.get("api_key"):
+        payload["api_key"] = row.get("api_key")
+    return payload
 
 
 async def _update_existing_client_for_signup(
@@ -61,6 +76,7 @@ async def _update_existing_client_for_signup(
     request: "CreateClientRequest",
     now: str,
 ) -> Dict[str, Any]:
+    raw_key: Optional[str] = None
     update_data = {
         "name": normalized_name,
         "default_language": request.default_language or client_row.get("default_language") or "en",
@@ -71,6 +87,10 @@ async def _update_existing_client_for_signup(
     }
     if request.supabase_uid and not client_row.get("supabase_uid"):
         update_data["supabase_uid"] = request.supabase_uid
+    if not client_row.get("api_key_hash"):
+        raw_key, key_hash, key_prefix = Client.generate_api_key(str(client_row["id"]))
+        update_data["api_key_hash"] = key_hash
+        update_data["api_key_prefix"] = key_prefix
 
     rows = await supabase_client.update(
         CLIENTS_TABLE,
@@ -83,7 +103,10 @@ async def _update_existing_client_for_signup(
         quiet_hours=request.quiet_hours,
         language=request.default_language or client_row.get("default_language") or "en",
     )
-    return rows[0] if rows else {**client_row, **update_data}
+    result = rows[0] if rows else {**client_row, **update_data}
+    if raw_key:
+        result["api_key"] = raw_key
+    return result
 
 
 async def _upsert_client_preferences(
@@ -139,7 +162,7 @@ async def list_clients(client: Client = Depends(get_authenticated_client)):
 @router.get("/me", response_model=dict)
 async def get_current_client(client: Client = Depends(get_authenticated_client)):
     rows = await supabase_client.select(
-        CLIENTS_TABLE, "id,name,client_slug,is_active,created_at,updated_at",
+        CLIENTS_TABLE, "id,name,client_slug,is_active,default_language,brand_color,api_key_prefix,created_at,updated_at",
         limit=1, filters={"id": f"eq.{client.id}"},
     )
     if not rows:
@@ -169,6 +192,67 @@ async def get_current_client_preferences(client: Client = Depends(get_authentica
         "language": row.get("language") or client.default_language or "en",
         "timezone": row.get("timezone") or "UTC",
     }
+
+
+@router.patch("/me/preferences", response_model=dict)
+async def update_current_client_preferences(
+    request: UpdateClientPreferencesRequest,
+    client: Client = Depends(get_authenticated_client),
+):
+    preferred_channels_payload = request.preferred_channels
+    if preferred_channels_payload is None:
+        existing_rows = await supabase_client.select(
+            CLIENT_PREFERENCES_TABLE,
+            "preferred_channels,quiet_hours,language,timezone",
+            limit=1,
+            filters={"client_id": f"eq.{client.id}"},
+        )
+        existing_row = existing_rows[0] if existing_rows else {}
+        existing_channels = existing_row.get("preferred_channels") or {"default": []}
+        preferred_channels_payload = existing_channels.get("default", []) if isinstance(existing_channels, dict) else existing_channels
+
+    await _upsert_client_preferences(
+        int(client.id),
+        preferred_channels=preferred_channels_payload,
+        quiet_hours=request.quiet_hours,
+        language=request.language or client.default_language or "en",
+    )
+
+    if request.timezone is not None:
+        existing = await supabase_client.select(
+            CLIENT_PREFERENCES_TABLE,
+            "client_id",
+            limit=1,
+            filters={"client_id": f"eq.{client.id}"},
+        )
+        if existing:
+            await supabase_client.update(
+                CLIENT_PREFERENCES_TABLE,
+                {"timezone": request.timezone},
+                filters={"client_id": f"eq.{client.id}"},
+            )
+
+    return await get_current_client_preferences(client)
+
+
+@router.post("/me/api-key/rotate", response_model=dict)
+async def rotate_current_client_api_key(client: Client = Depends(get_authenticated_client)):
+    raw_key, key_hash, key_prefix = Client.generate_api_key(str(client.id))
+    rows = await supabase_client.update(
+        CLIENTS_TABLE,
+        {
+            "api_key_hash": key_hash,
+            "api_key_prefix": key_prefix,
+            "updated_at": datetime.utcnow().isoformat(),
+        },
+        filters={"id": f"eq.{client.id}"},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    payload = _serialize_client(rows[0])
+    payload["api_key"] = raw_key
+    return payload
 
 
 @router.get("/{client_id}", response_model=dict)
@@ -224,7 +308,7 @@ async def create_client(request: CreateClientRequest):
     if request.supabase_uid:
         existing_rows = await supabase_client.select(
             CLIENTS_TABLE,
-            "id,name,default_language,is_active,brand_color,client_slug,supabase_uid,created_at,updated_at",
+            "id,name,default_language,is_active,brand_color,client_slug,supabase_uid,api_key_hash,api_key_prefix,created_at,updated_at",
             limit=1,
             filters={"supabase_uid": f"eq.{request.supabase_uid}"},
         )
@@ -245,7 +329,7 @@ async def create_client(request: CreateClientRequest):
     for filters in conflict_filters:
         existing_rows = await supabase_client.select(
             CLIENTS_TABLE,
-            "id,name,default_language,is_active,brand_color,client_slug,supabase_uid,created_at,updated_at",
+            "id,name,default_language,is_active,brand_color,client_slug,supabase_uid,api_key_hash,api_key_prefix,created_at,updated_at",
             limit=1,
             filters=filters,
         )
@@ -261,6 +345,7 @@ async def create_client(request: CreateClientRequest):
     # Get next ID
     latest = await supabase_client.select(CLIENTS_TABLE, "id", limit=1, filters={"order": "id.desc"})
     next_id = int(latest[0]["id"]) + 1 if latest else 1
+    raw_key, key_hash, key_prefix = Client.generate_api_key(str(next_id))
 
     try:
         rows = await supabase_client.insert(CLIENTS_TABLE, {
@@ -271,6 +356,8 @@ async def create_client(request: CreateClientRequest):
             "brand_color": request.brand_color,
             "client_slug": desired_slug,
             "supabase_uid": request.supabase_uid,
+            "api_key_hash": key_hash,
+            "api_key_prefix": key_prefix,
             "created_at": now,
             "updated_at": now,
         })
@@ -278,7 +365,7 @@ async def create_client(request: CreateClientRequest):
         logger.warning("Client signup insert conflicted for name='%s', slug='%s': %s", normalized_name, desired_slug, exc)
         fallback_rows = await supabase_client.select(
             CLIENTS_TABLE,
-            "id,name,default_language,is_active,brand_color,client_slug,supabase_uid,created_at,updated_at",
+            "id,name,default_language,is_active,brand_color,client_slug,supabase_uid,api_key_hash,api_key_prefix,created_at,updated_at",
             limit=1,
             filters={"or": f"(supabase_uid.eq.{request.supabase_uid},client_slug.eq.{desired_slug},name.eq.{normalized_name})"} if request.supabase_uid else {"or": f"(client_slug.eq.{desired_slug},name.eq.{normalized_name})"},
         )
@@ -303,7 +390,9 @@ async def create_client(request: CreateClientRequest):
     except Exception:
         pass  # Non-critical, client still created
 
-    return _serialize_created_client(client)
+    response_data = _serialize_created_client(client)
+    response_data["api_key"] = raw_key
+    return response_data
 
 
 @router.get("/by-supabase/{uid}", response_model=dict)

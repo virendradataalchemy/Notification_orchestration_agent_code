@@ -29,3 +29,7 @@ export function clientTemplateEditUrl(clientPath: string | number, templateId: s
 export function clientDemoUrl(clientPath: string | number) {
   return `/client/${clientPath}/send-demo`;
 }
+
+export function clientSettingsUrl(clientPath: string | number) {
+  return `/clients/${clientPath}/settings`;
+}

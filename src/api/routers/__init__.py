@@ -12,6 +12,7 @@ from .client_templates import router as client_templates_router
 from .client_portal import router as client_portal_router
 from .client_auth import router as client_auth_router
 from .tracking import router as tracking_router
+from .integration import router as integration_router
 
 __all__ = [
     "notifications_router",
@@ -28,4 +29,5 @@ __all__ = [
     "client_portal_router",
     "client_auth_router",
     "tracking_router",
+    "integration_router",
 ]

@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 
-import { clientAnalyticsUrl, clientDemoUrl, clientDepartmentsUrl, clientPortalUrl, clientTemplatesUrl } from "@/lib/client-routes";
+import { clientAnalyticsUrl, clientDemoUrl, clientDepartmentsUrl, clientPortalUrl, clientSettingsUrl, clientTemplatesUrl } from "@/lib/client-routes";
 import { supabase } from "@/lib/supabase";
 
 type ClientPortalShellProps = {
@@ -19,6 +19,7 @@ const navItems = [
   { label: "Templates", href: (id: string) => clientTemplatesUrl(id), onlyClientId: null },
   { label: "Departments", href: (id: string) => clientDepartmentsUrl(id), onlyClientId: "1" },
   { label: "Send Demo", href: (id: string) => clientDemoUrl(id), onlyClientId: null },
+  { label: "Settings", href: (id: string) => clientSettingsUrl(id), onlyClientId: null },
 ];
 
 export function ClientPortalShell({

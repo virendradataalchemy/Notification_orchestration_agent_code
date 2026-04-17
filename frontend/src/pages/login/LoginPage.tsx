@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { clientPortalUrl } from "@/lib/client-routes";
@@ -10,6 +10,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const searchError = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("error") || "";
+  }, []);
   const getErrorMessage = (err: unknown, fallback: string) => {
     if (err instanceof Error && err.message) {
       return err.message;
@@ -31,10 +35,16 @@ export default function LoginPage() {
       if (authError) throw authError;
 
       if (authData.user) {
-        const clientData = await ensureClientProfile(authData.user);
         localStorage.setItem("access_token", authData.session?.access_token || "");
-        localStorage.setItem("client_id", clientData.id.toString());
-        navigate(clientPortalUrl(clientData.client_slug || clientData.id));
+        try {
+          const clientData = await ensureClientProfile(authData.user);
+          localStorage.setItem("client_id", clientData.id.toString());
+          navigate(clientPortalUrl(clientData.client_slug || clientData.id));
+        } catch (profileErr) {
+          console.error("Profile provisioning error:", profileErr);
+          // Backend down ya profile nahi mili — admin page pe bhejo
+          setError(getErrorMessage(profileErr, "Login succeeded, but the client profile could not be loaded."));
+        }
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Invalid login credentials"));
@@ -56,7 +66,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex text-slate-900 bg-white selection:bg-indigo-600 selection:text-white">
       {/* Left side Form */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 sm:px-16 lg:px-24 xl:px-32 relative">
-        <Link href="/" className="absolute top-8 left-8 sm:left-12 font-bold text-xl tracking-tight flex items-center gap-2">
+        <Link to="/" className="absolute top-8 left-8 sm:left-12 font-bold text-xl tracking-tight flex items-center gap-2">
             <div className="w-8 h-8 flex items-center justify-center text-indigo-600 text-2xl">
                 ✦
             </div>
@@ -69,9 +79,9 @@ export default function LoginPage() {
             Enter your Client Name to securely access your intelligent orchestration dashboard.
           </p>
 
-          {error && (
+          {(error || searchError) && (
             <div className="p-3 bg-red-50 text-red-700 text-sm font-medium rounded-md mb-6 border border-red-100">
-              {error}
+              {error || searchError}
             </div>
           )}
 
