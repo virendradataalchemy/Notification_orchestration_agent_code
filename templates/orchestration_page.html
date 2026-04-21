@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Intelligent Orchestration Pipeline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 42px;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 18px;
+            opacity: 0.95;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+
+        .input-section {
+            margin-bottom: 25px;
+        }
+
+        .input-section label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 15px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 15px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .btn {
+            padding: 15px 35px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            flex: 1;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .btn-back {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid rgba(255,255,255,0.4);
+            padding: 10px 20px;
+            margin-bottom: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-back:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .pipeline-progress {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .pipeline-progress h3 {
+            margin-bottom: 20px;
+            color: #374151;
+            font-size: 18px;
+        }
+
+        .stage {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            border-left: 4px solid #e5e7eb;
+            transition: all 0.3s;
+        }
+
+        .stage.active {
+            background: #eff6ff;
+            border-left-color: #fbbf24;
+        }
+
+        .stage.complete {
+            background: #d1fae5;
+            border-left-color: #22c55e;
+        }
+
+        .stage.error {
+            background: #fee2e2;
+            border-left-color: #ef4444;
+        }
+
+        .stage-icon {
+            font-size: 24px;
+            min-width: 30px;
+        }
+
+        .stage.active .stage-icon {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .stage-text {
+            font-size: 15px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .results {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .results h3 {
+            margin-bottom: 20px;
+            color: #374151;
+            font-size: 18px;
+        }
+
+        .result-card {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-card h4 {
+            margin-bottom: 10px;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .result-card p {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        .status-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .channel-badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .channel-badge {
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .urgency-critical { color: #dc2626; }
+        .urgency-high { color: #ea580c; }
+        .urgency-medium { color: #ca8a04; }
+        .urgency-low { color: #16a34a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <button class="btn btn-back" onclick="window.history.back()">
+                ← Back to Dashboard
+            </button>
+            <!-- Notification Bell -->
+            <div style="position: relative;">
+                {% include 'components/notification_bell.html' %}
+            </div>
+        </div>
+
+        <div class="header">
+            <h1>🤖 Intelligent Orchestration Pipeline</h1>
+            <p>Let AI analyze your message and deliver via optimal channels</p>
+        </div>
+
+        <div class="card">
+            <div class="input-section">
+                <label for="messageContent">Message Content</label>
+                <textarea 
+                    id="messageContent" 
+                    placeholder="Enter your message here... 
+
+Examples:
+• 'Server is down! Critical issue!'
+• 'Your order #12345 has shipped'
+• 'Reminder: Meeting tomorrow at 10 AM'
+• 'Flash sale: 50% off everything!'"
+                ></textarea>
+            </div>
+
+            <div class="input-section">
+                <label for="userId">User ID (required) *</label>
+                <input 
+                    type="text" 
+                    id="userId" 
+                    placeholder="Enter user ID (e.g., user_123)"
+                    required
+                />
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" id="runBtn" onclick="runPipeline()">
+                    <span>🚀</span>
+                    <span>Run Pipeline</span>
+                </button>
+                <button class="btn btn-secondary" onclick="clearForm()">
+                    Clear
+                </button>
+            </div>
+
+            <div class="pipeline-progress" id="progress">
+                <h3>Pipeline Progress</h3>
+                <div id="stage1" class="stage">
+                    <span class="stage-icon">⏳</span>
+                    <span class="stage-text">Analyzing content...</span>
+                </div>
+                <div id="stage2" class="stage">
+                    <span class="stage-icon">⏳</span>
+                    <span class="stage-text">Selecting template...</span>
+                </div>
+                <div id="stage3" class="stage">
+                    <span class="stage-icon">⏳</span>
+                    <span class="stage-text">Determining priority...</span>
+                </div>
+                <div id="stage4" class="stage">
+                    <span class="stage-icon">⏳</span>
+                    <span class="stage-text">Sending notification...</span>
+                </div>
+            </div>
+
+            <div class="results" id="results">
+                <h3>📊 Results</h3>
+                <div id="resultsContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const clientId = "{{ client_id }}";
+
+        async function runPipeline() {
+            const content = document.getElementById('messageContent').value.trim();
+            const userId = document.getElementById('userId').value.trim();
+
+            if (!content) {
+                alert('Please enter message content');
+                return;
+            }
+
+            if (!userId) {
+                alert('Please enter User ID - required to know who to send the message to');
+                return;
+            }
+
+            // Show progress
+            document.getElementById('progress').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('runBtn').disabled = true;
+            document.getElementById('runBtn').innerHTML = '<span>⏳</span><span>Processing...</span>';
+
+            resetStages();
+
+            try {
+                // Stage 1
+                updateStage('stage1', 'active', '🔄', 'Analyzing content...');
+                await sleep(500);
+
+                // Stage 2
+                updateStage('stage1', 'complete', '✅', 'Content analyzed');
+                updateStage('stage2', 'active', '🔄', 'Selecting template...');
+                await sleep(500);
+
+                // Stage 3
+                updateStage('stage2', 'complete', '✅', 'Template selected');
+                updateStage('stage3', 'active', '🔄', 'Determining priority...');
+                await sleep(500);
+
+                // Stage 4
+                updateStage('stage3', 'complete', '✅', 'Priority determined');
+                updateStage('stage4', 'active', '🔄', 'Sending notification...');
+
+                // API call
+                const response = await fetch('/api/v1/orchestrate/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Client-Id': clientId
+                    },
+                    body: JSON.stringify({
+                        message_content: content,
+                        user_id: userId
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Orchestration failed');
+                }
+
+                updateStage('stage4', 'complete', '✅', 'Notification sent!');
+                displayResults(result);
+
+            } catch (error) {
+                console.error('Error:', error);
+                updateStage('stage4', 'error', '❌', 'Error: ' + error.message);
+                
+                document.getElementById('results').style.display = 'block';
+                document.getElementById('resultsContent').innerHTML =
+                    '<div class="result-card" style="border-left-color: #ef4444;">' +
+                        '<h4 style="color: #ef4444;">Error</h4>' +
+                        '<p>' + error.message + '</p>' +
+                    '</div>';
+            } finally {
+                document.getElementById('runBtn').disabled = false;
+                document.getElementById('runBtn').innerHTML = '<span>🚀</span><span>Run Pipeline</span>';
+            }
+        }
+
+        function updateStage(id, status, icon, text) {
+            const stage = document.getElementById(id);
+            stage.className = 'stage ' + status;
+            stage.querySelector('.stage-icon').textContent = icon;
+            stage.querySelector('.stage-text').textContent = text;
+        }
+
+        function resetStages() {
+            for (let i = 1; i <= 4; i++) {
+                updateStage('stage' + i, '', '⏳', 'Waiting...');
+            }
+        }
+
+        function displayResults(result) {
+            document.getElementById('results').style.display = 'block';
+
+            const statusClass = result.delivery_status === 'sent' ? 'status-success' : 'status-error';
+            const statusIcon = result.delivery_status === 'sent' ? '✅' : '❌';
+
+            let html = '';
+
+            // Status card
+            html += '<div class="result-card">' +
+                '<h4>Delivery Status</h4>' +
+                '<p><span class="status-badge ' + statusClass + '">' + statusIcon + ' ' + result.delivery_status.toUpperCase() + '</span></p>' +
+                '<p><strong>Channel:</strong> ' + (result.channel_used || 'N/A') + '</p>' +
+                '<p><strong>Processing Time:</strong> ' + result.processing_time_ms + 'ms</p>' +
+            '</div>';
+
+            // Urgency
+            if (result.urgency) {
+                html += '<div class="result-card">' +
+                    '<h4>Urgency Analysis</h4>' +
+                    '<p class="urgency-' + result.urgency + '" style="font-size: 18px; font-weight: 600;">' +
+                        result.urgency.toUpperCase() +
+                    '</p>' +
+                '</div>';
+            }
+
+            // Template
+            if (result.selected_template) {
+                html += '<div class="result-card">' +
+                    '<h4>🎯 Template Selection</h4>';
+                
+                // User details
+                if (result.selected_template.user_details) {
+                    const user = result.selected_template.user_details;
+                    html += '<div style="background: #f0f9ff; padding: 12px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #0ea5e9;">' +
+                        '<strong style="color: #0369a1;">📧 Recipient Details:</strong><br>' +
+                        '<span style="color: #555; margin-top: 6px; display: block;">' +
+                            '<strong>Name:</strong> ' + (user.name || 'N/A') + '<br>' +
+                            '<strong>Email:</strong> ' + (user.email || 'N/A') + '<br>' +
+                            '<strong>Phone:</strong> ' + (user.phone || 'N/A') + '<br>' +
+                            '<strong>WhatsApp:</strong> ' + (user.whatsapp || 'N/A') +
+                        '</span>' +
+                    '</div>';
+                }
+                
+                html += '<p><strong>Template:</strong> ' + (result.selected_template.template_name || 'None') + '</p>' +
+                    '<p><strong>Template ID:</strong> ' + (result.selected_template.template_id || 'None') + '</p>' +
+                    '<p><strong>Confidence:</strong> ' + ((result.selected_template.confidence_score || 0) * 100).toFixed(0) + '%</p>' +
+                    '<p style="font-style: italic; margin-top: 10px;">' + result.selected_template.reasoning + '</p>' +
+                '</div>';
+            }
+
+            // Priority order
+            if (result.priority_order && result.priority_order.length > 0) {
+                html += '<div class="result-card">' +
+                    '<h4>📋 Channel Priority Order</h4>' +
+                    '<div class="channel-badges">';
+                
+                result.priority_order.forEach((channel, index) => {
+                    html += '<span class="channel-badge">' + (index + 1) + '. ' + channel.toUpperCase() + '</span>';
+                });
+                
+                html += '</div>' +
+                    '<p style="font-style: italic; margin-top: 15px;">' + (result.reasoning?.priority_determination || '') + '</p>' +
+                '</div>';
+            }
+
+            // Reasoning
+            if (result.reasoning) {
+                html += '<div class="result-card">' +
+                    '<h4>🤖 AI Reasoning</h4>' +
+                    '<p>' + (result.reasoning.delivery || '') + '</p>' +
+                '</div>';
+            }
+
+            document.getElementById('resultsContent').innerHTML = html;
+        }
+
+        function clearForm() {
+            document.getElementById('messageContent').value = '';
+            document.getElementById('userId').value = '';
+            document.getElementById('progress').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+            resetStages();
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+    
+    <!-- Web Push Support -->
+    {% include 'components/web_push.html' %}
+</body>
+</html>

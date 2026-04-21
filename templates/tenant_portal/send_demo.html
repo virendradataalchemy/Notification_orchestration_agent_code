@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Demo - Client Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Georgia, 'Times New Roman', serif;
+            background:
+                radial-gradient(circle at top left, rgba(255,214,153,0.28), transparent 28%),
+                linear-gradient(135deg, #f6f2e8 0%, #eef4ff 100%);
+            color: #1f2937;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #1f2937 0%, #334155 100%);
+            color: white;
+            padding: 0 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .navbar-content {
+            max-width: 1440px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+        }
+        .navbar-brand {
+            font-size: 22px;
+            font-weight: 700;
+            color: white;
+            text-decoration: none;
+        }
+        .navbar-links {
+            display: flex;
+            gap: 10px;
+        }
+        .navbar-links a {
+            text-decoration: none;
+            color: white;
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.25);
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .container {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 30px 20px 48px;
+        }
+        .hero {
+            background: rgba(255,255,255,0.82);
+            border: 1px solid rgba(31,41,55,0.08);
+            border-radius: 24px;
+            padding: 28px;
+            box-shadow: 0 12px 32px rgba(31,41,55,0.07);
+            margin-bottom: 24px;
+        }
+        .hero h1 {
+            font-size: 34px;
+            margin-bottom: 10px;
+        }
+        .hero p {
+            color: #4b5563;
+            line-height: 1.6;
+            max-width: 760px;
+        }
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(320px, 440px) 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+        .panel {
+            background: rgba(255,255,255,0.84);
+            border: 1px solid rgba(31,41,55,0.08);
+            border-radius: 20px;
+            padding: 22px;
+            box-shadow: 0 10px 26px rgba(31,41,55,0.06);
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+        .panel h2 {
+            font-size: 22px;
+            margin-bottom: 16px;
+        }
+        .panel p {
+            color: #4b5563;
+            line-height: 1.55;
+        }
+        .form-grid {
+            display: grid;
+            gap: 16px;
+        }
+        .field label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+        .field input,
+        .field select,
+        .field textarea {
+            width: 100%;
+            border: 1px solid rgba(31,41,55,0.14);
+            border-radius: 12px;
+            padding: 12px 14px;
+            font: inherit;
+            background: white;
+            color: #1f2937;
+        }
+        .field textarea {
+            min-height: 130px;
+            resize: vertical;
+            font-family: Consolas, monospace;
+            font-size: 13px;
+        }
+        .checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .checkboxes label {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #f8fafc;
+            border: 1px solid #dbe3f1;
+            text-transform: none;
+            letter-spacing: 0;
+            color: #334155;
+            margin-bottom: 0;
+            font-size: 14px;
+        }
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            border: none;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: #1d4ed8;
+            color: white;
+        }
+        .btn-secondary {
+            background: #1f2937;
+            color: white;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .stat {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 14px;
+        }
+        .stat .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #6b7280;
+            margin-bottom: 6px;
+        }
+        .stat .value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1d4ed8;
+        }
+        .result-card,
+        .history-card {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+        .history-list {
+            display: grid;
+            gap: 12px;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 9px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-right: 6px;
+        }
+        .badge.sent, .badge.delivered { background: #dcfce7; color: #166534; }
+        .badge.failed { background: #fee2e2; color: #991b1b; }
+        .badge.queued, .badge.initiated, .badge.ringing { background: #dbeafe; color: #1d4ed8; }
+        .services {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 14px;
+            width: 100%;
+        }
+        .service-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 18px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            transition: all 0.2s ease;
+        }
+        .service-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+        }
+        .service-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f3f4f6;
+        }
+        .service-card-title {
+            font-size: 18px;
+            font-weight: 700;
+            text-transform: capitalize;
+            color: #1f2937;
+        }
+        .service-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .metric-item {
+            background: #f9fafb;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .metric-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1d4ed8;
+        }
+        .metric-value.success { color: #059669; }
+        .metric-value.warning { color: #d97706; }
+        .metric-value.danger { color: #dc2626; }
+        .channel-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .channel-icon.email { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .channel-icon.sms { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .channel-icon.whatsapp { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .channel-icon.voice { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .channel-icon.push { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); }
+        .channel-icon.slack { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
+        .channel-icon.in_app { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .analytics-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        .analytics-card .number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1d4ed8;
+            margin-bottom: 4px;
+        }
+        .analytics-card .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+        }
+        .muted { color: #6b7280; }
+        @media (max-width: 1024px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a class="navbar-brand" href="#" onclick="goBack(); return false;">Notification Demo</a>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div class="navbar-links">
+                    <a href="#" onclick="goBack(); return false;">Portal</a>
+                    <a href="/client-dashboard">Client Analytics</a>
+                    <a href="/admin/dashboard">Admin</a>
+                </div>
+                <!-- Notification Bell -->
+                {% include 'components/notification_bell.html' %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="hero">
+            <h1>Interactive Channel Demo</h1>
+            <p>Send demo notifications from the frontend using the live Supabase schema. This page reads candidates, templates, channels, providers, deduplication, and delivery history from the backend so you can visually showcase the orchestration flow.</p>
+        </section>
+
+        <div class="layout">
+            <section class="panel">
+                <h2>Send Demo</h2>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="candidateSelect">Candidate</label>
+                        <select id="candidateSelect"></select>
+                    </div>
+                    <div class="field">
+                        <label for="templateSelect">Template</label>
+                        <select id="templateSelect"></select>
+                    </div>
+                    <div class="field">
+                        <label for="notificationType">Notification Type</label>
+                        <input id="notificationType" type="text" placeholder="confirmation, interview, payslip">
+                    </div>
+                    <div class="field">
+                        <label for="prioritySelect">Priority</label>
+                        <select id="prioritySelect">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Channels</label>
+                        <div class="checkboxes" id="channelCheckboxes"></div>
+                    </div>
+                    <div class="field">
+                        <label for="subjectInput">Subject Override</label>
+                        <input id="subjectInput" type="text" placeholder="Optional subject override">
+                    </div>
+                    <div class="field">
+                        <label for="bodyInput">Body Override</label>
+                        <textarea id="bodyInput" placeholder="Optional manual body override"></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="idempotencyInput">Idempotency Key</label>
+                        <input id="idempotencyInput" type="text" placeholder="Optional custom idempotency key">
+                    </div>
+                    <div class="field">
+                        <label for="dataInput">Template Data JSON</label>
+                        <textarea id="dataInput">{
+  "name": "Demo User",
+  "company": "Data Alchemy",
+  "month": "March",
+  "slot1": "Monday 10 AM",
+  "slot2": "Tuesday 2 PM",
+  "slot3": "Wednesday 11 AM",
+  "chosen_slot": "Tuesday 2 PM"
+}</textarea>
+                    </div>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="sendDemo()">Send Notification</button>
+                        <button class="btn btn-secondary" onclick="refreshPageData()">Refresh Data</button>
+                    </div>
+                </div>
+                <div id="sendResult"></div>
+            </section>
+
+            <section class="panel">
+                <h2>Analytics Overview</h2>
+                <div class="analytics-grid" id="analyticsOverview"></div>
+                
+                <h2 style="margin-top: 24px; margin-bottom: 16px;">Channel Performance</h2>
+                <div id="serviceCards" class="services"></div>
+                
+                <h2 style="margin-top: 24px;">Recent History</h2>
+                <div id="historyList" class="history-list"></div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const clientId = window.location.pathname.split('/')[2];
+        let demoOptions = null;
+        let serviceShowcase = null;
+
+        function goBack() {
+            window.location.href = '/portal/' + clientId + '/dashboard';
+        }
+
+        function getClientHeaders() {
+            return {
+                'X-Client-Id': clientId,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        async function refreshPageData() {
+            await Promise.all([loadOptions(), loadShowcase(), loadHistory()]);
+        }
+
+        async function loadOptions() {
+            const response = await fetch('/api/v1/notifications/demo/options', {
+                headers: getClientHeaders()
+            });
+            demoOptions = await response.json();
+            renderOptions();
+        }
+
+        async function loadShowcase() {
+            const response = await fetch(`/api/client-dashboard/client/${clientId}/service-showcase`, {
+                headers: { 'X-Client-Id': clientId }
+            });
+            serviceShowcase = await response.json();
+            renderShowcase();
+        }
+
+        async function loadHistory() {
+            const response = await fetch('/api/v1/notifications/history?limit=12', {
+                headers: getClientHeaders()
+            });
+            const history = await response.json();
+            renderHistory(history);
+        }
+
+        function renderOptions() {
+            const candidateSelect = document.getElementById('candidateSelect');
+            const templateSelect = document.getElementById('templateSelect');
+            const channelCheckboxes = document.getElementById('channelCheckboxes');
+
+            candidateSelect.innerHTML = demoOptions.candidates.map(candidate =>
+                `<option value="${candidate.id}">${candidate.name} | ${candidate.email || candidate.phone || candidate.whatsapp_number || 'No recipient'}</option>`
+            ).join('');
+
+            templateSelect.innerHTML =
+                '<option value="">Auto Select</option>' +
+                demoOptions.templates.map(template =>
+                    `<option value="${template.id}" data-type="${template.notification_type || ''}">${template.name} | ${template.channel}</option>`
+                ).join('');
+
+            channelCheckboxes.innerHTML = demoOptions.channels.map(channel =>
+                `<label><input type="checkbox" value="${channel.name}" id="channel_${channel.name}"> ${channel.name.replace('_', ' ')}</label>`
+            ).join('');
+
+            // Add event listener for push checkbox
+            const pushCheckbox = document.getElementById('channel_push');
+            if (pushCheckbox) {
+                pushCheckbox.addEventListener('change', async function(e) {
+                    if (e.target.checked) {
+                        // Request push permission
+                        const granted = await requestPushPermission();
+                        if (!granted) {
+                            e.target.checked = false;
+                            alert('Push notifications require permission. Please allow notifications in your browser.');
+                        }
+                    }
+                });
+            }
+
+            templateSelect.addEventListener('change', () => {
+                const selected = templateSelect.options[templateSelect.selectedIndex];
+                if (selected && selected.dataset.type) {
+                    document.getElementById('notificationType').value = selected.dataset.type;
+                }
+            });
+        }
+
+        function renderShowcase() {
+            const analytics = document.getElementById('analyticsOverview');
+            const cards = document.getElementById('serviceCards');
+
+            // Calculate analytics
+            const totalSent = serviceShowcase.services.reduce((sum, s) => sum + (s.sent_count || 0), 0);
+            const totalDelivered = serviceShowcase.services.reduce((sum, s) => sum + (s.delivered_count || 0), 0);
+            const totalFailed = serviceShowcase.services.reduce((sum, s) => sum + (s.failed_count || 0), 0);
+            const totalOpened = serviceShowcase.services.reduce((sum, s) => sum + (s.opened_count || 0), 0);
+            const totalClicked = serviceShowcase.services.reduce((sum, s) => sum + (s.clicked_count || 0), 0);
+
+            analytics.innerHTML = `
+                <div class="analytics-card">
+                    <div class="number">${totalSent}</div>
+                    <div class="label">Total Sent</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="number" style="color: #059669;">${totalDelivered}</div>
+                    <div class="label">Delivered</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="number" style="color: #dc2626;">${totalFailed}</div>
+                    <div class="label">Failed</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="number" style="color: #7c3aed;">${totalOpened}</div>
+                    <div class="label">Opened</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="number" style="color: #ea580c;">${totalClicked}</div>
+                    <div class="label">Clicked</div>
+                </div>
+            `;
+
+            const channelIcons = {
+                'email': '📧',
+                'sms': '💬',
+                'whatsapp': '📱',
+                'voice': '📞',
+                'push': '🔔',
+                'slack': '💼',
+                'in_app': '🔵'
+            };
+
+            cards.innerHTML = (serviceShowcase.services || []).map(service => {
+                const sentCount = service.sent_count || 0;
+                const deliveredCount = service.delivered_count || 0;
+                const failedCount = service.failed_count || 0;
+                const openedCount = service.opened_count || 0;
+                const clickedCount = service.clicked_count || 0;
+                const unsubscribedCount = service.unsubscribed_count || 0;
+                
+                const deliveryRate = sentCount > 0 ? Math.round((deliveredCount / sentCount) * 100) : 0;
+                const openRate = deliveredCount > 0 ? Math.round((openedCount / deliveredCount) * 100) : 0;
+                const clickRate = openedCount > 0 ? Math.round((clickedCount / openedCount) * 100) : 0;
+
+                return `<div class="service-card">
+                    <div class="service-card-header">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div class="channel-icon ${service.channel}">${channelIcons[service.channel] || '📬'}</div>
+                            <div>
+                                <div class="service-card-title">${service.channel.replace('_', ' ')}</div>
+                                <div class="muted" style="font-size: 12px;">${service.providers.length ? service.providers.join(', ') : 'No provider'}</div>
+                            </div>
+                        </div>
+                        <span class="badge ${service.enabled ? 'sent' : 'failed'}">${service.enabled ? 'active' : 'inactive'}</span>
+                    </div>
+                    
+                    <div class="service-metrics">
+                        <div class="metric-item">
+                            <div class="metric-label">Sent</div>
+                            <div class="metric-value">${sentCount}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Delivered</div>
+                            <div class="metric-value success">${deliveredCount}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Opened</div>
+                            <div class="metric-value" style="color: #7c3aed;">${openedCount}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Clicked</div>
+                            <div class="metric-value" style="color: #ea580c;">${clickedCount}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Failed</div>
+                            <div class="metric-value danger">${failedCount}</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Unsub.</div>
+                            <div class="metric-value warning">${unsubscribedCount}</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                            <span class="muted">Delivery Rate</span>
+                            <span style="font-weight: 700; color: #059669;">${deliveryRate}%</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                            <span class="muted">Open Rate</span>
+                            <span style="font-weight: 700; color: #7c3aed;">${openRate}%</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                            <span class="muted">Click Rate</span>
+                            <span style="font-weight: 700; color: #ea580c;">${clickRate}%</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 10px; font-size: 12px; color: #6b7280;">
+                        ${service.template_count} template${service.template_count !== 1 ? 's' : ''} • Priority ${service.priority}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderHistory(history) {
+            const list = document.getElementById('historyList');
+            if (!history.length) {
+                list.innerHTML = '<div class="history-card muted">No notifications yet.</div>';
+                return;
+            }
+
+            list.innerHTML = history.map(item =>
+                `<div class="history-card">
+                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                        <div>
+                            <div style="font-weight:700; margin-bottom:6px;">${item.type || 'notification'} for ${item.candidate_name || 'candidate'}</div>
+                            <div class="muted">${item.channel} | ${item.recipient || 'N/A'}</div>
+                            <div class="muted">${item.template_name || 'No template'}${item.last_error ? ' | ' + item.last_error : ''}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <span class="badge ${item.status}">${item.status}</span>
+                            <div class="muted" style="margin-top:6px;">${item.created_at ? new Date(item.created_at).toLocaleString() : ''}</div>
+                        </div>
+                    </div>
+                </div>`
+            ).join('');
+        }
+
+        let isSending = false;
+
+        async function sendDemo() {
+            if (isSending) {
+                console.log('Already sending, please wait...');
+                return;
+            }
+
+            const sendButton = document.querySelector('.btn-primary');
+            const originalText = sendButton.textContent;
+            
+            try {
+                isSending = true;
+                sendButton.disabled = true;
+                sendButton.textContent = 'Sending...';
+                sendButton.style.opacity = '0.6';
+
+                const templateSelect = document.getElementById('templateSelect');
+                const selectedChannels = Array.from(document.querySelectorAll('#channelCheckboxes input:checked')).map(input => input.value);
+
+            let data;
+            try {
+                data = JSON.parse(document.getElementById('dataInput').value || '{}');
+            } catch (error) {
+                document.getElementById('sendResult').innerHTML = '<div class="result-card" style="color:#991b1b;">Template data JSON is invalid.</div>';
+                return;
+            }
+
+            // If push is selected, add device token
+            if (selectedChannels.includes('push')) {
+                const token = getDeviceToken();
+                if (token) {
+                    data.device_token = token;
+                } else {
+                    // Request permission if not granted
+                    const granted = await requestPushPermission();
+                    if (granted) {
+                        const newToken = getDeviceToken();
+                        if (newToken) {
+                            data.device_token = newToken;
+                        }
+                    } else {
+                        document.getElementById('sendResult').innerHTML = '<div class="result-card" style="color:#991b1b;">Push notifications require permission. Please allow notifications.</div>';
+                        return;
+                    }
+                }
+            }
+
+            const payload = {
+                candidate_id: parseInt(document.getElementById('candidateSelect').value, 10),
+                template_id: templateSelect.value ? parseInt(templateSelect.value, 10) : null,
+                notification_type: document.getElementById('notificationType').value || null,
+                priority: document.getElementById('prioritySelect').value,
+                channels: selectedChannels,
+                subject: document.getElementById('subjectInput').value || null,
+                body: document.getElementById('bodyInput').value || null,
+                idempotency_key: document.getElementById('idempotencyInput').value || null,
+                data: data
+            };
+
+            const response = await fetch('/api/v1/notifications/demo/send', {
+                method: 'POST',
+                headers: getClientHeaders(),
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+                document.getElementById('sendResult').innerHTML = `<div class="result-card" style="color:#991b1b;">${result.detail || 'Failed to send notification'}</div>`;
+                return;
+            }
+
+            const channelHtml = (result.channels || []).map(channel => {
+                // If push was sent successfully, show browser notification
+                if (channel.channel === 'push' && channel.status === 'sent' && typeof showPushNotification === 'function') {
+                    const subject = document.getElementById('subjectInput').value || 'Notification';
+                    const body = document.getElementById('bodyInput').value || 'You have a new notification';
+                    setTimeout(() => showPushNotification(subject, body), 500);
+                }
+                
+                return `<div style="margin-top:10px;">
+                    <strong>${channel.channel}</strong> via ${channel.provider}
+                    <span class="badge ${channel.status}">${channel.status}</span>
+                    <div class="muted">${channel.message_id || channel.error || 'No message id returned'}</div>
+                </div>`;
+            }).join('');
+
+            document.getElementById('sendResult').innerHTML =
+                `<div class="result-card">
+                    <div style="font-weight:700; margin-bottom:8px;">${result.deduplicated ? 'Duplicate prevented' : 'Notification processed'}</div>
+                    <div class="muted">${result.notification_type || ''} for ${result.candidate_name || ''}</div>
+                    ${channelHtml}
+                </div>`;
+
+            await loadHistory();
+            await loadShowcase();
+            
+            } catch (error) {
+                console.error('Error sending notification:', error);
+                document.getElementById('sendResult').innerHTML = `<div class="result-card" style="color:#991b1b;">Error: ${error.message}</div>`;
+            } finally {
+                isSending = false;
+                sendButton.disabled = false;
+                sendButton.textContent = originalText;
+                sendButton.style.opacity = '1';
+            }
+        }
+
+        refreshPageData();
+    </script>
+    
+    <!-- Web Push Support -->
+    {% include 'components/web_push.html' %}
+</body>
+</html>

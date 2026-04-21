@@ -1,0 +1,95 @@
+# Core Framework
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+
+# Database
+sqlalchemy
+alembic
+psycopg2-binary
+asyncpg
+
+# Cache & Queue
+redis
+hiredis
+
+# AWS Services
+boto3
+botocore
+
+# External Providers
+twilio
+slack-sdk
+firebase-admin
+
+# Authentication & Security
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+cryptography
+
+# HTTP Client
+httpx
+aiohttp
+
+# Template Engine
+jinja2
+
+# Monitoring & Logging
+prometheus-client
+sentry-sdk[fastapi]
+python-json-logger
+
+# Time & Date
+python-dateutil
+pytz
+
+# Utilities
+python-dotenv
+email-validator
+phonenumbers
+
+# Testing
+pytest
+pytest-asyncio
+pytest-cov
+httpx
+faker
+
+# Development
+black
+flake8
+mypy
+pre-commit
+
+# LangGraph & AI (Keep for compatibility)
+langgraph
+langchain
+langchain-core
+langchain-aws
+
+# Strands Agents (Agentic Framework)
+strands-agents
+strands-agents-tools
+
+# Observability
+langfuse
+
+# Celery & Queue (Phase 1)
+celery[redis]
+flower
+
+# ML & Embeddings (Phase 2)
+sentence-transformers
+scikit-learn
+pandas
+
+# Vector Database (compatible with NumPy 2.0)
+chromadb
+
+strands-agents
+strands-agents-tools
+langchain-aws
+# Demo script dependencies
+colorama

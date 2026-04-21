@@ -1,0 +1,155 @@
+"""User preferences API - Supabase REST based."""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional, Dict, Any
+
+from src.api.dependencies import get_authenticated_client, verify_api_key
+from src.api.schemas import UserPreferenceUpdate, UserPreferenceResponse
+from src.core.supabase import CLIENT_PREFERENCES_TABLE, supabase_client
+from src.models import Client
+
+router = APIRouter(prefix="/preferences", tags=["preferences"])
+
+
+async def _get_or_none(client_id: int) -> Optional[Dict[str, Any]]:
+    rows = await supabase_client.select(
+        CLIENT_PREFERENCES_TABLE,
+        "client_id,preferred_channels,quiet_hours,unsubscribed,language,timezone",
+        limit=1,
+        filters={"client_id": f"eq.{client_id}"},
+    )
+    return rows[0] if rows else None
+
+
+def _default_prefs(user_id: str) -> Dict[str, Any]:
+    return {
+        "user_id": user_id,
+        "preferred_channels": None,
+        "quiet_hours": None,
+        "unsubscribed": None,
+        "language": "en",
+        "timezone": "UTC",
+    }
+
+
+@router.get("/{user_id}", response_model=UserPreferenceResponse)
+async def get_user_preferences(
+    user_id: str,
+    client: Client = Depends(get_authenticated_client),
+):
+    row = await _get_or_none(client.id)
+    if not row:
+        return UserPreferenceResponse(**_default_prefs(user_id))
+    return UserPreferenceResponse(
+        user_id=user_id,
+        preferred_channels=row.get("preferred_channels"),
+        quiet_hours=row.get("quiet_hours"),
+        unsubscribed=row.get("unsubscribed"),
+        language=row.get("language") or "en",
+        timezone=row.get("timezone") or "UTC",
+    )
+
+
+@router.put("/{user_id}", response_model=UserPreferenceResponse)
+async def update_user_preferences(
+    user_id: str,
+    preferences: UserPreferenceUpdate,
+    client: Client = Depends(get_authenticated_client),
+):
+    existing = await _get_or_none(client.id)
+    update_data: Dict[str, Any] = {}
+    if preferences.preferred_channels is not None:
+        update_data["preferred_channels"] = preferences.preferred_channels
+    if preferences.quiet_hours is not None:
+        update_data["quiet_hours"] = preferences.quiet_hours
+    if preferences.unsubscribed is not None:
+        update_data["unsubscribed"] = preferences.unsubscribed
+    if preferences.language is not None:
+        update_data["language"] = preferences.language
+    if preferences.timezone is not None:
+        update_data["timezone"] = preferences.timezone
+
+    if existing:
+        rows = await supabase_client.update(
+            CLIENT_PREFERENCES_TABLE, update_data, filters={"client_id": f"eq.{client.id}"}
+        )
+        row = rows[0] if rows else {**existing, **update_data}
+    else:
+        rows = await supabase_client.insert(CLIENT_PREFERENCES_TABLE, {
+            "client_id": client.id,
+            "preferred_channels": preferences.preferred_channels,
+            "quiet_hours": preferences.quiet_hours,
+            "unsubscribed": preferences.unsubscribed,
+            "language": preferences.language or "en",
+            "timezone": preferences.timezone or "UTC",
+        })
+        row = rows[0]
+
+    return UserPreferenceResponse(
+        user_id=user_id,
+        preferred_channels=row.get("preferred_channels"),
+        quiet_hours=row.get("quiet_hours"),
+        unsubscribed=row.get("unsubscribed"),
+        language=row.get("language") or "en",
+        timezone=row.get("timezone") or "UTC",
+    )
+
+
+@router.post("/{user_id}/unsubscribe/{notification_type}", response_model=UserPreferenceResponse)
+async def unsubscribe_notification_type(
+    user_id: str,
+    notification_type: str,
+    client: Client = Depends(get_authenticated_client),
+):
+    existing = await _get_or_none(client.id)
+    current_unsub = (existing or {}).get("unsubscribed") or []
+    if notification_type not in current_unsub:
+        current_unsub = current_unsub + [notification_type]
+
+    if existing:
+        rows = await supabase_client.update(
+            CLIENT_PREFERENCES_TABLE, {"unsubscribed": current_unsub}, filters={"client_id": f"eq.{client.id}"}
+        )
+        row = rows[0] if rows else {**existing, "unsubscribed": current_unsub}
+    else:
+        rows = await supabase_client.insert(CLIENT_PREFERENCES_TABLE, {
+            "client_id": client.id,
+            "unsubscribed": current_unsub, "language": "en", "timezone": "UTC",
+        })
+        row = rows[0]
+
+    return UserPreferenceResponse(
+        user_id=user_id,
+        preferred_channels=row.get("preferred_channels"),
+        quiet_hours=row.get("quiet_hours"),
+        unsubscribed=row.get("unsubscribed"),
+        language=row.get("language") or "en",
+        timezone=row.get("timezone") or "UTC",
+    )
+
+
+@router.delete("/{user_id}/unsubscribe/{notification_type}", response_model=UserPreferenceResponse)
+async def resubscribe_notification_type(
+    user_id: str,
+    notification_type: str,
+    client: Client = Depends(get_authenticated_client),
+):
+    existing = await _get_or_none(client.id)
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User preferences not found")
+
+    current_unsub = existing.get("unsubscribed") or []
+    new_unsub = [t for t in current_unsub if t != notification_type]
+    rows = await supabase_client.update(
+        CLIENT_PREFERENCES_TABLE, {"unsubscribed": new_unsub}, filters={"client_id": f"eq.{client.id}"}
+    )
+    row = rows[0] if rows else {**existing, "unsubscribed": new_unsub}
+
+    return UserPreferenceResponse(
+        user_id=user_id,
+        preferred_channels=row.get("preferred_channels"),
+        quiet_hours=row.get("quiet_hours"),
+        unsubscribed=row.get("unsubscribed"),
+        language=row.get("language") or "en",
+        timezone=row.get("timezone") or "UTC",
+    )

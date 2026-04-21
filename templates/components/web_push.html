@@ -1,0 +1,214 @@
+<!-- Web Push Notification Support -->
+<script>
+(function() {
+    let pushPermissionGranted = false;
+    let deviceToken = null;
+
+    // Check if browser supports notifications
+    if (!('Notification' in window)) {
+        console.log('This browser does not support notifications');
+        return;
+    }
+
+    // Check current permission status
+    if (Notification.permission === 'granted') {
+        pushPermissionGranted = true;
+        console.log('Push notifications already enabled');
+    }
+
+    // Function to request notification permission
+    window.requestPushPermission = async function() {
+        if (!('Notification' in window)) {
+            alert('Your browser does not support push notifications');
+            return false;
+        }
+
+        if (Notification.permission === 'granted') {
+            console.log('Permission already granted');
+            pushPermissionGranted = true;
+            await registerDeviceToken();
+            return true;
+        }
+
+        if (Notification.permission === 'denied') {
+            alert('Push notifications are blocked. Please enable them in your browser settings.');
+            return false;
+        }
+
+        try {
+            const permission = await Notification.requestPermission();
+            
+            if (permission === 'granted') {
+                pushPermissionGranted = true;
+                console.log('Push notification permission granted');
+                
+                // Show a test notification
+                new Notification('Notifications Enabled!', {
+                    body: 'You will now receive push notifications',
+                    icon: '🔔',
+                    badge: '🔔'
+                });
+                
+                // Register device token
+                await registerDeviceToken();
+                
+                return true;
+            } else {
+                console.log('Push notification permission denied');
+                return false;
+            }
+        } catch (error) {
+            console.error('Error requesting permission:', error);
+            return false;
+        }
+    };
+
+    // Generate a unique device token for this browser
+    async function registerDeviceToken() {
+        try {
+            // Generate a unique token based on browser fingerprint
+            const userAgent = navigator.userAgent;
+            const timestamp = Date.now();
+            const random = Math.random().toString(36).substring(7);
+            
+            // Create a simple token (in production, use Firebase SDK)
+            deviceToken = `web_${btoa(userAgent).substring(0, 20)}_${random}_${timestamp}`;
+            
+            // Store in localStorage
+            localStorage.setItem('push_device_token', deviceToken);
+            
+            console.log('Device token generated:', deviceToken);
+            
+            // Get client and candidate info
+            const clientId = getClientId();
+            const candidateId = await getCurrentCandidateId();
+            
+            if (clientId && candidateId) {
+                // Register with backend
+                const response = await fetch('/api/v1/device-tokens/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Client-Id': clientId
+                    },
+                    body: JSON.stringify({
+                        candidate_id: candidateId,
+                        device_token: deviceToken,
+                        platform: 'web'
+                    })
+                });
+                
+                if (response.ok) {
+                    console.log('Device token registered with backend');
+                }
+            }
+            
+            return deviceToken;
+        } catch (error) {
+            console.error('Error registering device token:', error);
+            return null;
+        }
+    }
+
+    // Get stored device token
+    window.getDeviceToken = function() {
+        if (deviceToken) return deviceToken;
+        
+        // Try to get from localStorage
+        const stored = localStorage.getItem('push_device_token');
+        if (stored) {
+            deviceToken = stored;
+            return deviceToken;
+        }
+        
+        return null;
+    };
+
+    // Function to send a test push notification
+    window.sendTestPushNotification = function(title, body) {
+        if (!pushPermissionGranted) {
+            console.log('Push permission not granted');
+            return false;
+        }
+
+        try {
+            new Notification(title || 'Test Notification', {
+                body: body || 'This is a test push notification',
+                icon: '🔔',
+                badge: '🔔',
+                tag: 'test-notification',
+                requireInteraction: false
+            });
+            return true;
+        } catch (error) {
+            console.error('Error sending notification:', error);
+            return false;
+        }
+    };
+
+    // Listen for push notifications from the backend
+    window.addEventListener('pushNotificationReceived', function(event) {
+        if (pushPermissionGranted && event.detail) {
+            const { title, body, data } = event.detail;
+            new Notification(title || 'Notification', {
+                body: body || '',
+                icon: '🔔',
+                badge: '🔔',
+                data: data,
+                requireInteraction: false
+            });
+        }
+    });
+
+    // Function to trigger notification when push is sent
+    window.showPushNotification = function(title, body, data) {
+        if (Notification.permission === 'granted') {
+            new Notification(title || 'Notification', {
+                body: body || '',
+                icon: '🔔',
+                badge: '🔔',
+                data: data || {},
+                requireInteraction: false
+            });
+        }
+    };
+
+    // Helper to get client ID
+    function getClientId() {
+        if (typeof clientId !== 'undefined') return clientId;
+        const match = window.location.pathname.match(/\/portal\/(\d+)/);
+        return match ? match[1] : null;
+    }
+
+    // Helper to get current candidate ID
+    async function getCurrentCandidateId() {
+        try {
+            const tid = getClientId();
+            if (!tid) return null;
+            
+            const response = await fetch(`/api/v1/notifications/demo/options`, {
+                headers: { 'X-Client-Id': tid }
+            });
+            const options = await response.json();
+            
+            if (options.candidates && options.candidates.length > 0) {
+                return options.candidates[0].id;
+            }
+        } catch (error) {
+            console.error('Error getting candidate:', error);
+        }
+        return null;
+    }
+
+    // Check if we already have permission on page load
+    if (Notification.permission === 'granted') {
+        const stored = localStorage.getItem('push_device_token');
+        if (stored) {
+            deviceToken = stored;
+            pushPermissionGranted = true;
+        }
+    }
+
+    console.log('Web push support loaded. Permission status:', Notification.permission);
+})();
+</script>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ client_id }} - Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #faf8ff; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-900 pb-12 selection:bg-slate-900 selection:text-white">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <a href="javascript:history.back()" class="text-sm font-semibold text-slate-500 hover:text-slate-900 uppercase tracking-widest transition-colors flex items-center gap-2">
+                &larr; Back
+            </a>
+            <div class="flex items-center space-x-4">
+                <button onclick="loadData()" class="text-xs font-semibold uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors">
+                    Sync Ledger
+                </button>
+                <div class="w-px h-4 bg-slate-300"></div>
+                <button onclick="window.location.href='/portal/{{ client_id }}/dashboard'" class="text-xs font-semibold uppercase tracking-widest text-white bg-slate-900 px-4 py-2 hover:bg-slate-800 transition-colors shadow-sm">
+                    Open Tenant Portal
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 mt-12 space-y-12">
+        
+        <!-- Client Identity Block -->
+        <div>
+            <div class="flex justify-between flex-col md:flex-row md:items-end mb-4">
+                <div>
+                    <span class="text-xs font-bold font-mono text-slate-400 uppercase tracking-widest bg-slate-100 px-2.5 py-1 mb-4 inline-block">ID: {{ client_id }}</span>
+                    <h1 id="client-name" class="text-4xl font-bold tracking-tight text-slate-900 leading-none">Accessing Details...</h1>
+                </div>
+                <span id="client-tier" class="border border-slate-200 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-500 mt-4 md:mt-0">Loading Tier</span>
+            </div>
+        </div>
+
+        <!-- Overarching Stats -->
+        <div id="stats-grid" class="grid grid-cols-2 md:grid-cols-5 gap-0 border border-slate-200 bg-white">
+             <!-- Rendered dynamically -->
+             <div class="col-span-5 flex justify-center py-10 opacity-50"><svg class="animate-spin h-6 w-6 border-2 border-slate-900 border-t-transparent rounded-full"></svg></div>
+        </div>
+
+        <!-- Infrastructure & Routes -->
+        <div>
+            <h2 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 border-b border-slate-200 pb-2">Active Channels</h2>
+            <div id="channels-grid" class="space-y-4">
+                 <!-- Rendered dynamically -->
+            </div>
+        </div>
+
+        <!-- Live Feed -->
+        <div>
+            <h2 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 border-b border-slate-200 pb-2">Transmission Ledger</h2>
+            <div id="notifications-table" class="bg-white border border-slate-200 overflow-x-auto">
+                <div class="flex justify-center py-10 opacity-50"><svg class="animate-spin h-6 w-6 border-2 border-slate-900 border-t-transparent rounded-full"></svg></div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const clientId = "{{ client_id }}";
+
+        async function loadData() {
+            try {
+                const response = await fetch(`/api/client-dashboard/client/${clientId}/overview`);
+                const data = await response.json();
+
+                document.getElementById('client-name').textContent = data.client_name;
+                document.getElementById('client-tier').textContent = data.tier + " TIER";
+                
+                renderStats(data);
+                renderChannels(data.channels);
+
+                if (data.channels.length > 0) {
+                    loadNotifications(data.channels[0].channel);
+                }
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        function renderStats(data) {
+            const container = document.getElementById('stats-grid');
+            
+            const totalNotifications = data.channels.reduce((sum, ch) => sum + ch.total, 0);
+            const totalSuccess = data.channels.reduce((sum, ch) => sum + (ch.sent + ch.delivered), 0);
+            const totalFailed = data.channels.reduce((sum, ch) => sum + ch.failed, 0);
+            const avgSuccessRate = data.channels.length > 0
+                ? Math.round(data.channels.reduce((sum, ch) => sum + ch.success_rate, 0) / data.channels.length)
+                : 0;
+
+            const statBlock = (label, value, extraClasses="") => `
+                <div class="p-6 border-b md:border-b-0 md:border-r border-slate-200 last:border-r-0 ${extraClasses}">
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">${label}</p>
+                    <p class="text-3xl font-bold tracking-tight text-slate-900">${value}</p>
+                </div>
+            `;
+
+            container.innerHTML = `
+                ${statBlock("Transmissions", totalNotifications.toLocaleString())}
+                ${statBlock("Endpoints", data.channels.length)}
+                ${statBlock("Delivered", totalSuccess.toLocaleString(), "text-emerald-700 bg-emerald-50/30")}
+                ${statBlock("Dropped", totalFailed.toLocaleString(), "text-red-700 bg-red-50/30")}
+                ${statBlock("Reliability", avgSuccessRate + "%")}
+            `;
+        }
+
+        function renderChannels(channels) {
+            const container = document.getElementById('channels-grid');
+
+            const html = channels.map(channel => {
+                const successRate = channel.success_rate;
+                const barColor = successRate >= 80 ? 'bg-emerald-500' : successRate >= 50 ? 'bg-amber-500' : 'bg-red-500';
+                
+                return `
+                    <div onclick="loadNotifications('${channel.channel}')" class="group bg-white border border-slate-200 p-5 flex items-center justify-between cursor-pointer hover:border-slate-400 hover:shadow-sm transition-all focus:outline-none">
+                        <div class="w-1/4">
+                            <span class="text-sm font-bold uppercase tracking-wider text-slate-800">${channel.channel}</span>
+                        </div>
+                        <div class="w-1/2 flex items-center space-x-6">
+                            <div class="w-full bg-slate-100 h-1.5 flex-grow relative overflow-hidden">
+                                <div class="${barColor} h-full" style="width: ${successRate}%"></div>
+                            </div>
+                            <span class="text-sm font-mono font-medium text-slate-600 w-12 text-right">${successRate}%</span>
+                        </div>
+                        <div class="w-1/4 flex justify-end space-x-6 text-sm font-medium">
+                            <span class="text-slate-400 uppercase text-xs tracking-wider">Total <span class="text-slate-900 text-sm ml-1">${channel.total}</span></span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        }
+
+        async function loadNotifications(channel) {
+            const container = document.getElementById('notifications-table');
+            container.innerHTML = '<div class="flex justify-center py-10 opacity-50"><svg class="animate-spin h-6 w-6 border-2 border-slate-900 border-t-transparent rounded-full"></svg></div>';
+
+            try {
+                const response = await fetch(`/api/client-dashboard/client/${clientId}/channel/${channel}`);
+                const data = await response.json();
+
+                if (data.notifications.length === 0) {
+                    container.innerHTML = '<div class="p-8 text-center text-slate-400 text-sm font-medium">No ledger entries found for ' + channel.toUpperCase() + '</div>';
+                    return;
+                }
+
+                const table = `
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200">
+                                <th class="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">Payload Type</th>
+                                <th class="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">Target</th>
+                                <th class="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">State</th>
+                                <th class="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">Priority</th>
+                                <th class="py-3 px-6 text-xs font-semibold uppercase tracking-widest text-slate-400">Clock</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${data.notifications.slice(0, 15).map(notif => {
+                                const statusClass = notif.status.toLowerCase() === 'delivered' || notif.status.toLowerCase() === 'sent' ? 'bg-emerald-100/50 text-emerald-700 border-emerald-200' : (notif.status.toLowerCase() === 'failed' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-100 text-slate-600 border-slate-200');
+                                const priorityClass = notif.priority.toLowerCase() === 'critical' || notif.priority.toLowerCase() === 'high' ? 'text-red-600 font-bold' : 'text-slate-600';
+                                
+                                return `
+                                <tr class="hover:bg-slate-50/50 transition-colors group">
+                                    <td class="py-3 px-6 text-sm font-medium text-slate-800">${notif.type}</td>
+                                    <td class="py-3 px-6 text-xs font-mono text-slate-500">${notif.recipient}</td>
+                                    <td class="py-3 px-6">
+                                        <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border ${statusClass}">${notif.status}</span>
+                                    </td>
+                                    <td class="py-3 px-6 text-xs uppercase tracking-wider ${priorityClass}">${notif.priority}</td>
+                                    <td class="py-3 px-6 text-xs text-slate-400">${formatTimeAgo(notif.created_at)}</td>
+                                </tr>
+                            `}).join('')}
+                        </tbody>
+                    </table>
+                `;
+
+                container.innerHTML = table;
+
+            } catch (error) {
+                container.innerHTML = '<div class="p-8 text-center text-red-500 text-sm font-medium">Failed to fetch ledger entries.</div>';
+            }
+        }
+
+        function formatTimeAgo(dateString) {
+            if (!dateString) return 'N/A';
+            const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
+            if (seconds < 60) return '< 1m';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
