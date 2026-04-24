@@ -14,6 +14,7 @@ class SlackProvider(NotificationProvider):
             self.client = AsyncWebClient(token=settings.slack_bot_token)
         else:
             self.client = None
+        self.default_channel_id = self.config.get("channel_id")
 
     async def send(self, message: Message) -> ProviderResponse:
         """
@@ -42,8 +43,16 @@ class SlackProvider(NotificationProvider):
                 body_text = f"Slack: {message.subject or 'Notification'}"
 
             # Send message
+            channel_target = message.recipient or self.default_channel_id
+            if not channel_target:
+                return ProviderResponse(
+                    status=ProviderStatus.FAILED,
+                    error_code="NO_CHANNEL",
+                    error_message="Slack channel/user recipient is missing"
+                )
+
             response = await self.client.chat_postMessage(
-                channel=message.recipient,
+                channel=channel_target,
                 text=body_text,
                 blocks=message.data.get('blocks') if message.data else None
             )

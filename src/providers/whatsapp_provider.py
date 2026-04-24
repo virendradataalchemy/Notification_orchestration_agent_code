@@ -2,6 +2,7 @@ from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import json
 
 from .base import NotificationProvider, Message, ProviderResponse, ProviderStatus
 from src.config import settings
@@ -19,7 +20,11 @@ class WhatsAppProvider(NotificationProvider):
             )
         else:
             self.client = None
-        self.from_number = settings.twilio_whatsapp_number
+        self.from_number = (
+            self.config.get("from_number")
+            or self.config.get("sender_id")
+            or settings.twilio_whatsapp_number
+        )
         self.executor = ThreadPoolExecutor(max_workers=5)
 
     async def send(self, message: Message) -> ProviderResponse:
@@ -51,25 +56,40 @@ class WhatsAppProvider(NotificationProvider):
             to_number = message.recipient
             if not to_number.startswith('whatsapp:'):
                 to_number = f'whatsapp:{to_number}'
-
-            # Ensure from_number has whatsapp: prefix
             from_number = self.from_number
-            if not from_number.startswith('whatsapp:'):
+            if from_number and not from_number.startswith('whatsapp:'):
                 from_number = f'whatsapp:{from_number}'
 
-            # Ensure body is not empty (WhatsApp requires it)
-            body_text = message.body or message.data.get('body', '')
-            if not body_text:
-                body_text = message.data.get('message', '') or f"WhatsApp: {message.subject or 'Notification'}"
+            template_id = message.data.get("template_id")
+            template_vars = message.data.get("template_variables") or {}
+            provider_template_refs = message.data.get("provider_template_refs") or {}
+
+            # Resolve provider-native template ref (Twilio Content SID) from internal mapping
+            content_sid = (
+                provider_template_refs.get("whatsapp")
+                or (self.config.get("template_refs") or {}).get(template_id)
+            )
+
+            create_kwargs = {
+                "to": to_number,
+                "from_": from_number,
+            }
+            if content_sid:
+                create_kwargs["content_sid"] = content_sid
+                create_kwargs["content_variables"] = json.dumps(template_vars or {})
+            else:
+                # Fallback to body send when no provider template mapping exists
+                body_text = message.body or message.data.get('body', '')
+                if not body_text:
+                    body_text = message.data.get('message', '') or f"WhatsApp: {message.subject or 'Notification'}"
+                create_kwargs["body"] = body_text
 
             # Send WhatsApp message in thread pool
-            loop = asyncio.get_running_loop()
+            loop = asyncio.get_event_loop()
             twilio_message = await loop.run_in_executor(
                 self.executor,
                 lambda: self.client.messages.create(
-                    to=to_number,
-                    from_=from_number,
-                    body=body_text
+                    **create_kwargs
                 )
             )
 
@@ -105,7 +125,7 @@ class WhatsAppProvider(NotificationProvider):
             )
 
         try:
-            loop = asyncio.get_running_loop()
+            loop = asyncio.get_event_loop()
             message = await loop.run_in_executor(
                 self.executor,
                 lambda: self.client.messages(message_id).fetch()

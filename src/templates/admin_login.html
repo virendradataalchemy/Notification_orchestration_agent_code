@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1f2a56 0%, #4b5fb2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #222;
+        }
+        .card {
+            width: 100%;
+            max-width: 420px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+            padding: 28px;
+        }
+        h1 { margin: 0 0 6px; font-size: 24px; }
+        p { margin: 0 0 18px; color: #666; font-size: 14px; }
+        label { display: block; margin: 10px 0 6px; font-size: 13px; color: #444; }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cfd4dc;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        button {
+            margin-top: 16px;
+            width: 100%;
+            background: #2d3e75;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .status { margin-top: 12px; font-size: 13px; min-height: 18px; }
+        .error { color: #b42318; }
+        .ok { color: #0f7a43; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Admin Login</h1>
+        <p>Sign in to access the super-admin dashboard.</p>
+        <form id="loginForm">
+            <label for="username">Username</label>
+            <input id="username" type="text" required autocomplete="username">
+            <label for="password">Password</label>
+            <input id="password" type="password" required autocomplete="current-password">
+            <button type="submit" id="submitBtn">Sign In</button>
+        </form>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('loginForm');
+        const statusEl = document.getElementById('status');
+        const submitBtn = document.getElementById('submitBtn');
+
+        function setStatus(msg, isError = false) {
+            statusEl.textContent = msg || '';
+            statusEl.className = 'status ' + (isError ? 'error' : 'ok');
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            setStatus('');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Signing in...';
+
+            const payload = {
+                username: document.getElementById('username').value.trim(),
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const res = await fetch('/api/v1/admin/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    setStatus(data.detail || 'Login failed', true);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Sign In';
+                    return;
+                }
+
+                localStorage.setItem('admin_access_token', data.access_token);
+                localStorage.setItem('admin_token_expires_at', String(Date.now() + (data.expires_in * 1000)));
+                setStatus('Login successful, redirecting...');
+                window.location.href = '/admin/dashboard';
+            } catch (err) {
+                setStatus('Network error while logging in', true);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Sign In';
+            }
+        });
+    </script>
+</body>
+</html>
+

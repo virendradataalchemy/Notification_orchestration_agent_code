@@ -1,10 +1,10 @@
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import List, Dict, Any
 from datetime import datetime, time
 import pytz
 
-from src.models import Channel, Candidate, UserPreference
+from src.models import UserPreference
 
 
 class MessageRouter:
@@ -15,12 +15,11 @@ class MessageRouter:
 
     async def select_channels(
         self,
-        client_id: int,
+        tenant_id: str,
         user_id: str,
         notification_type: str,
         priority: str,
         requested_channels: List[str],
-        candidate: Candidate | None = None,
     ) -> List[str]:
         """
         Select appropriate channels for notification delivery.
@@ -35,11 +34,10 @@ class MessageRouter:
             List of selected channel names
         """
         # Get user preferences
-        query = select(UserPreference).where(UserPreference.user_id == user_id)
-        if client_id is not None:
-            query = query.where(
-                (UserPreference.client_id == client_id) | (UserPreference.client_id.is_(None))
-            )
+        query = select(UserPreference).where(
+            UserPreference.tenant_id == tenant_id,
+            UserPreference.user_id == user_id
+        )
         result = await self.db.execute(query)
         preferences = result.scalar_one_or_none()
 
@@ -79,43 +77,7 @@ class MessageRouter:
             if self._is_quiet_hours(preferences):
                 # Schedule for later
                 return []
-            candidates = requested_channels if requested_channels else ["email"]
-            return await self._filter_active_channels(candidates, candidate)
-
-        return await self._filter_active_channels(requested_channels, candidate)
-
-    async def _filter_active_channels(
-        self, channel_names: List[str], candidate: Candidate | None
-    ) -> List[str]:
-        if not channel_names:
-            return []
-
-        result = await self.db.execute(
-            select(Channel).where(Channel.name.in_(channel_names), Channel.is_active == True)
-        )
-        available = {channel.name for channel in result.scalars().all()}
-        deliverable = []
-        for name in channel_names:
-            if name not in available:
-                continue
-            if not self._has_destination(candidate, name):
-                continue
-            deliverable.append(name)
-        return deliverable
-
-    def _has_destination(self, candidate: Candidate | None, channel: str) -> bool:
-        if candidate is None:
-            return True
-        recipient_map = {
-            "email": bool(candidate.email),
-            "sms": bool(candidate.phone),
-            "whatsapp": bool(candidate.whatsapp_number or candidate.phone),
-            "voice": bool(candidate.phone),
-            "push": False,
-            "slack": False,
-            "in_app": True,
-        }
-        return recipient_map.get(channel, True)
+            return requested_channels if requested_channels else ["email"]
 
     def _is_quiet_hours(self, preferences: UserPreference) -> bool:
         """

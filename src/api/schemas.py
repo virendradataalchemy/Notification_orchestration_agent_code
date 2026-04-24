@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional, List, Dict, Any, Literal
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 import uuid
@@ -22,6 +22,12 @@ class Channel(str, Enum):
     PUSH = "push"
     VOICE = "voice"
     INAPP = "inapp"
+
+
+class DeliveryMode(str, Enum):
+    """Delivery execution mode for selected channels."""
+    PARALLEL_ALL = "parallel_all"
+    SEQUENTIAL_FAILOVER = "sequential_failover"
 
 
 class NotificationStatus(str, Enum):
@@ -54,12 +60,16 @@ class NotificationData(BaseModel):
     """Notification content data."""
     type: str = Field(..., description="Notification type (e.g., 'order_confirmation')")
     priority: Priority = Priority.MEDIUM
-    channels: List[Channel] = [Channel.EMAIL]
+    channels: List[Channel] = Field(default_factory=list)
     subject: Optional[str] = None
     body: Optional[str] = None
     template_id: Optional[str] = None
     data: Dict[str, Any] = Field(default_factory=dict, description="Template variables")
     idempotency_key: Optional[str] = Field(None, description="Unique key to prevent duplicate notifications")
+    delivery_mode: Optional[DeliveryMode] = None
+    strict_client_priority: bool = True
+    ai_fallback_enabled: bool = True
+    ai_on_no_channel_preference: bool = True
 
 
 class SendNotificationRequest(BaseModel):
@@ -74,14 +84,34 @@ class BatchRecipient(BaseModel):
     user_id: str
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    slack_id: Optional[str] = None
+    device_tokens: Optional[List[str]] = None
     data: Dict[str, Any] = Field(default_factory=dict)
 
 
 class BatchNotificationRequest(BaseModel):
     """Request to send batch notifications."""
-    template_id: str
+    template_id: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    data: Dict[str, Any] = Field(default_factory=dict)
     recipients: List[BatchRecipient]
     channel: Channel
+    schedule_at: Optional[datetime] = None
+
+
+class BatchMultiChannelNotificationRequest(BaseModel):
+    """Request to send batch notifications across multiple channels."""
+    template_id: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    data: Dict[str, Any] = Field(default_factory=dict)
+    recipients: List[BatchRecipient]
+    channels: List[Channel] = Field(default_factory=list)
+    delivery_mode: Optional[DeliveryMode] = None
+    strict_client_priority: bool = True
+    ai_fallback_enabled: bool = True
+    ai_on_no_channel_preference: bool = True
     schedule_at: Optional[datetime] = None
 
 
@@ -100,10 +130,10 @@ class ChannelStatus(BaseModel):
 class NotificationResponse(BaseModel):
     """Notification response."""
     notification_id: str
-    status: str  # string to accept both enum values and raw strings from Supabase
-    channels: Dict[str, Any]
+    status: NotificationStatus
+    channels: Dict[str, ChannelStatus]
     estimated_delivery: Optional[datetime] = None
-    created_at: Optional[datetime] = None
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -114,6 +144,17 @@ class BatchNotificationResponse(BaseModel):
     batch_id: str
     status: str
     total_recipients: int
+    estimated_completion: Optional[datetime] = None
+
+
+class BatchMultiChannelNotificationResponse(BaseModel):
+    """Batch multi-channel notification response."""
+    batch_id: str
+    status: str
+    total_recipients: int
+    total_notifications: int
+    total_channel_records: int
+    channels: List[str]
     estimated_completion: Optional[datetime] = None
 
 
@@ -145,27 +186,34 @@ class TemplateCreate(BaseModel):
     version: int = 1
 
 
-class ClientTemplateCreate(BaseModel):
-    """Create client-specific template request."""
+class TenantTemplateCreate(BaseModel):
+    """Create tenant-specific template request."""
     name: str = Field(..., description="Template name (e.g., 'welcome_email')")
     channel: Channel = Field(..., description="Channel type")
     language: str = Field(default="en", description="Language code (ISO 639-1)")
     subject: Optional[str] = Field(None, description="Template subject (for email)")
     body: str = Field(..., description="Template body with Jinja2 variables")
     base_template_id: Optional[str] = Field(None, description="Global template ID to inherit from")
+    provider_template_ref: Optional[str] = Field(
+        None,
+        description="Optional provider-native template reference (internal use, e.g., Twilio Content SID)"
+    )
+    provider_template_meta: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Optional provider metadata for template dispatch"
+    )
     description: Optional[str] = Field(None, description="Template description")
-    visibility: Literal["public", "private"] = Field(default="public", description="Template visibility")
-    category: Optional[str] = Field(None, description="Department category: hr, it, general")
 
 
-class ClientTemplateUpdate(BaseModel):
-    """Update client template request."""
+class TenantTemplateUpdate(BaseModel):
+    """Update tenant template request."""
     name: Optional[str] = None
     subject: Optional[str] = None
     body: Optional[str] = None
     active: Optional[bool] = None
+    provider_template_ref: Optional[str] = None
+    provider_template_meta: Optional[Dict[str, Any]] = None
     description: Optional[str] = None
-    visibility: Optional[Literal["public", "private"]] = None
 
 
 class TemplatePreviewRequest(BaseModel):
@@ -193,8 +241,8 @@ class TemplateCloneRequest(BaseModel):
 
 class TemplateResponse(BaseModel):
     """Template response."""
-    id: int | str
-    client_id: Optional[int | str] = None
+    id: str
+    tenant_id: Optional[str] = None
     name: str
     channel: str
     language: str
@@ -203,21 +251,21 @@ class TemplateResponse(BaseModel):
     version: int
     active: bool
     is_global: bool
-    visibility: str = "public"
     base_template_id: Optional[str] = None
-    created_at: Optional[datetime] = None
+    provider_template_ref: Optional[str] = None
+    provider_template_meta: Optional[Dict[str, Any]] = None
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
 
-class ClientTemplateListResponse(BaseModel):
-    """List of client templates."""
-    client_id: int | str
-    client_name: Optional[str] = None
+class TenantTemplateListResponse(BaseModel):
+    """List of tenant templates."""
+    tenant_id: str
     templates: List[TemplateResponse]
     global_templates_count: int
-    client_templates_count: int
+    tenant_templates_count: int
 
 
 # User Preference Schemas
@@ -253,20 +301,35 @@ class WebhookEvent(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
-# Client Authentication Schemas
-class ClientLoginRequest(BaseModel):
-    """Client portal login request."""
-    username: str = Field(..., description="Client username")
-    password: str = Field(..., description="Client password")
+# Tenant Authentication Schemas
+class TenantLoginRequest(BaseModel):
+    """Tenant portal login request."""
+    username: str = Field(..., description="Tenant username")
+    password: str = Field(..., description="Tenant password")
 
 
-class ClientLoginResponse(BaseModel):
-    """Client portal login response."""
+class TenantLoginResponse(BaseModel):
+    """Tenant portal login response."""
     access_token: str = Field(..., description="JWT access token")
     token_type: str = Field(default="bearer", description="Token type")
-    client_id: int | str
-    client_name: str
+    tenant_id: str
+    tenant_name: str
     expires_in: int = Field(description="Token expiration in seconds")
+
+
+class ChannelCapability(BaseModel):
+    """Channel capability record for API clients."""
+    channel: Channel
+    template_required: bool
+    required_recipient_fields: List[str]
+    supports_subject: bool
+    requires_body: bool
+    notes: str
+
+
+class ChannelCapabilitiesResponse(BaseModel):
+    """List of capabilities for all supported channels."""
+    channels: List[ChannelCapability]
 
 
 # Health Check

@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
 from typing import Optional
 from functools import lru_cache
 
@@ -12,7 +11,6 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "notification-orchestration-app"
     app_env: str = "development"
-    app_base_url: Optional[str] = None  # Base URL for webhooks (e.g., https://yourdomain.com)
     debug: bool = True
     log_level: str = "INFO"
     api_version: str = "v1"
@@ -23,6 +21,7 @@ class Settings(BaseSettings):
     workers: int = 4
 
     # Database
+    database_url: str
     db_pool_size: int = 20
     db_max_overflow: int = 10
 
@@ -36,6 +35,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 15
     api_key_expiration_days: int = 90
+    allow_public_tenant_signup: bool = True
+    admin_username: str = "admin"
+    admin_password: Optional[str] = None  # Falls back to secret_key when not set
+    admin_session_hours: int = 8
 
     # Rate Limiting
     rate_limit_per_user_hour: int = 100
@@ -92,11 +95,6 @@ class Settings(BaseSettings):
     slack_refresh_token: Optional[str] = None
 
     slack_channel_id: Optional[str] = None
-
-    # Supabase REST
-    supabase_url: Optional[str] = None
-    supabase_key: Optional[str] = None
-    supabase_service_role_key: Optional[str] = None
 
     # Firebase
     firebase_credentials_path: Optional[str] = None
@@ -155,17 +153,6 @@ class Settings(BaseSettings):
         """Get API prefix with version."""
         return f"/api/{self.api_version}"
 
-    @field_validator("debug", mode="before")
-    @classmethod
-    def parse_debug_flag(cls, value):
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized in {"release", "prod", "production", "false", "0", "no"}:
-                return False
-            if normalized in {"debug", "dev", "development", "true", "1", "yes"}:
-                return True
-        return value
-
     @property
     def cors_origins(self) -> list[str]:
         """Get CORS allowed origins."""
@@ -174,10 +161,6 @@ class Settings(BaseSettings):
         return [
             "https://yourdomain.com",
             "https://app.yourdomain.com",
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173",
         ]
 
 

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Orchestration Platform</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --surface-2: #eef3ff;
+            --text: #10213a;
+            --muted: #55667f;
+            --brand: #0f766e;
+            --brand-2: #2563eb;
+            --border: #d6dfec;
+            --shadow: 0 18px 48px rgba(16, 33, 58, 0.12);
+            --radius: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 8% 8%, #dff7f3 0%, transparent 30%),
+                radial-gradient(circle at 92% 12%, #dbeafe 0%, transparent 34%),
+                linear-gradient(180deg, #f9fbff 0%, var(--bg) 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 26px 18px 50px;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .brand {
+            font-weight: 800;
+            font-size: 20px;
+            letter-spacing: 0.3px;
+        }
+
+        .brand small {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        .links a {
+            text-decoration: none;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+            padding: 9px 12px;
+            border-radius: 10px;
+            border: 1px solid transparent;
+        }
+
+        .links a:hover {
+            background: var(--surface);
+            border-color: var(--border);
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%);
+            border: 1px solid var(--border);
+            border-radius: calc(var(--radius) + 4px);
+            padding: 34px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            right: -40px;
+            bottom: -56px;
+            width: 230px;
+            height: 230px;
+            background: linear-gradient(135deg, rgba(15, 118, 110, 0.16), rgba(37, 99, 235, 0.22));
+            border-radius: 50%;
+        }
+
+        .eyebrow {
+            display: inline-block;
+            margin-bottom: 10px;
+            padding: 5px 11px;
+            border-radius: 999px;
+            background: #e5fff7;
+            border: 1px solid #b5f0e2;
+            color: #0f766e;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            font-size: 36px;
+            line-height: 1.1;
+            margin-bottom: 11px;
+            max-width: 760px;
+        }
+
+        .hero p {
+            color: var(--muted);
+            max-width: 760px;
+            margin-bottom: 18px;
+            font-size: 16px;
+        }
+
+        .cta a {
+            display: inline-block;
+            text-decoration: none;
+            font-weight: 800;
+            font-size: 14px;
+            padding: 11px 15px;
+            border-radius: 11px;
+            margin: 0 8px 8px 0;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+            color: #fff;
+            box-shadow: 0 10px 20px rgba(15, 118, 110, 0.24);
+        }
+
+        .btn-secondary {
+            background: #fff;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin-top: 18px;
+            max-width: 680px;
+        }
+
+        .stat {
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .stat strong {
+            display: block;
+            font-size: 20px;
+            margin-bottom: 2px;
+        }
+
+        .stat span {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+            margin-top: 16px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+        }
+
+        .card h3 {
+            font-size: 16px;
+            margin-bottom: 7px;
+        }
+
+        .card p {
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 11px;
+        }
+
+        .card a {
+            color: var(--brand-2);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .footer-note {
+            margin-top: 14px;
+            background: var(--surface-2);
+            border: 1px solid #c7d9ff;
+            color: #244073;
+            font-size: 13px;
+            padding: 10px 12px;
+            border-radius: 11px;
+            font-weight: 600;
+        }
+
+        code {
+            background: #e2e9f5;
+            border-radius: 5px;
+            padding: 2px 6px;
+        }
+
+        @media (max-width: 760px) {
+            .hero { padding: 24px; }
+            h1 { font-size: 29px; }
+            .links a { padding: 7px 9px; }
+            .nav { align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="nav">
+            <div class="brand">
+                Notification Orchestration Platform
+                <small>Multi-tenant messaging for product teams</small>
+            </div>
+            <div class="links">
+                <a href="/portal/signup">Sign Up</a>
+                <a href="/portal/login">Login</a>
+                <a href="/api/v1/docs">API Docs</a>
+            </div>
+        </header>
+
+        <section class="hero">
+            <span class="eyebrow">Unified Messaging</span>
+            <h1>Design once, deliver across WhatsApp, Email, SMS, Slack, Voice, Push, and In-App.</h1>
+            <p>
+                Create tenant-owned templates, enforce WhatsApp template requirements, and keep other channels flexible with either
+                template or raw-body sends. Use one API flow for transactional and bulk messaging.
+            </p>
+            <div class="cta">
+                <a class="btn-primary" href="/portal/signup">Create Tenant Account</a>
+                <a class="btn-secondary" href="/portal/how-to-use">How To Use</a>
+                <a class="btn-secondary" href="/status">System Health</a>
+            </div>
+            <div class="stats">
+                <div class="stat"><strong>7</strong><span>Integrated channels</span></div>
+                <div class="stat"><strong>1</strong><span>API for send + tracking</span></div>
+                <div class="stat"><strong>100%</strong><span>Tenant-scoped templates</span></div>
+                <div class="stat"><strong>Real-time</strong><span>Delivery activity view</span></div>
+            </div>
+        </section>
+
+        <section class="grid">
+            <article class="card">
+                <h3>Tenant Portal</h3>
+                <p>Onboard your organization, create templates, and monitor delivery outcomes by channel.</p>
+                <a href="/portal/login">Open Portal</a>
+            </article>
+            <article class="card">
+                <h3>How To Use</h3>
+                <p>Step-by-step integration guide for template rules, single sends, and bulk sends.</p>
+                <a href="/portal/how-to-use">Open Guide</a>
+            </article>
+            <article class="card">
+                <h3>Channel Capabilities</h3>
+                <p>View template requirement, recipient fields, and subject support for each channel.</p>
+                <a href="/channels">Open Capabilities</a>
+            </article>
+            <article class="card">
+                <h3>System Status</h3>
+                <p>Check health of API and dependencies before traffic spikes and campaign launches.</p>
+                <a href="/status">Open Status</a>
+            </article>
+        </section>
+
+        <div class="footer-note">
+            API base: <code>/api/v1</code> | Capability endpoint: <code>/api/v1/channels/capabilities</code>
+        </div>
+    </div>
+</body>
+</html>

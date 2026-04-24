@@ -1,7 +1,7 @@
-from .client_auth import ClientAuthMiddleware, get_client_id, get_client
+from .tenant_auth import TenantAuthMiddleware, get_tenant_id, get_tenant
 
 __all__ = [
-    "ClientAuthMiddleware",
-    "get_client_id",
-    "get_client",
+    "TenantAuthMiddleware",
+    "get_tenant_id",
+    "get_tenant",
 ]

@@ -140,11 +140,12 @@ class NotificationWorker:
             return
 
         # Create message
+        payload = notification.data or {}
         message = Message(
             recipient=recipient_info,
-            subject=notification.subject or notification.type,
-            body=notification.content,
-            data=notification.data or {},
+            subject=payload.get("subject") or notification.type,
+            body=payload.get("body") or "",
+            data=payload,
             metadata={
                 "notification_id": str(notification.id),
                 "type": notification.type,
@@ -161,8 +162,7 @@ class NotificationWorker:
 
             if response.status.value == "success":
                 channel_record.status = ChannelStatus.SENT
-                channel_record.provider_message_id = response.message_id
-                channel_record.sent_at = datetime.utcnow()
+                channel_record.message_id = response.message_id
 
                 # For immediate delivery channels, mark as delivered
                 if channel_name in ["slack", "inapp"]:

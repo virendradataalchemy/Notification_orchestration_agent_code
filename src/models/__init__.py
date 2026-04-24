@@ -1,43 +1,29 @@
 from .base import Base
-from .client import Client, ClientProviderConfig
-from .channel import Channel
-from .candidate import Candidate
-from .provider import Provider
-from .delivery_log import DeliveryLog
-from .notification import (
-    Notification,
-    Communication,
-    CommunicationAttempt,
-    CommunicationPayload,
-    NotificationChannel,
-    NotificationEvent,
-    NotificationStatus,
-    Priority,
-    ChannelStatus,
-)
-from .template import Template, TemplateDepartment
+from .tenant import Tenant, TenantProviderConfig
+from .notification import Notification, NotificationChannel, NotificationStatus, Priority, ChannelStatus
+from .template import Template
 from .user_preference import UserPreference
 from .audit_log import AuditLog
+from .tenant_channel_preference import TenantChannelPreference
+from .inbound import InboundMessage, InboundIntent, InboundChannel, InboundStatus, IntentCategory, DetectionMethod
 
 __all__ = [
     "Base",
-    "Client",
-    "ClientProviderConfig",
-    "Channel",
-    "Candidate",
-    "Provider",
-    "DeliveryLog",
+    "Tenant",
+    "TenantProviderConfig",
     "Notification",
-    "Communication",
-    "CommunicationAttempt",
-    "CommunicationPayload",
     "NotificationChannel",
-    "NotificationEvent",
     "NotificationStatus",
     "Priority",
     "ChannelStatus",
     "Template",
-    "TemplateDepartment",
     "UserPreference",
     "AuditLog",
+    "TenantChannelPreference",
+    "InboundMessage",
+    "InboundIntent",
+    "InboundChannel",
+    "InboundStatus",
+    "IntentCategory",
+    "DetectionMethod",
 ]

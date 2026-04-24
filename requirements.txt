@@ -70,26 +70,26 @@ langchain-core
 langchain-aws
 
 # Strands Agents (Agentic Framework)
-strands-agents
-strands-agents-tools
+strands-agents>=0.5.0
+strands-agents-tools>=0.3.0
 
 # Observability
-langfuse
+langfuse>=2.0.0
 
 # Celery & Queue (Phase 1)
-celery[redis]
-flower
+celery[redis]==5.4.0
+flower==2.0.1
 
 # ML & Embeddings (Phase 2)
-sentence-transformers
-scikit-learn
-pandas
+sentence-transformers==3.3.1
+scikit-learn==1.6.0
+pandas==2.2.3
 
 # Vector Database (compatible with NumPy 2.0)
-chromadb
+chromadb>=0.5.23
 
 strands-agents
 strands-agents-tools
 langchain-aws
 # Demo script dependencies
-colorama
+colorama>=0.4.6

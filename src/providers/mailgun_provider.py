@@ -4,6 +4,7 @@ import asyncio
 import aiohttp
 from typing import Optional, List
 import re
+import json
 
 import requests
 
@@ -18,7 +19,12 @@ class MailgunProvider(NotificationProvider):
         super().__init__(config)
         self.api_key = settings.mailgun_api_key
         self.domain = settings.mailgun_domain or "sandbox123456.mailgun.org"
-        self.from_email = settings.mailgun_from_email or "noreply@dataalchemy.ai"
+        self.from_email = (
+            self.config.get("from_email")
+            or self.config.get("sender_email")
+            or settings.mailgun_from_email
+            or "noreply@dataalchemy.ai"
+        )
         self.base_url = settings.mailgun_base_url or "https://api.mailgun.net/v3"
 
     async def send(self, message: Message) -> ProviderResponse:
@@ -43,24 +49,38 @@ class MailgunProvider(NotificationProvider):
             # Prepare Mailgun API request
             url = f"{self.base_url}/{self.domain}/messages"
 
-            # Prepare data
-            # Ensure body is not empty (Mailgun requires it)
-            body_text = message.body or message.data.get('body', '')
-            if not body_text:
-                body_text = message.data.get('message', '') or message.data.get('text', '')
-            if not body_text:
-                body_text = message.subject or "Notification"
+            template_id = message.data.get("template_id")
+            template_vars = message.data.get("template_variables") or {}
+            provider_template_refs = message.data.get("provider_template_refs") or {}
+            mailgun_template_ref = (
+                provider_template_refs.get("email")
+                or (self.config.get("template_refs") or {}).get(template_id)
+            )
 
             data = {
                 "from": self.from_email,
                 "to": message.recipient,
-                "subject": message.subject or "Notification",
-                "text": body_text,
             }
 
-            # Add HTML if body contains HTML tags
-            if self._is_html(body_text):
-                data["html"] = body_text
+            if mailgun_template_ref:
+                data["template"] = mailgun_template_ref
+                data["t:variables"] = json.dumps(template_vars or {})
+                if message.subject:
+                    data["subject"] = message.subject
+            else:
+                # Ensure body is not empty for raw-body sends
+                body_text = message.body or message.data.get('body', '')
+                if not body_text:
+                    body_text = message.data.get('message', '') or message.data.get('text', '')
+                if not body_text:
+                    body_text = message.subject or "Notification"
+
+                data["subject"] = message.subject or "Notification"
+                data["text"] = body_text
+
+                # Add HTML if body contains HTML tags
+                if message.body and ('<html' in message.body.lower() or '<p>' in message.body.lower()):
+                    data["html"] = message.body
 
             # Add CC recipients if provided
             if message.metadata and message.metadata.get('cc'):
@@ -99,18 +119,11 @@ class MailgunProvider(NotificationProvider):
                             }
                         )
                     else:
-                        # Try to parse as JSON, fallback to text if it fails
-                        try:
-                            error_data = await response.json()
-                            error_message = error_data.get('message', 'Unknown error')
-                        except Exception:
-                            error_text = await response.text()
-                            error_message = error_text or f'HTTP {response.status} error'
-                        
+                        error_data = await response.json()
                         return ProviderResponse(
                             status=ProviderStatus.FAILED,
                             error_code=f"MAILGUN_{response.status}",
-                            error_message=error_message
+                            error_message=error_data.get('message', 'Unknown error')
                         )
 
         except asyncio.TimeoutError:
@@ -150,13 +163,6 @@ class MailgunProvider(NotificationProvider):
         # Basic email validation regex
         email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(email_pattern, recipient))
-
-    def _is_html(self, body: str) -> bool:
-        """Check if message body contains HTML tags."""
-        if not body:
-            return False
-        # Match common HTML tags
-        return bool(re.search(r'<(/?[a-z]+[a-z0-9]*\b[^>]*)>', body.lower()))
 
     async def send_batch(self, messages: List[Message]) -> List[ProviderResponse]:
         """

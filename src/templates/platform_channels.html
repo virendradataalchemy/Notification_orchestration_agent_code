@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Channel Capabilities</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --text: #10213a;
+            --muted: #5a6a82;
+            --brand: #0f766e;
+            --accent: #2563eb;
+            --border: #d6dfec;
+            --radius: 15px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 8% 8%, #dbf8f1 0%, transparent 28%),
+                radial-gradient(circle at 91% 11%, #dbeafe 0%, transparent 30%),
+                linear-gradient(180deg, #fbfdff 0%, var(--bg) 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 24px 18px 40px;
+        }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            gap: 12px;
+        }
+
+        .title {
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .top nav a {
+            text-decoration: none;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+            margin-left: 10px;
+            padding: 8px 10px;
+            border-radius: 9px;
+        }
+
+        .top nav a:hover {
+            background: #fff;
+            border: 1px solid var(--border);
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #ffffff 0%, #f3f8ff 100%);
+            border: 1px solid var(--border);
+            border-radius: calc(var(--radius) + 2px);
+            padding: 22px;
+            margin-bottom: 14px;
+            box-shadow: 0 12px 30px rgba(16, 33, 58, 0.1);
+        }
+
+        .hero h1 {
+            font-size: 31px;
+            margin-bottom: 6px;
+        }
+
+        .hero p { color: var(--muted); }
+
+        .table-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 760px;
+        }
+
+        th, td {
+            padding: 13px 12px;
+            border-bottom: 1px solid #e9eef6;
+            text-align: left;
+            vertical-align: top;
+            font-size: 14px;
+        }
+
+        th {
+            background: #eff4ff;
+            color: #314a72;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.45px;
+        }
+
+        tr:hover td { background: #fbfdff; }
+
+        .pill {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .yes { background: #ffe3e3; color: #a30e0e; }
+        .no { background: #dff8ea; color: #136b3a; }
+
+        code {
+            background: #e1e9f7;
+            border-radius: 5px;
+            padding: 2px 6px;
+            margin-right: 4px;
+            display: inline-block;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .note {
+            margin-top: 12px;
+            background: #edf5ff;
+            border: 1px solid #c8dbff;
+            border-radius: 11px;
+            padding: 10px 12px;
+            color: #274172;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        @media (max-width: 720px) {
+            .hero h1 { font-size: 26px; }
+            .top { align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="top">
+            <div class="title">Notification Platform</div>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/portal/how-to-use">How To Use</a>
+                <a href="/status">Status</a>
+                <a href="/api/v1/docs">API Docs</a>
+            </nav>
+        </header>
+
+        <section class="hero">
+            <h1>Channel Capabilities</h1>
+            <p>Readable view of <code>/api/v1/channels/capabilities</code> so tenant teams can build the correct payload.</p>
+        </section>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th>Template Required</th>
+                        <th>Recipient Fields</th>
+                        <th>Supports Subject</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody id="rows">
+                    <tr><td colspan="5">Loading channel capabilities...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="note">WhatsApp policy is strict template usage. Other channels may use either template mode or raw content mode.</div>
+    </div>
+
+    <script>
+        function yn(v) {
+            return v ? '<span class="pill yes">YES</span>' : '<span class="pill no">NO</span>';
+        }
+
+        function listFields(fields) {
+            if (!Array.isArray(fields) || fields.length === 0) return '-';
+            return fields.map(function(f) { return '<code>' + f + '</code>'; }).join(' ');
+        }
+
+        async function loadCapabilities() {
+            const tbody = document.getElementById('rows');
+            try {
+                const res = await fetch('/api/v1/channels/capabilities');
+                const data = await res.json();
+                const channels = data.channels || [];
+
+                if (channels.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">No capability records found.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = channels.map(function(c) {
+                    return '<tr>' +
+                        '<td><strong>' + c.channel + '</strong></td>' +
+                        '<td>' + yn(c.template_required) + '</td>' +
+                        '<td>' + listFields(c.required_recipient_fields) + '</td>' +
+                        '<td>' + yn(c.supports_subject) + '</td>' +
+                        '<td>' + (c.notes || '-') + '</td>' +
+                        '</tr>';
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="5">Failed to load capabilities.</td></tr>';
+            }
+        }
+
+        loadCapabilities();
+    </script>
+</body>
+</html>

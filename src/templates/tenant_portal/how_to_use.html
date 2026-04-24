@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How To Use - Notification Platform</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --text: #10213a;
+            --muted: #5a6a82;
+            --brand: #0f766e;
+            --accent: #2563eb;
+            --border: #d6dfec;
+            --ok-bg: #dff8ea;
+            --ok-border: #bdeecf;
+            --ok-text: #136b3a;
+            --warn-bg: #fff2d9;
+            --warn-border: #ffd9a0;
+            --warn-text: #8a5200;
+            --danger-bg: #ffe3e3;
+            --danger-border: #ffcaca;
+            --danger-text: #a30e0e;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 8% 8%, #dbf8f1 0%, transparent 28%),
+                radial-gradient(circle at 91% 11%, #dbeafe 0%, transparent 30%),
+                linear-gradient(180deg, #fbfdff 0%, var(--bg) 100%);
+            color: var(--text);
+            line-height: 1.55;
+            min-height: 100vh;
+        }
+
+        .topbar {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .topbar-inner {
+            width: 100%;
+            max-width: 1140px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            font-weight: 800;
+            font-size: 20px;
+        }
+
+        .topbar a {
+            color: var(--text);
+            text-decoration: none;
+            margin-left: 10px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 1140px;
+            margin: 8px auto 0;
+            padding: 0 18px 44px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #ffffff 0%, #f3f8ff 100%);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 26px;
+            box-shadow: 0 12px 30px rgba(16, 33, 58, 0.1);
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 34px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 12px;
+            max-width: 900px;
+        }
+
+        .badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .badge {
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 800;
+            border: 1px solid #cde0ff;
+            background: #ebf3ff;
+            color: #294575;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 12px;
+            align-items: start;
+        }
+
+        .toc {
+            position: sticky;
+            top: 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .toc h2 {
+            font-size: 15px;
+            margin-bottom: 9px;
+        }
+
+        .toc a {
+            display: block;
+            text-decoration: none;
+            color: #294575;
+            font-size: 13px;
+            padding: 5px 0;
+            font-weight: 700;
+        }
+
+        .docs {
+            display: grid;
+            gap: 12px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        .card h2 {
+            font-size: 21px;
+            margin-bottom: 10px;
+            scroll-margin-top: 20px;
+        }
+
+        .card h3 {
+            font-size: 15px;
+            margin-top: 10px;
+            margin-bottom: 6px;
+            color: #294575;
+        }
+
+        ol, ul { padding-left: 18px; }
+        li { margin-bottom: 7px; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        th, td {
+            border: 1px solid #e6edf8;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+            font-size: 13px;
+        }
+
+        th {
+            background: #eff4ff;
+            color: #314a72;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        code {
+            background: #e1e9f7;
+            padding: 2px 6px;
+            border-radius: 5px;
+        }
+
+        pre {
+            background: #0f1e36;
+            color: #d8e8ff;
+            padding: 12px;
+            border-radius: 10px;
+            overflow: auto;
+            font-size: 12px;
+            margin-top: 9px;
+            margin-bottom: 8px;
+        }
+
+        .ok {
+            margin-top: 10px;
+            background: var(--ok-bg);
+            border: 1px solid var(--ok-border);
+            color: var(--ok-text);
+            padding: 10px;
+            border-radius: 9px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .note {
+            margin-top: 10px;
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
+            color: var(--warn-text);
+            padding: 10px;
+            border-radius: 9px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .danger {
+            margin-top: 10px;
+            background: var(--danger-bg);
+            border: 1px solid var(--danger-border);
+            color: var(--danger-text);
+            padding: 10px;
+            border-radius: 9px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+            .toc { position: static; }
+        }
+
+        @media (max-width: 760px) {
+            h1 { font-size: 27px; }
+            .topbar-inner { align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">Notification Platform</div>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/portal/signup">Sign Up</a>
+                <a href="/portal/login">Login</a>
+                <a href="/channels">Channels</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <h1>How To Use This Platform</h1>
+            <p class="subtitle">Client integration guide for tenant onboarding, template policies, channel payloads, bulk sends, delivery tracking, and production readiness.</p>
+            <div class="badge-row">
+                <span class="badge">WhatsApp template mandatory</span>
+                <span class="badge">Other channels template optional</span>
+                <span class="badge">Bulk rules same as single send</span>
+                <span class="badge">Provider details abstracted</span>
+            </div>
+        </section>
+
+        <section class="layout">
+            <aside class="toc">
+                <h2>Contents</h2>
+                <a href="#quickstart">1. Quickstart</a>
+                <a href="#auth">2. Authentication</a>
+                <a href="#template-policy">3. Template Policy</a>
+                <a href="#channel-cookbook">4. Channel Cookbook</a>
+                <a href="#bulk">5. Bulk Messaging</a>
+                <a href="#tracking">6. Delivery Tracking</a>
+                <a href="#errors">7. Common Errors</a>
+                <a href="#production">8. Production Checklist</a>
+                <a href="#twilio-mailgun">9. Mapping From Twilio/Mailgun</a>
+            </aside>
+
+            <div class="docs">
+                <article class="card" id="quickstart">
+                    <h2>1. Quickstart (First Successful Send)</h2>
+                    <ol>
+                        <li>Create account at <code>/portal/signup</code>.</li>
+                        <li>Store API key in server-side secret storage.</li>
+                        <li>Create one template for WhatsApp or use raw payload for Email/SMS/Slack/Voice.</li>
+                        <li>Send a notification using <code>POST /api/v1/notifications/send</code>.</li>
+                        <li>Use returned <code>notification_id</code> to track status via <code>GET /api/v1/notifications/{notification_id}</code>.</li>
+                    </ol>
+                    <div class="ok">Goal: verify end-to-end flow once before integrating business events.</div>
+                </article>
+
+                <article class="card" id="auth">
+                    <h2>2. Authentication</h2>
+                    <p>All tenant API calls must include tenant key:</p>
+<pre>X-API-Key: your_tenant_api_key</pre>
+                    <h3>Minimum send request</h3>
+<pre>POST /api/v1/notifications/send
+Content-Type: application/json
+X-API-Key: your_tenant_api_key</pre>
+                    <div class="note">Use API keys only from backend services. Do not expose keys in browser/mobile client bundles.</div>
+                </article>
+
+                <article class="card" id="template-policy">
+                    <h2>3. Template Policy (Important)</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Channel</th>
+                                <th>Template Required</th>
+                                <th>Can Send Raw Body</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>whatsapp</td>
+                                <td>Yes</td>
+                                <td>No</td>
+                                <td>Provide <code>template_id</code> and variables in <code>data</code>.</td>
+                            </tr>
+                            <tr>
+                                <td>email, sms, slack, voice, push, inapp</td>
+                                <td>No</td>
+                                <td>Yes</td>
+                                <td>Either template mode or raw mode is valid.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="muted">Check runtime channel metadata via <code>GET /api/v1/channels/capabilities</code>.</p>
+                </article>
+
+                <article class="card" id="channel-cookbook">
+                    <h2>4. Channel Cookbook (Minimal Payloads)</h2>
+                    <h3>Email raw mode</h3>
+<pre>{
+  "recipient": {"email": "user@example.com"},
+  "notification": {
+    "channels": ["email"],
+    "subject": "Order Update",
+    "body": "Your order shipped",
+    "data": {"order_id": "ORD-1001"}
+  }
+}</pre>
+                    <h3>SMS raw mode</h3>
+<pre>{
+  "recipient": {"phone": "+14155550123"},
+  "notification": {
+    "channels": ["sms"],
+    "body": "Your OTP is 549921"
+  }
+}</pre>
+                    <h3>Slack template mode (optional)</h3>
+<pre>{
+  "recipient": {"slack_user_id": "U123456"},
+  "notification": {
+    "channels": ["slack"],
+    "template_id": "slack_ops_alert",
+    "data": {"service": "payments", "severity": "high"}
+  }
+}</pre>
+                    <h3>WhatsApp template mode (required)</h3>
+<pre>{
+  "recipient": {"phone": "+14155550123"},
+  "notification": {
+    "channels": ["whatsapp"],
+    "template_id": "wa_order_update",
+    "data": {"name": "Alex", "order_id": "ORD-1001"}
+  }
+}</pre>
+                    <div class="danger">If <code>channels</code> contains <code>whatsapp</code> and <code>template_id</code> is missing, request will fail.</div>
+                </article>
+
+                <article class="card" id="bulk">
+                    <h2>5. Bulk Messaging</h2>
+                    <p>Bulk flow follows the same template policy as single send.</p>
+                    <ol>
+                        <li>Use bulk endpoint from your integration layer.</li>
+                        <li>If any selected channel is <code>whatsapp</code>, include <code>template_id</code>.</li>
+                        <li>For other channels, choose template mode or raw mode.</li>
+                        <li>Pass recipient-level fields and variables per row/object.</li>
+                    </ol>
+                    <h3>Bulk template mode idea</h3>
+<pre>{
+  "channels": ["whatsapp", "email"],
+  "template_id": "order_confirmation",
+  "recipients": [
+    {"phone": "+14155550123", "email": "a@example.com", "data": {"name": "Alex"}},
+    {"phone": "+14155550124", "email": "b@example.com", "data": {"name": "Sam"}}
+  ]
+}</pre>
+                    <div class="ok">Rule remains: mandatory only for WhatsApp, optional for all other channels, including bulk.</div>
+                </article>
+
+                <article class="card" id="tracking">
+                    <h2>6. Delivery Tracking</h2>
+                    <ol>
+                        <li>Capture <code>notification_id</code> from send response.</li>
+                        <li>Fetch status via <code>GET /api/v1/notifications/{notification_id}</code>.</li>
+                        <li>Use tenant dashboard for recent activity by channel, recipient, status, and attempts.</li>
+                    </ol>
+                    <h3>Status meanings</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Meaning</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>queued</td>
+                                <td>Accepted by platform, waiting dispatch.</td>
+                                <td>No action.</td>
+                            </tr>
+                            <tr>
+                                <td>sent</td>
+                                <td>Handed to channel/provider.</td>
+                                <td>Wait for delivery update.</td>
+                            </tr>
+                            <tr>
+                                <td>delivered</td>
+                                <td>Delivery confirmed.</td>
+                                <td>No action.</td>
+                            </tr>
+                            <tr>
+                                <td>failed</td>
+                                <td>Dispatch or provider failure.</td>
+                                <td>Inspect reason, fix payload/template, retry with idempotency key.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </article>
+
+                <article class="card" id="errors">
+                    <h2>7. Common Errors and Fixes</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Error Pattern</th>
+                                <th>Cause</th>
+                                <th>Fix</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Missing <code>template_id</code> for WhatsApp</td>
+                                <td>Policy violation</td>
+                                <td>Include <code>template_id</code> and required variables in <code>data</code>.</td>
+                            </tr>
+                            <tr>
+                                <td>Template variable mismatch</td>
+                                <td>Payload data keys do not match placeholders</td>
+                                <td>Align template placeholders and payload <code>data</code> fields.</td>
+                            </tr>
+                            <tr>
+                                <td>Unauthorized / invalid API key</td>
+                                <td>Wrong or revoked key</td>
+                                <td>Use active tenant key and ensure header is <code>X-API-Key</code>.</td>
+                            </tr>
+                            <tr>
+                                <td>Recipient field missing</td>
+                                <td>Channel requires specific recipient identity</td>
+                                <td>Use required field from channel capability endpoint.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </article>
+
+                <article class="card" id="production">
+                    <h2>8. Production Checklist</h2>
+                    <ul>
+                        <li>Store API keys in secret manager, not in source code.</li>
+                        <li>Always send <code>idempotency_key</code> for transactional events.</li>
+                        <li>Pre-validate channel payload using <code>/api/v1/channels/capabilities</code>.</li>
+                        <li>Maintain fallback channel strategy for high-priority events.</li>
+                        <li>Monitor failed deliveries and alert on threshold breaches.</li>
+                        <li>Version templates and roll out changes gradually.</li>
+                    </ul>
+                </article>
+
+                <article class="card" id="twilio-mailgun">
+                    <h2>9. Mapping From Twilio/Mailgun Thinking</h2>
+                    <ul>
+                        <li>Twilio WhatsApp style: choose template id + variables at send time.</li>
+                        <li>Mailgun style: template mode for campaigns or raw mode for direct content.</li>
+                        <li>This platform combines both patterns in one tenant API with channel-aware policy enforcement.</li>
+                    </ul>
+                    <div class="ok">Tenant users focus on business payload and delivery outcome. Provider-specific details are managed internally by the platform.</div>
+                </article>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

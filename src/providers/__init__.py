@@ -19,7 +19,7 @@ from .mock_provider import (
 from src.config import settings
 
 
-def get_provider_for_channel(channel: str, provider_name: str = None):
+def get_provider_for_channel(channel: str, provider_name: str = None, config: dict = None):
     """
     Get provider instance for a given channel.
 
@@ -40,10 +40,11 @@ def get_provider_for_channel(channel: str, provider_name: str = None):
             'push': MockPushProvider,
             'voice': MockVoiceProvider,
             'in_app': MockInAppProvider,
+            'inapp': MockInAppProvider,
         }
         provider_class = mock_provider_map.get(channel)
         if provider_class:
-            return provider_class()
+            return provider_class(config=config)
         return None
 
     # Real providers
@@ -73,8 +74,9 @@ def get_provider_for_channel(channel: str, provider_name: str = None):
             'twilio': VoiceProvider,
             'default': VoiceProvider
         },
-        'in_app': {
+        'inapp': {
             'websocket': InAppProvider,
+            'inapp': InAppProvider,
             'default': InAppProvider
         },
     }
@@ -88,7 +90,7 @@ def get_provider_for_channel(channel: str, provider_name: str = None):
     provider_class = channel_providers.get(provider_name) or channel_providers.get('default')
 
     if provider_class:
-        return provider_class()
+        return provider_class(config=config)
 
     return None
 

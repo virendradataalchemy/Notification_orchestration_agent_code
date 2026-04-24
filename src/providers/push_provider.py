@@ -5,8 +5,6 @@ import os
 
 from .base import NotificationProvider, Message, ProviderResponse, ProviderStatus
 from src.config import settings
-from src.core.supabase import supabase_client
-from datetime import datetime
 
 
 class PushProvider(NotificationProvider):
@@ -40,7 +38,7 @@ class PushProvider(NotificationProvider):
 
     async def send(self, message: Message) -> ProviderResponse:
         """
-        Send push notification via FCM or Web Notifications API.
+        Send push notification via FCM.
 
         Args:
             message: Push notification to send
@@ -50,33 +48,6 @@ class PushProvider(NotificationProvider):
         Returns:
             ProviderResponse with FCM message ID
         """
-        # Check if this is a web browser token (starts with 'web_')
-        if message.recipient and message.recipient.startswith('web_'):
-            # For web tokens, we can't send from backend - it's handled by browser
-            # Just store the token and return success
-            try:
-                candidate_id = message.metadata.get('candidate_id')
-                client_id = message.metadata.get('client_id')
-                if candidate_id and message.recipient:
-                    await self._store_device_token(candidate_id, message.recipient, client_id=client_id, platform='web')
-                
-                return ProviderResponse(
-                    status=ProviderStatus.SUCCESS,
-                    message_id=f"web_push_{message.recipient[-12:]}",
-                    metadata={
-                        'provider': 'web_push',
-                        'note': 'Web push handled by browser',
-                        'stored_token': True
-                    }
-                )
-            except Exception as e:
-                return ProviderResponse(
-                    status=ProviderStatus.FAILED,
-                    error_code="WEB_PUSH_ERROR",
-                    error_message=str(e)
-                )
-        
-        # For mobile tokens, use Firebase
         if not self._initialized:
             return ProviderResponse(
                 status=ProviderStatus.FAILED,
@@ -121,19 +92,10 @@ class PushProvider(NotificationProvider):
             # Send message
             response = messaging.send(fcm_message)
 
-            # Store device token in database if we have candidate info
-            try:
-                candidate_id = message.metadata.get('candidate_id')
-                client_id = message.metadata.get('client_id')
-                if candidate_id and message.recipient:
-                    await self._store_device_token(candidate_id, message.recipient, client_id=client_id)
-            except Exception as db_error:
-                print(f"Warning: Failed to store device token: {db_error}")
-
             return ProviderResponse(
                 status=ProviderStatus.SUCCESS,
                 message_id=response,
-                metadata={'provider': 'fcm', 'stored_token': True}
+                metadata={'provider': 'fcm'}
             )
 
         except firebase_admin.exceptions.FirebaseError as e:
@@ -156,67 +118,6 @@ class PushProvider(NotificationProvider):
                 error_code="UNKNOWN_ERROR",
                 error_message=str(e)
             )
-
-    async def _store_device_token(
-        self,
-        candidate_id: int,
-        device_token: str,
-        *,
-        client_id: int | None = None,
-        platform: str = "unknown",
-    ):
-        """Store device token in database."""
-        try:
-            # Check if token already exists
-            existing = await supabase_client.select(
-                "device_tokens",
-                "id,is_active",
-                filters={
-                    "user_id": f"eq.{candidate_id}",
-                    "token": f"eq.{device_token}",
-                    **({"client_id": f"eq.{client_id}"} if client_id is not None else {}),
-                },
-                limit=1
-            )
-            
-            if existing:
-                # Update last_active
-                await supabase_client.update(
-                    "device_tokens",
-                    {
-                        "last_active": datetime.utcnow().isoformat(),
-                        "is_active": True,
-                        "platform": platform,
-                    },
-                    filters={"id": f"eq.{existing[0]['id']}"}
-                )
-            else:
-                # Insert new token
-                latest = await supabase_client.select(
-                    "device_tokens",
-                    "id",
-                    limit=1,
-                    filters={"order": "id.desc"}
-                )
-                next_id = int(latest[0]["id"]) + 1 if latest else 1
-                
-                await supabase_client.insert(
-                    "device_tokens",
-                    {
-                        "id": next_id,
-                        "client_id": client_id,
-                        "user_id": candidate_id,
-                        "token": device_token,
-                        "platform": platform,
-                        "browser": None,
-                        "is_active": True,
-                        "last_active": datetime.utcnow().isoformat(),
-                        "created_at": datetime.utcnow().isoformat(),
-                    }
-                )
-        except Exception as e:
-            print(f"Error storing device token: {e}")
-            # Don't fail the notification if token storage fails
 
     async def send_multicast(self, message: Message, tokens: List[str]) -> ProviderResponse:
         """

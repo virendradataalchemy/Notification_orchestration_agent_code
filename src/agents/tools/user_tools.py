@@ -164,14 +164,14 @@ async def query_similar_past_notifications(
 @tool
 async def get_user_engagement_history(
     user_id: str,
-    client_id: str = "default"
+    tenant_id: str = "default"
 ) -> Dict[str, Any]:
     """
     Get user's notification engagement statistics from database.
 
     Args:
         user_id: The user's ID
-        client_id: The client's ID
+        tenant_id: The tenant's ID
 
     Returns:
         Dictionary with engagement metrics by channel
@@ -188,12 +188,12 @@ async def get_user_engagement_history(
                     avg_delivery_time_seconds,
                     last_successful_delivery
                 FROM user_engagement
-                WHERE client_id = :client_id AND user_id = :user_id
+                WHERE tenant_id = :tenant_id AND user_id = :user_id
                 ORDER BY success_rate DESC
             """)
 
             result = await db.execute(query, {
-                "client_id": client_id,
+                "tenant_id": tenant_id,
                 "user_id": user_id
             })
             rows = result.fetchall()
@@ -219,14 +219,14 @@ async def get_user_engagement_history(
 @tool
 async def get_user_preferences(
     user_id: str,
-    client_id: str = "default"
+    tenant_id: str = "default"
 ) -> Dict[str, Any]:
     """
     Get user notification preferences from database.
 
     Args:
         user_id: The user's ID
-        client_id: The client's ID
+        tenant_id: The tenant's ID
 
     Returns:
         User preferences including channels, quiet hours, timezone
@@ -237,7 +237,7 @@ async def get_user_preferences(
             from src.models import UserPreference
 
             query = select(UserPreference).where(
-                UserPreference.client_id == client_id,
+                UserPreference.tenant_id == tenant_id,
                 UserPreference.user_id == user_id
             )
 

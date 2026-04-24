@@ -1,163 +1,59 @@
-import hashlib
-import time
-from typing import Optional
-
 from fastapi import Depends, HTTPException, status, Header, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import select
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from redis.asyncio import Redis
-from src.core import get_db, get_db_optional, get_redis_client, verify_token, supabase_client
-from src.core.supabase import ADMINS_TABLE, CLIENTS_TABLE
+from src.core import get_db, get_redis_client, verify_token
 from src.config import settings
-from src.models import Client
+from src.models import Tenant
+import hashlib
+import time
 
 security = HTTPBearer()
 
 
-def _client_from_row(row: dict) -> Client:
-    return Client(
-        id=row["id"],
-        name=row["name"],
-        default_language=row.get("default_language"),
-        logo_url=row.get("logo_url"),
-        brand_color=row.get("brand_color"),
-        is_active=row.get("is_active", True),
-        client_slug=row.get("client_slug"),
-        created_at=row.get("created_at"),
-        updated_at=row.get("updated_at"),
-    )
-
-
-async def verify_api_key(
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
-    authorization: Optional[str] = Header(None),
-) -> Optional[str]:
+async def verify_api_key(x_api_key: Optional[str] = Header(None)) -> Optional[str]:
     """Verify API key from header."""
-    api_key_to_check = x_api_key
-    if not api_key_to_check and authorization and authorization.startswith("Bearer sk_"):
-        api_key_to_check = authorization.replace("Bearer ", "", 1)
-
     # In debug mode, allow requests without API key
-    if settings.debug and not api_key_to_check:
+    if settings.debug and not x_api_key:
         return None
 
-    if not api_key_to_check:
+    if not x_api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing API key"
         )
 
-    hashed_key = hashlib.sha256(api_key_to_check.encode()).hexdigest()
-
-    if supabase_client.configured:
-        rows = await supabase_client.select(
-            CLIENTS_TABLE,
-            "id",
-            limit=1,
-            filters={"api_key_hash": f"eq.{hashed_key}", "is_active": "eq.true"},
+    # In production, verify against database
+    # For now, check if key is provided
+    if not x_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key"
         )
-        if not rows:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid API key"
-            )
 
-    return api_key_to_check
+    return x_api_key
 
 
-async def get_authenticated_client(
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+async def get_authenticated_tenant(
+    x_api_key: Optional[str] = Header(None),
     authorization: Optional[str] = Header(None),
-    x_client_id: Optional[str] = Header(None),
-    db: AsyncSession | None = Depends(get_db_optional)
-) -> Client:
+    db: AsyncSession = Depends(get_db)
+) -> Tenant:
     """
-    Get authenticated client from API key, JWT token, or client ID (dev mode).
+    Get authenticated tenant from API key, JWT token, or tenant ID (dev mode).
 
-    Supports three authentication methods:
+    Supports two authentication methods:
     1. API Key (X-API-Key header) - for programmatic access
     2. JWT Token (Authorization: Bearer) - for web portal access
-    3. Client ID (X-Client-Id header) - for dev mode (no authentication)
 
-    Validates credentials and returns the associated client object.
-    Raises 401 if authentication fails or client is not active.
+    Validates credentials and returns the associated tenant object.
+    Raises 401 if authentication fails or tenant is not active.
     """
-    # Dev mode: Accept client ID directly (no authentication)
-    if x_client_id and settings.debug:
-        try:
-            client_pk = int(x_client_id)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="X-Client-Id must be an integer",
-            ) from exc
-        client = None
-        if db is not None:
-            query = select(Client).where(
-                Client.id == client_pk,
-                Client.is_active == True
-            )
-            result = await db.execute(query)
-            client = result.scalar_one_or_none()
-        elif supabase_client.configured:
-            rows = await supabase_client.select(
-                CLIENTS_TABLE,
-                "id,name,default_language,logo_url,brand_color,is_active,client_slug,created_at,updated_at",
-                limit=1,
-                filters={
-                    "id": f"eq.{client_pk}",
-                    "is_active": "eq.true",
-                },
-            )
-            client = _client_from_row(rows[0]) if rows else None
-
-        if not client:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Client '{x_client_id}' not found"
-            )
-
-        return client
-
-    api_key_to_check = x_api_key
-    if not api_key_to_check and authorization and authorization.startswith("Bearer sk_"):
-        api_key_to_check = authorization.replace("Bearer ", "", 1)
-
-    # Try API key authentication first (X-API-Key or Bearer sk_...)
-    if api_key_to_check:
-        hashed_key = hashlib.sha256(api_key_to_check.encode()).hexdigest()
-        client = None
-
-        if db is not None:
-            query = select(Client).where(
-                Client.api_key_hash == hashed_key,
-                Client.is_active == True
-            )
-            result = await db.execute(query)
-            client = result.scalar_one_or_none()
-        elif supabase_client.configured:
-            rows = await supabase_client.select(
-                CLIENTS_TABLE,
-                "id,name,default_language,logo_url,brand_color,is_active,client_slug,created_at,updated_at",
-                limit=1,
-                filters={
-                    "api_key_hash": f"eq.{hashed_key}",
-                    "is_active": "eq.true",
-                },
-            )
-            client = _client_from_row(rows[0]) if rows else None
-
-        if not client:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid API key or client is inactive"
-            )
-        return client
-
-    # Try JWT authentication (frontend UI/dashboard)
+    # Try JWT authentication first (Authorization header)
     if authorization and authorization.startswith("Bearer "):
-        token = authorization.replace("Bearer ", "", 1)
+        token = authorization.replace("Bearer ", "")
         payload = verify_token(token)
 
         if payload is None:
@@ -166,52 +62,106 @@ async def get_authenticated_client(
                 detail="Invalid or expired token"
             )
 
-        client_id = payload.get("client_id")
-        if not client_id:
+        tenant_id = payload.get("tenant_id")
+        if not tenant_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload"
             )
-        try:
-            client_pk = int(client_id)
-        except ValueError as exc:
+
+        # Look up tenant by ID from JWT
+        query = select(Tenant).where(
+            Tenant.id == tenant_id,
+            Tenant.status == "active",
+            Tenant.deleted_at.is_(None)
+        )
+        result = await db.execute(query)
+        tenant = result.scalar_one_or_none()
+
+        if not tenant:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid client ID in token"
-            ) from exc
-
-        client = None
-        if db is not None:
-            query = select(Client).where(
-                Client.id == client_pk,
-                Client.is_active == True
+                detail="Tenant not found or not active"
             )
-            result = await db.execute(query)
-            client = result.scalar_one_or_none()
-        elif supabase_client.configured:
-            rows = await supabase_client.select(
-                CLIENTS_TABLE,
-                "id,name,default_language,logo_url,brand_color,is_active,client_slug,created_at,updated_at",
-                limit=1,
-                filters={
-                    "id": f"eq.{client_pk}",
-                    "is_active": "eq.true",
-                },
-            )
-            client = _client_from_row(rows[0]) if rows else None
 
-        if not client:
+        return tenant
+
+    # Try API key authentication (X-API-Key header)
+    if x_api_key:
+        # Hash the provided API key
+        api_key_hash = Tenant.hash_api_key(x_api_key)
+
+        # Look up tenant by hashed API key
+        query = select(Tenant).where(
+            Tenant.api_key_hash == api_key_hash,
+            Tenant.status == "active",
+            Tenant.deleted_at.is_(None)
+        )
+        result = await db.execute(query)
+        tenant = result.scalar_one_or_none()
+
+        if not tenant:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Client not found or not active"
+                detail="Invalid API key or tenant not active"
             )
 
-        return client
+        return tenant
 
     # No authentication provided
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Missing authentication. Provide X-API-Key, or Authorization Bearer token"
+        detail="Missing authentication. Provide X-API-Key or Authorization Bearer token"
+    )
+
+
+async def require_admin_access(
+    request: Request,
+    x_admin_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None)
+) -> bool:
+    """
+    Require admin key for admin-only endpoints.
+
+    Accepts either:
+    - X-Admin-Key: <secret>
+    - Authorization: Bearer <secret>
+    """
+    # Legacy header support (x-admin-key / bearer secret)
+    if x_admin_key and x_admin_key == settings.secret_key:
+        return True
+
+    bearer_token = None
+    if authorization and authorization.startswith("Bearer "):
+        bearer_token = authorization.replace("Bearer ", "").strip()
+
+    if bearer_token:
+        # Backward-compatible admin secret as bearer token
+        if bearer_token == settings.secret_key:
+            return True
+
+        payload = verify_token(bearer_token)
+        if (
+            payload
+            and payload.get("type") == "admin_access"
+            and payload.get("role") in {"admin", "super_admin"}
+        ):
+            return True
+
+    # Cookie-based admin portal session
+    cookie_token = request.cookies.get("admin_access_token")
+    if cookie_token:
+        payload = verify_token(cookie_token)
+        if (
+            payload
+            and payload.get("type") == "admin_access"
+            and payload.get("role") in {"admin", "super_admin"}
+        ):
+            return True
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Admin authentication required"
     )
 
 
@@ -237,56 +187,6 @@ async def get_current_user(
     """Get current authenticated user."""
     # In production, fetch user info from API key
     return api_key
-
-
-async def get_authenticated_admin(
-    authorization: Optional[str] = Header(None),
-) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing admin authentication token",
-        )
-
-    access_token = authorization.replace("Bearer ", "", 1)
-
-    try:
-        auth_user = await supabase_client.get_auth_user(access_token)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired admin session",
-        ) from exc
-
-    user_id = auth_user.get("id")
-    email = auth_user.get("email")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Admin session is missing a user id",
-        )
-
-    rows = await supabase_client.select(
-        ADMINS_TABLE,
-        "id,supabase_uid,email,name,is_active,created_at,updated_at",
-        limit=1,
-        filters={"supabase_uid": f"eq.{user_id}", "is_active": "eq.true"},
-    )
-    if not rows and email:
-        rows = await supabase_client.select(
-            ADMINS_TABLE,
-            "id,supabase_uid,email,name,is_active,created_at,updated_at",
-            limit=1,
-            filters={"email": f"eq.{email}", "is_active": "eq.true"},
-        )
-
-    if not rows:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This account is not authorized as an admin",
-        )
-
-    return rows[0]
 
 
 class RateLimiter:

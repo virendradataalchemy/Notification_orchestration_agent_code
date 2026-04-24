@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Status</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --text: #10213a;
+            --muted: #5a6a82;
+            --brand: #0f766e;
+            --accent: #2563eb;
+            --border: #d6dfec;
+            --radius: 15px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 8% 8%, #dbf8f1 0%, transparent 28%),
+                radial-gradient(circle at 91% 11%, #dbeafe 0%, transparent 30%),
+                linear-gradient(180deg, #fbfdff 0%, var(--bg) 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1040px;
+            margin: 0 auto;
+            padding: 24px 18px 40px;
+        }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            gap: 12px;
+        }
+
+        .title {
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .top nav a {
+            text-decoration: none;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+            margin-left: 10px;
+            padding: 8px 10px;
+            border-radius: 9px;
+        }
+
+        .top nav a:hover {
+            background: #fff;
+            border: 1px solid var(--border);
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #ffffff 0%, #f3f8ff 100%);
+            border: 1px solid var(--border);
+            border-radius: calc(var(--radius) + 2px);
+            padding: 22px;
+            margin-bottom: 14px;
+            box-shadow: 0 12px 30px rgba(16, 33, 58, 0.1);
+        }
+
+        .hero h1 {
+            font-size: 31px;
+            margin-bottom: 6px;
+        }
+
+        .hero p {
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        .btn {
+            border: none;
+            background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
+            color: #fff;
+            padding: 11px 14px;
+            border-radius: 10px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .last-updated {
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px;
+        }
+
+        .card h3 {
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+
+        .row {
+            font-size: 14px;
+            color: #2e3f57;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 4px 9px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .ok { background: #dff8ea; color: #136b3a; }
+        .warn { background: #fff4d7; color: #965b00; }
+        .bad { background: #ffe3e3; color: #a30e0e; }
+
+        .meta {
+            margin-top: 12px;
+            background: #edf5ff;
+            border: 1px solid #c8dbff;
+            border-radius: 11px;
+            padding: 10px 12px;
+            color: #274172;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        code {
+            background: #dde7f7;
+            border-radius: 5px;
+            padding: 2px 6px;
+        }
+
+        @media (max-width: 720px) {
+            .hero h1 { font-size: 26px; }
+            .top { align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="top">
+            <div class="title">Notification Platform</div>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/channels">Channels</a>
+                <a href="/portal/login">Portal</a>
+                <a href="/api/v1/docs">API Docs</a>
+            </nav>
+        </header>
+
+        <section class="hero">
+            <h1>System Status</h1>
+            <p>Live dependency health from <code>/health</code>. Use this before high-volume sends.</p>
+            <button class="btn" onclick="loadStatus()">Refresh Status</button>
+            <div class="last-updated" id="lastUpdated">Last updated: -</div>
+        </section>
+
+        <section class="grid">
+            <article class="card">
+                <h3>Overall</h3>
+                <div class="row" id="overall">Loading...</div>
+            </article>
+            <article class="card">
+                <h3>Database</h3>
+                <div class="row" id="dbStatus">Loading...</div>
+            </article>
+            <article class="card">
+                <h3>Redis</h3>
+                <div class="row" id="redisStatus">Loading...</div>
+            </article>
+            <article class="card">
+                <h3>Version</h3>
+                <div class="row" id="version">-</div>
+            </article>
+        </section>
+
+        <div class="meta">This page is tenant-facing operational context only; provider internals are abstracted by platform routing.</div>
+    </div>
+
+    <script>
+        function badge(text) {
+            const t = String(text || "").toLowerCase();
+            if (t.startsWith("healthy")) return '<span class="pill ok">' + text + '</span>';
+            if (t.startsWith("degraded")) return '<span class="pill warn">' + text + '</span>';
+            return '<span class="pill bad">' + text + '</span>';
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch('/health');
+                const data = await res.json();
+
+                document.getElementById('overall').innerHTML = badge(data.status || 'unknown');
+                document.getElementById('dbStatus').innerHTML = badge((data.services || {}).database || 'unknown');
+                document.getElementById('redisStatus').innerHTML = badge((data.services || {}).redis || 'unknown');
+                document.getElementById('version').textContent = data.version || '-';
+                document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleString();
+            } catch (e) {
+                document.getElementById('overall').innerHTML = '<span class="pill bad">unreachable</span>';
+                document.getElementById('dbStatus').textContent = 'Could not load';
+                document.getElementById('redisStatus').textContent = 'Could not load';
+                document.getElementById('version').textContent = '-';
+            }
+        }
+
+        loadStatus();
+    </script>
+</body>
+</html>

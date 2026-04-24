@@ -1,5 +1,6 @@
+from .notification_service import NotificationService
 from .template_engine import TemplateEngine
-from .client_template_engine import ClientTemplateEngine
+from .tenant_template_engine import TenantTemplateEngine
 from .router import MessageRouter
 
-__all__ = ["TemplateEngine", "ClientTemplateEngine", "MessageRouter"]
+__all__ = ["NotificationService", "TemplateEngine", "TenantTemplateEngine", "MessageRouter"]

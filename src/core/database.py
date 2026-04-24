@@ -1,26 +1,40 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import sessionmaker
 from typing import AsyncGenerator
-from src.core.supabase import supabase_client
+from src.config import settings
+from src.models.base import Base
 
-engine = None
-AsyncSessionLocal = None
+# Create async engine
+engine = create_async_engine(
+    settings.database_url,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+    echo=settings.debug,
+)
+
+# Create async session factory
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Direct SQL sessions are disabled; the app runs in Supabase REST mode."""
-    raise RuntimeError("Direct database sessions are disabled. This app runs against Supabase REST only.")
-    yield  # pragma: no cover
-
-
-async def get_db_optional() -> AsyncGenerator[AsyncSession | None, None]:
-    """Yield None because direct SQL mode is intentionally disabled."""
-    yield None
+    """Dependency to get database session."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 
 async def init_db():
-    """Verify Supabase REST connectivity without mutating schema."""
-    if not supabase_client.configured:
-        raise RuntimeError(
-            "Supabase REST is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
-        )
-    await supabase_client.health_check()
+    """Initialize database tables."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)

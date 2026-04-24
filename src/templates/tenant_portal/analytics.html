@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Analytics</title>
+    <link rel="stylesheet" href="/portal/assets/portal_shared.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: #f5f7fa; color: #222; }
+        .controls { background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
+        .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+        .card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+        .card .label { font-size: 12px; color: #666; }
+        .card .value { font-size: 28px; font-weight: 700; margin-top: 6px; color: #667eea; }
+        .panel { padding: 18px; margin-bottom: 16px; }
+        th, td { padding: 8px; border-bottom: 1px solid #edf0f4; }
+        @media (max-width: 1000px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<nav class="navbar">
+    <div class="navbar-content">
+        <a class="navbar-brand" href="#">Tenant Portal</a>
+        <div class="navbar-user">
+            <div class="navbar-links">
+                <a id="navDashboard" href="#">Dashboard</a>
+                <a id="navTemplates" href="#">Templates</a>
+                <a id="navAnalytics" href="#"><strong>Analytics</strong></a>
+                <a id="navChannels" href="#">Channels</a>
+                <a id="navDeveloper" href="#">Developer</a>
+                <a id="navProfile" href="#">Profile</a>
+            </div>
+            <div class="user-info">
+                <div class="user-name" id="tenantName"></div>
+                <div class="user-tenant" id="tenantIdLabel"></div>
+            </div>
+            <button class="btn-logout" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="controls">
+        <label for="days">Time Window</label>
+        <select id="days">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+        </select>
+        <button id="refreshBtn">Refresh</button>
+    </div>
+
+    <div class="cards">
+        <div class="card"><div class="label">Total Channel Attempts</div><div class="value" id="kpiTotal">-</div></div>
+        <div class="card"><div class="label">Success Rate</div><div class="value" id="kpiSuccess">-</div></div>
+        <div class="card"><div class="label">Delivered</div><div class="value" id="kpiDelivered">-</div></div>
+        <div class="card"><div class="label">Failed</div><div class="value" id="kpiFailed">-</div></div>
+    </div>
+
+    <div class="panel">
+        <h3>Channel Performance</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Channel</th>
+                    <th>Total</th>
+                    <th>Queued</th>
+                    <th>Sent</th>
+                    <th>Delivered</th>
+                    <th>Failed</th>
+                    <th>Success %</th>
+                </tr>
+            </thead>
+            <tbody id="channelRows"></tbody>
+        </table>
+    </div>
+
+    <div class="panel">
+        <h3>Provider Health (Tenant Scope)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Channel</th>
+                    <th>Provider</th>
+                    <th>Total Sent</th>
+                    <th>Success Rate</th>
+                    <th>Healthy</th>
+                </tr>
+            </thead>
+            <tbody id="providerRows"></tbody>
+        </table>
+    </div>
+
+    <div id="statusMsg" class="status"></div>
+</div>
+
+<script>
+    const pathParts = window.location.pathname.split('/');
+    const tenantId = pathParts[2];
+    const token = localStorage.getItem('tenant_access_token');
+    const loggedTenantId = localStorage.getItem('tenant_id');
+    const expiresRaw = localStorage.getItem('token_expires_at');
+
+    function clearAuth() {
+        localStorage.removeItem('tenant_access_token');
+        localStorage.removeItem('tenant_id');
+        localStorage.removeItem('tenant_name');
+        localStorage.removeItem('token_expires_at');
+        document.cookie = 'tenant_access_token=; path=/; max-age=0; SameSite=Lax';
+    }
+
+    if (!token || !loggedTenantId || !expiresRaw || Date.now() >= Number(expiresRaw)) {
+        clearAuth();
+        window.location.href = '/portal/login';
+    } else if (loggedTenantId !== tenantId) {
+        window.location.href = '/portal/' + loggedTenantId + '/analytics';
+    }
+
+    function wireNav() {
+        document.querySelector('.navbar-brand').href = '/portal/' + tenantId + '/dashboard';
+        document.getElementById('navDashboard').href = '/portal/' + tenantId + '/dashboard';
+        document.getElementById('navTemplates').href = '/portal/' + tenantId + '/templates';
+        document.getElementById('navAnalytics').href = '/portal/' + tenantId + '/analytics';
+        document.getElementById('navChannels').href = '/portal/' + tenantId + '/channels';
+        document.getElementById('navDeveloper').href = '/portal/' + tenantId + '/developer';
+        document.getElementById('navProfile').href = '/portal/' + tenantId + '/profile';
+    }
+
+    function setTenantIdentity() {
+        document.getElementById('tenantName').textContent = localStorage.getItem('tenant_name') || tenantId;
+        document.getElementById('tenantIdLabel').textContent = tenantId;
+    }
+
+    async function logout() {
+        try { await fetch('/api/v1/tenant/auth/logout', { method: 'POST' }); } catch (_) {}
+        clearAuth();
+        window.location.href = '/portal/login';
+    }
+
+    function setStatus(msg, isError=false) {
+        const el = document.getElementById('statusMsg');
+        el.textContent = msg || '';
+        el.className = 'status' + (isError ? ' error' : '');
+    }
+
+    async function loadAnalytics() {
+        setStatus('Loading analytics...');
+        const days = document.getElementById('days').value;
+
+        const [overviewRes, providerRes] = await Promise.all([
+            fetch(`/api/tenant-dashboard/tenant/${tenantId}/overview?days=${days}`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            }),
+            fetch(`/api/tenant-dashboard/tenant/${tenantId}/provider-health`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+        ]);
+
+        const overview = await overviewRes.json();
+        const provider = await providerRes.json();
+
+        if (!overviewRes.ok) {
+            throw new Error(overview.detail || 'Failed to load overview');
+        }
+        if (!providerRes.ok) {
+            throw new Error(provider.detail || 'Failed to load provider health');
+        }
+
+        const channels = overview.channels || [];
+        let total = 0, delivered = 0, failed = 0, sent = 0;
+        const rows = channels.map((c) => {
+            total += c.total || 0;
+            delivered += c.delivered || 0;
+            failed += c.failed || 0;
+            sent += c.sent || 0;
+            return '<tr>' +
+                `<td>${c.channel}</td>` +
+                `<td>${c.total || 0}</td>` +
+                `<td>${c.queued || 0}</td>` +
+                `<td>${c.sent || 0}</td>` +
+                `<td>${c.delivered || 0}</td>` +
+                `<td>${c.failed || 0}</td>` +
+                `<td>${c.success_rate || 0}%</td>` +
+                '</tr>';
+        }).join('');
+
+        document.getElementById('channelRows').innerHTML = rows || '<tr><td colspan="7">No channel data.</td></tr>';
+
+        const successPct = total > 0 ? (((sent + delivered) / total) * 100).toFixed(1) : '0.0';
+        document.getElementById('kpiTotal').textContent = String(total);
+        document.getElementById('kpiSuccess').textContent = successPct + '%';
+        document.getElementById('kpiDelivered').textContent = String(delivered);
+        document.getElementById('kpiFailed').textContent = String(failed);
+
+        const pRows = (provider.provider_stats || []).map((p) => (
+            '<tr>' +
+            `<td>${p.channel}</td>` +
+            `<td>${p.provider}</td>` +
+            `<td>${p.total_sent}</td>` +
+            `<td>${p.success_rate}%</td>` +
+            `<td>${p.is_healthy ? 'Yes' : 'No'}</td>` +
+            '</tr>'
+        )).join('');
+        document.getElementById('providerRows').innerHTML = pRows || '<tr><td colspan="5">No provider data.</td></tr>';
+
+        setStatus('Analytics updated.');
+    }
+
+    wireNav();
+    setTenantIdentity();
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+        loadAnalytics().catch((e) => setStatus(e.message, true));
+    });
+    document.getElementById('days').addEventListener('change', () => {
+        loadAnalytics().catch((e) => setStatus(e.message, true));
+    });
+    loadAnalytics().catch((e) => setStatus(e.message, true));
+</script>
+</body>
+</html>

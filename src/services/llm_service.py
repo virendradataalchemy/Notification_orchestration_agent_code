@@ -17,19 +17,13 @@ class BedrockLLMService:
     """LLM service using AWS Bedrock Qwen model for routing decisions."""
 
     def __init__(self):
-        self._client = None  # lazy init - don't crash on startup if AWS not configured
+        self.client = boto3.client(
+            'bedrock-runtime',
+            region_name=settings.aws_region,
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key
+        )
         self.model_id = settings.qwen_model_id
-
-    @property
-    def client(self):
-        if self._client is None:
-            self._client = boto3.client(
-                'bedrock-runtime',
-                region_name=settings.aws_region,
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key
-            )
-        return self._client
 
     async def make_routing_decision(
         self,
@@ -221,6 +215,87 @@ Respond ONLY with valid JSON (no markdown, no extra text):
             'reasoning': f'Fallback rule-based routing for {priority} priority'
         }
 
+    async def classify_inbound_intent(self, parsed_content: str) -> Dict[str, Any]:
+        """
+        Layer 2: Fallback LLM Classification for inbound intents.
+        Used when deterministic rules fail to confidently identify an intent.
+        
+        Returns:
+            {
+                'intent': 'accept|reject|request|query',
+                'confidence': float,
+                'rationale': str
+            }
+        """
+        prompt = f"""You are a smart assistant classifying a reply from a candidate.
+
+Message Content:
+"{parsed_content[:800]}"
+
+Classify the intent of this message into EXACTLY ONE of the following categories:
+- accept: The candidate is agreeing, confirming, or saying yes.
+- reject: The candidate is declining, saying no, or asking to stop.
+- request: The candidate is asking for an action (e.g., reschedule, send info, update details).
+- query: The candidate is asking a question or seeking clarification.
+
+Respond ONLY with valid JSON in this exact format (no markdown tags):
+{{
+    "intent": "accept|reject|request|query|unknown",
+    "confidence": 0.0 to 1.0,
+    "rationale": "Brief 1-sentence explanation of why"
+}}"""
+
+        try:
+            response = await asyncio.to_thread(
+                self.client.invoke_model,
+                modelId=self.model_id,
+                contentType='application/json',
+                accept='application/json',
+                body=json.dumps({
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'max_tokens': 150,
+                    'temperature': 0.1,  # low temp for classification
+                })
+            )
+
+            result = json.loads(response['body'].read())
+            
+            # Extract content from Qwen format
+            content = "{}"
+            if 'choices' in result:
+                content = result['choices'][0]['message'].get('content', '{}')
+            elif 'content' in result:
+                content = result['content'][0].get('text', '{}')
+            elif 'completion' in result:
+                content = result['completion']
+                
+            clean_content = re.sub(r'```json\s?|\s?```', '', content).strip()
+            
+            start = clean_content.find('{')
+            end = clean_content.rfind('}') + 1
+            if start == -1 or end == 0:
+                raise ValueError("No JSON found")
+
+            decision = json.loads(clean_content[start:end])
+            
+            intent = decision.get("intent", "unknown").lower()
+            if intent not in ["accept", "reject", "request", "query"]:
+                intent = "unknown"
+                
+            return {
+                "intent": intent,
+                "confidence": float(decision.get("confidence", 0.5)),
+                "rationale": decision.get("rationale", "LLM parsed response")
+            }
+
+        except Exception as e:
+            logger.error(f"LLM Intent Classification failed: {e}")
+            return {
+                "intent": "unknown",
+                "confidence": 0.0,
+                "rationale": f"LLM Error: {str(e)}"
+            }
+
     async def analyze_content_urgency(self, content: str) -> str:
         """
         Analyze notification content to determine urgency level.
@@ -241,8 +316,7 @@ Low: Marketing, promotional content
 Respond with ONLY the urgency level (one word)."""
 
         try:
-            response = await asyncio.to_thread(
-                self.client.invoke_model,
+            response = self.client.invoke_model(
                 modelId=self.model_id,
                 contentType='application/json',
                 accept='application/json',
@@ -255,9 +329,7 @@ Respond with ONLY the urgency level (one word)."""
 
             result = json.loads(response['body'].read())
 
-            if 'choices' in result:
-                urgency = result['choices'][0]['message'].get('content', 'medium').strip().lower()
-            elif 'content' in result:
+            if 'content' in result:
                 urgency = result['content'][0].get('text', 'medium').strip().lower()
             elif 'completion' in result:
                 urgency = result['completion'].strip().lower()
@@ -271,304 +343,3 @@ Respond with ONLY the urgency level (one word)."""
         except Exception as e:
             logger.error(f"Failed to analyze urgency: {e}")
             return 'medium'
-
-    async def select_template(
-        self,
-        message_content: str,
-        client_id: int,
-        templates: list[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """
-        Use LLM to select the most appropriate template for the message.
-
-        Args:
-            message_content: The message content to analyze
-            client_id: Client ID for context
-            templates: List of available templates with metadata
-
-        Returns:
-            {
-                'template_id': int,
-                'confidence_score': float,
-                'reasoning': str
-            }
-        """
-        if not templates:
-            return {
-                'template_id': None,
-                'confidence_score': 0.0,
-                'reasoning': 'No templates available, will use raw content'
-            }
-
-        # Build template descriptions for LLM
-        template_descriptions = []
-        for tmpl in templates:
-            desc = f"ID: {tmpl['id']}, Name: {tmpl.get('name', 'Unnamed')}, Type: {tmpl.get('notification_type', 'general')}"
-            if tmpl.get('description'):
-                desc += f", Description: {tmpl['description']}"
-            template_descriptions.append(desc)
-
-        prompt = f"""You are a template selection agent. Analyze the message content and select the most appropriate template.
-
-Message Content: {message_content[:500]}
-
-Available Templates:
-{chr(10).join(f"{i+1}. {desc}" for i, desc in enumerate(template_descriptions))}
-
-Select the template that best matches the message content, type, and purpose.
-
-Respond ONLY with valid JSON (no markdown, no extra text):
-{{
-    "template_id": <selected template ID>,
-    "confidence_score": <0.0 to 1.0>,
-    "reasoning": "brief explanation of why this template was selected"
-}}"""
-
-        try:
-            response = await asyncio.to_thread(
-                self.client.invoke_model,
-                modelId=self.model_id,
-                contentType='application/json',
-                accept='application/json',
-                body=json.dumps({
-                    'messages': [{'role': 'user', 'content': prompt}],
-                    'max_tokens': 300,
-                    'temperature': 0.3,
-                })
-            )
-
-            result = json.loads(response['body'].read())
-            selection = self._parse_template_selection(result, templates)
-
-            logger.info(f"LLM template selection: {selection['template_id']} - {selection['reasoning']}")
-            return selection
-
-        except Exception as e:
-            logger.error(f"LLM template selection failed: {e}, using fallback")
-            return self._fallback_template_selection(message_content, templates)
-
-    def _parse_template_selection(self, response_body: Dict, templates: list) -> Dict[str, Any]:
-        """Parse LLM template selection response."""
-        try:
-            content = "{}"
-            if 'choices' in response_body:
-                content = response_body['choices'][0]['message'].get('content', '{}')
-            elif 'content' in response_body:
-                content = response_body['content'][0].get('text', '{}')
-            elif 'completion' in response_body:
-                content = response_body['completion']
-
-            clean_content = re.sub(r'```json\s?|\s?```', '', content).strip()
-            start = clean_content.find('{')
-            end = clean_content.rfind('}') + 1
-
-            if start == -1 or end == 0:
-                return self._fallback_template_selection("", templates)
-
-            json_str = clean_content[start:end]
-            selection = json.loads(json_str)
-
-            # Validate template_id exists
-            template_ids = [t['id'] for t in templates]
-            if selection.get('template_id') not in template_ids:
-                return self._fallback_template_selection("", templates)
-
-            return {
-                'template_id': selection.get('template_id'),
-                'confidence_score': selection.get('confidence_score', 0.7),
-                'reasoning': selection.get('reasoning', 'LLM selected template')
-            }
-
-        except Exception as e:
-            logger.error(f"Template selection parsing error: {e}")
-            return self._fallback_template_selection("", templates)
-
-    def _fallback_template_selection(self, message_content: str, templates: list) -> Dict[str, Any]:
-        """Fallback rule-based template selection."""
-        if not templates:
-            return {
-                'template_id': None,
-                'confidence_score': 0.0,
-                'reasoning': 'No templates available'
-            }
-
-        # Simple fallback: select first template or match by type
-        selected = templates[0]
-        return {
-            'template_id': selected['id'],
-            'confidence_score': 0.5,
-            'reasoning': 'Fallback rule-based selection (first available template)'
-        }
-
-    async def determine_channel_priority(
-        self,
-        message_content: str,
-        urgency: str,
-        user_context: Dict[str, Any],
-        template_info: Dict[str, Any],
-        provider_health: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Use LLM to determine optimal channel priority order.
-
-        Args:
-            message_content: The notification message content
-            urgency: Urgency level (critical/high/medium/low)
-            user_context: User preferences and engagement history
-            template_info: Selected template information
-            provider_health: Current health status of providers
-
-        Returns:
-            {
-                'priority_order': ['sms', 'push', 'email', ...],
-                'timing': 'immediate|scheduled',
-                'scheduled_time': <timestamp or None>,
-                'reasoning': 'explanation of priority order'
-            }
-        """
-        # Critical priority override
-        if urgency == 'critical':
-            return {
-                'priority_order': ['sms', 'push', 'voice'],
-                'timing': 'immediate',
-                'scheduled_time': None,
-                'reasoning': 'Critical urgency requires fastest, most reliable channels (SMS, Push, Voice)'
-            }
-
-        # Check quiet hours
-        is_quiet = user_context.get('is_quiet_hours', False)
-        if is_quiet and urgency not in ['critical', 'high']:
-            client_channels = user_context.get('client_preferred_channels', [])
-            quiet_channels = client_channels if client_channels else ['email', 'inapp']
-            return {
-                'priority_order': quiet_channels,
-                'timing': 'scheduled',
-                'scheduled_time': user_context.get('optimal_send_time'),
-                'reasoning': 'Client in quiet hours, using client preferred channels for non-intrusive delivery'
-            }
-
-        prompt = f"""You are a channel priority agent. Determine the optimal order of notification channels.
-
-Message Content: {message_content[:300]}
-Urgency: {urgency}
-
-Client Preferred Channels (set by the company): {user_context.get('client_preferred_channels', [])}
-
-User Context:
-- User Preferred Channels: {user_context.get('preferred_channels', {})}
-- Success Rates by Channel: {user_context.get('success_rates', {})}
-- Timezone: {user_context.get('timezone', 'UTC')}
-- Quiet Hours: {user_context.get('quiet_hours', {})}
-
-Template Info:
-- Type: {template_info.get('notification_type', 'general')}
-- Channels: {template_info.get('supported_channels', ['email', 'sms', 'push'])}
-
-Provider Health:
-- Email: {provider_health.get('email', {}).get('is_healthy', True)}
-- SMS: {provider_health.get('sms', {}).get('is_healthy', True)}
-- Push: {provider_health.get('push', {}).get('is_healthy', True)}
-- WhatsApp: {provider_health.get('whatsapp', {}).get('is_healthy', True)}
-- Slack: {provider_health.get('slack', {}).get('is_healthy', True)}
-
-Rules:
-1. HIGHEST PRIORITY: If client has set preferred channels, use those first
-2. If user also has preferred channels, combine with client preferences
-3. HIGH urgency: Prioritize preferred channels if healthy
-4. MEDIUM/LOW urgency: Optimize for cost and preferences
-5. Only include healthy providers
-6. If no preferences set, fall back to urgency-based defaults
-
-Respond ONLY with valid JSON (no markdown, no extra text):
-{{
-    "priority_order": ["channel1", "channel2", "channel3"],
-    "timing": "immediate|scheduled",
-    "scheduled_time": null,
-    "reasoning": "brief explanation of priority order"
-}}"""
-
-        try:
-            response = await asyncio.to_thread(
-                self.client.invoke_model,
-                modelId=self.model_id,
-                contentType='application/json',
-                accept='application/json',
-                body=json.dumps({
-                    'messages': [{'role': 'user', 'content': prompt}],
-                    'max_tokens': 400,
-                    'temperature': 0.3,
-                })
-            )
-
-            result = json.loads(response['body'].read())
-            priority = self._parse_priority_response(result, urgency)
-
-            logger.info(f"LLM priority determination: {priority['priority_order']} - {priority['reasoning']}")
-            return priority
-
-        except Exception as e:
-            logger.error(f"LLM priority determination failed: {e}, using fallback")
-            return self._fallback_priority(urgency, user_context, provider_health)
-
-    def _parse_priority_response(self, response_body: Dict, urgency: str) -> Dict[str, Any]:
-        """Parse LLM priority determination response."""
-        try:
-            content = "{}"
-            if 'choices' in response_body:
-                content = response_body['choices'][0]['message'].get('content', '{}')
-            elif 'content' in response_body:
-                content = response_body['content'][0].get('text', '{}')
-            elif 'completion' in response_body:
-                content = response_body['completion']
-
-            clean_content = re.sub(r'```json\s?|\s?```', '', content).strip()
-            start = clean_content.find('{')
-            end = clean_content.rfind('}') + 1
-
-            if start == -1 or end == 0:
-                return self._fallback_priority(urgency, {}, {})
-
-            json_str = clean_content[start:end]
-            priority = json.loads(json_str)
-
-            return {
-                'priority_order': priority.get('priority_order', ['email', 'push']),
-                'timing': priority.get('timing', 'immediate'),
-                'scheduled_time': priority.get('scheduled_time'),
-                'reasoning': priority.get('reasoning', 'LLM determined priority order')
-            }
-
-        except Exception as e:
-            logger.error(f"Priority parsing error: {e}")
-            return self._fallback_priority(urgency, {}, {})
-
-    def _fallback_priority(
-        self,
-        urgency: str,
-        user_context: Dict[str, Any],
-        provider_health: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Fallback rule-based priority determination."""
-        # Respect client preferred channels first, even in fallback
-        client_channels = user_context.get('client_preferred_channels', [])
-        if client_channels:
-            return {
-                'priority_order': client_channels,
-                'timing': 'immediate' if urgency in ['critical', 'high'] else 'scheduled',
-                'scheduled_time': None,
-                'reasoning': f'Fallback using client preferred channels for {urgency} urgency'
-            }
-
-        priority_map = {
-            'critical': ['sms', 'push', 'voice'],
-            'high': ['push', 'sms', 'email'],
-            'medium': ['email', 'push', 'sms'],
-            'low': ['email', 'inapp']
-        }
-
-        return {
-            'priority_order': priority_map.get(urgency, ['email', 'push']),
-            'timing': 'immediate' if urgency in ['critical', 'high'] else 'scheduled',
-            'scheduled_time': None,
-            'reasoning': f'Fallback rule-based priority for {urgency} urgency'
-        }

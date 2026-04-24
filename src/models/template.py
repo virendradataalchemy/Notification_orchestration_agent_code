@@ -1,74 +1,44 @@
-from __future__ import annotations
-
-from typing import Optional
-
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from sqlalchemy.orm import relationship
+from datetime import datetime
 from .base import Base
 
 
 class Template(Base):
+    """Notification template table.
+
+    Supports both global templates (tenant_id=NULL) and tenant-specific templates.
+    Tenant-specific templates can override or extend global templates.
+    """
+
     __tablename__ = "templates"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id"), nullable=False, index=True)
-    language: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    subject: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    variable_schema: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    notification_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
-    department: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
-    visibility: Mapped[str] = mapped_column(String(20), nullable=False, default="public", server_default="public", index=True)
-    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
-    updated_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
+    id = Column(String(50), primary_key=True)
+    tenant_id = Column(String(50), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True)
 
-    client = relationship("Client", back_populates="templates")
-    channel_ref = relationship("Channel", back_populates="templates")
-    communications = relationship("Communication", back_populates="template")
-    departments = relationship("TemplateDepartment", back_populates="template", cascade="all, delete-orphan")
+    # Template identification
+    name = Column(String(100), nullable=False)
+    base_template_id = Column(String(50), nullable=True)  # Reference to global template if this is an override
 
-    @property
-    def active(self) -> bool:
-        return self.is_active
+    channel = Column(String(20), nullable=False, index=True)  # email|sms|whatsapp etc.
+    language = Column(String(10), nullable=False, default="en")
+    subject = Column(Text, nullable=True)  # For email
+    body = Column(Text, nullable=False)
+    provider_template_ref = Column(String(255), nullable=True)  # Internal mapping to provider-native template id
+    provider_template_meta = Column(JSONB, nullable=True)  # Extra provider metadata
+    version = Column(Integer, default=1)
+    active = Column(Boolean, default=True, index=True)
+    is_global = Column(Boolean, default=False, index=True)  # True for system templates
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    @active.setter
-    def active(self, value: bool) -> None:
-        self.is_active = value
+    # Relationships
+    tenant = relationship("Tenant", back_populates="templates")
 
-    @property
-    def body(self) -> str:
-        return self.content
+    __table_args__ = (
+        # Ensure template names are unique per tenant (global templates have tenant_id=NULL)
+        UniqueConstraint('tenant_id', 'name', 'channel', 'language', name='uq_tenant_template'),
+    )
 
-    @body.setter
-    def body(self, value: str) -> None:
-        self.content = value
-
-    @property
-    def channel(self) -> Optional[str]:
-        return self.channel_ref.name if self.channel_ref else None
-
-    @property
-    def is_global(self) -> bool:
-        return self.client_id is None
-
-    @property
-    def base_template_id(self) -> Optional[int]:
-        return None
-
-
-class TemplateDepartment(Base):
-    __tablename__ = "template_departments"
-    __table_args__ = (UniqueConstraint("template_id", "department", name="uq_template_departments_template_department"),)
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    template_id: Mapped[int] = mapped_column(ForeignKey("templates.id", ondelete="CASCADE"), nullable=False, index=True)
-    department: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
-
-    template = relationship("Template", back_populates="departments")
+    def __repr__(self):
+        return f"<Template(id={self.id}, tenant_id={self.tenant_id}, name={self.name}, channel={self.channel}, is_global={self.is_global})>"

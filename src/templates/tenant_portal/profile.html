@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Profile</title>
+    <link rel="stylesheet" href="/portal/assets/portal_shared.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; margin: 0; background: #f5f7fa; color: #222; }
+        h1 { margin-top: 0; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        textarea { min-height: 120px; }
+        .actions { margin-top: 16px; }
+    </style>
+</head>
+<body>
+<nav class="navbar">
+    <div class="navbar-content">
+        <a class="navbar-brand" href="#">Tenant Portal</a>
+        <div class="navbar-user">
+            <div class="nav-links">
+                <a id="navDashboard" href="#">Dashboard</a>
+                <a id="navTemplates" href="#">Templates</a>
+                <a id="navAnalytics" href="#">Analytics</a>
+                <a id="navChannels" href="#">Channel Settings</a>
+                <a id="navDeveloper" href="#">Developer Settings</a>
+                <a id="navProfile" href="#"><strong>Profile</strong></a>
+            </div>
+            <div class="user-info">
+                <div class="user-name" id="tenantName"></div>
+                <div class="user-tenant" id="tenantIdLabel"></div>
+            </div>
+            <button class="btn-logout" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="panel">
+    <h1>Organization Profile</h1>
+    <div class="row">
+        <div>
+            <label for="tenantId">Tenant ID</label>
+            <input id="tenantId" disabled>
+        </div>
+        <div>
+            <label for="status">Status</label>
+            <input id="status" disabled>
+        </div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+        <div>
+            <label for="name">Organization Name</label>
+            <input id="name">
+        </div>
+        <div>
+            <label for="adminName">Admin Name</label>
+            <input id="adminName">
+        </div>
+    </div>
+    <div style="margin-top:12px;">
+        <label for="adminEmail">Admin Email</label>
+        <input id="adminEmail" type="email">
+    </div>
+    <div style="margin-top:12px;">
+        <label for="config">Config (JSON object merged into tenant config)</label>
+        <textarea id="config">{}</textarea>
+    </div>
+    <div class="actions">
+        <button id="saveBtn">Save Changes</button>
+    </div>
+    <div id="statusMsg" class="status"></div>
+    </div>
+</div>
+
+<script>
+    const pathParts = window.location.pathname.split('/');
+    const tenantId = pathParts[2];
+    const token = localStorage.getItem('tenant_access_token');
+    const loggedTenantId = localStorage.getItem('tenant_id');
+    const expiresRaw = localStorage.getItem('token_expires_at');
+
+    function clearAuth() {
+        localStorage.removeItem('tenant_access_token');
+        localStorage.removeItem('tenant_id');
+        localStorage.removeItem('tenant_name');
+        localStorage.removeItem('token_expires_at');
+        document.cookie = 'tenant_access_token=; path=/; max-age=0; SameSite=Lax';
+    }
+
+    if (!token || !loggedTenantId || !expiresRaw || Date.now() >= Number(expiresRaw)) {
+        clearAuth();
+        window.location.href = '/portal/login';
+    } else if (loggedTenantId !== tenantId) {
+        window.location.href = '/portal/' + loggedTenantId + '/profile';
+    }
+
+    function wireNav() {
+        document.querySelector('.navbar-brand').href = '/portal/' + tenantId + '/dashboard';
+        document.getElementById('navDashboard').href = '/portal/' + tenantId + '/dashboard';
+        document.getElementById('navTemplates').href = '/portal/' + tenantId + '/templates';
+        document.getElementById('navAnalytics').href = '/portal/' + tenantId + '/analytics';
+        document.getElementById('navChannels').href = '/portal/' + tenantId + '/channels';
+        document.getElementById('navDeveloper').href = '/portal/' + tenantId + '/developer';
+        document.getElementById('navProfile').href = '/portal/' + tenantId + '/profile';
+    }
+
+    function setTenantIdentity() {
+        document.getElementById('tenantName').textContent = localStorage.getItem('tenant_name') || tenantId;
+        document.getElementById('tenantIdLabel').textContent = tenantId;
+    }
+
+    async function logout() {
+        try { await fetch('/api/v1/tenant/auth/logout', { method: 'POST' }); } catch (_) {}
+        clearAuth();
+        window.location.href = '/portal/login';
+    }
+
+    async function loadProfile() {
+        const res = await fetch('/api/v1/tenant/settings/profile', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load profile');
+
+        document.getElementById('tenantId').value = data.tenant_id || '';
+        document.getElementById('status').value = data.status || '';
+        document.getElementById('name').value = data.name || '';
+        document.getElementById('adminName').value = data.admin_name || '';
+        document.getElementById('adminEmail').value = data.admin_email || '';
+        document.getElementById('config').value = JSON.stringify(data.config || {}, null, 2);
+    }
+
+    async function saveProfile() {
+        const msg = document.getElementById('statusMsg');
+        msg.textContent = '';
+        msg.className = 'status';
+
+        let configObj = {};
+        try {
+            configObj = JSON.parse(document.getElementById('config').value || '{}');
+        } catch (_) {
+            msg.textContent = 'Config must be valid JSON.';
+            msg.className = 'status error';
+            return;
+        }
+
+        const payload = {
+            name: document.getElementById('name').value,
+            admin_name: document.getElementById('adminName').value,
+            admin_email: document.getElementById('adminEmail').value,
+            config: configObj
+        };
+
+        const res = await fetch('/api/v1/tenant/settings/profile', {
+            method: 'PATCH',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            msg.textContent = data.detail || 'Failed to save profile';
+            msg.className = 'status error';
+            return;
+        }
+        msg.textContent = 'Profile updated.';
+    }
+
+    wireNav();
+    setTenantIdentity();
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+    document.getElementById('saveBtn').addEventListener('click', saveProfile);
+    loadProfile().catch((e) => {
+        const msg = document.getElementById('statusMsg');
+        msg.textContent = e.message;
+        msg.className = 'status error';
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Channel Settings</title>
+    <link rel="stylesheet" href="/portal/assets/portal_shared.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; margin: 0; background: #f5f7fa; color: #222; }
+        table { margin-top: 16px; }
+        button { margin-top: 16px; }
+    </style>
+</head>
+<body>
+<nav class="navbar">
+    <div class="navbar-content">
+        <a class="navbar-brand" href="#">Tenant Portal</a>
+        <div class="navbar-user">
+            <div class="nav-links">
+                <a id="navDashboard" href="#">Dashboard</a>
+                <a id="navTemplates" href="#">Templates</a>
+                <a id="navAnalytics" href="#">Analytics</a>
+                <a id="navChannels" href="#"><strong>Channel Settings</strong></a>
+                <a id="navDeveloper" href="#">Developer Settings</a>
+                <a id="navProfile" href="#">Profile</a>
+            </div>
+            <div class="user-info">
+                <div class="user-name" id="tenantName"></div>
+                <div class="user-tenant" id="tenantIdLabel"></div>
+            </div>
+            <button class="btn-logout" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="panel">
+    <h1>Channel Configuration</h1>
+    <p>Enable or disable delivery channels for your tenant.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Channel</th>
+                <th>Enabled</th>
+                <th>Availability</th>
+            </tr>
+        </thead>
+        <tbody id="channelRows"></tbody>
+    </table>
+
+    <button id="saveBtn">Save Preferences</button>
+    <hr style="margin: 24px 0;">
+    <h2>Default Channel Priority</h2>
+    <p style="font-size: 13px; color: #666; margin-top: 8px;">
+        Used when API requests do not provide <code>notification.channels</code>.
+    </p>
+    <p style="font-size: 12px; color: #666; margin-top: 6px;">
+        Only enabled channels appear in this priority list.
+    </p>
+    <p style="font-size: 12px; color: #666; margin-top: 8px;">
+        Highest channel in list is first preference. Use arrows to reorder.
+    </p>
+    <div id="priorityControls" style="display:flex; flex-direction:column; gap:8px; margin-top:12px;"></div>
+    <button id="savePriorityBtn">Save Default Priority</button>
+    <hr style="margin: 24px 0;">
+    <h2>Default Delivery Mode</h2>
+    <p style="font-size: 13px; color: #666; margin-top: 8px;">
+        Used when API requests do not provide <code>notification.delivery_mode</code>.
+    </p>
+    <div style="margin-top: 12px; max-width: 420px;">
+        <label for="defaultDeliveryMode">Delivery Mode</label>
+        <select id="defaultDeliveryMode">
+            <option value="parallel_all">Parallel (all selected channels)</option>
+            <option value="sequential_failover">Sequential failover (stop on first success)</option>
+        </select>
+    </div>
+    <button id="saveDeliveryModeBtn">Save Default Delivery Mode</button>
+    <div id="statusMsg" class="status"></div>
+    </div>
+</div>
+
+<script>
+    const pathParts = window.location.pathname.split('/');
+    const tenantId = pathParts[2];
+    const token = localStorage.getItem('tenant_access_token');
+    const loggedTenantId = localStorage.getItem('tenant_id');
+    const expiresRaw = localStorage.getItem('token_expires_at');
+    const supportedChannels = ["email", "sms", "whatsapp", "slack", "push", "voice", "inapp"];
+    let activeChannels = [];
+
+    function clearAuth() {
+        localStorage.removeItem('tenant_access_token');
+        localStorage.removeItem('tenant_id');
+        localStorage.removeItem('tenant_name');
+        localStorage.removeItem('token_expires_at');
+        document.cookie = 'tenant_access_token=; path=/; max-age=0; SameSite=Lax';
+    }
+
+    if (!token || !loggedTenantId || !expiresRaw || Date.now() >= Number(expiresRaw)) {
+        clearAuth();
+        window.location.href = '/portal/login';
+    } else if (loggedTenantId !== tenantId) {
+        window.location.href = '/portal/' + loggedTenantId + '/channels';
+    }
+
+    function wireNav() {
+        document.querySelector('.navbar-brand').href = '/portal/' + tenantId + '/dashboard';
+        document.getElementById('navDashboard').href = '/portal/' + tenantId + '/dashboard';
+        document.getElementById('navTemplates').href = '/portal/' + tenantId + '/templates';
+        document.getElementById('navAnalytics').href = '/portal/' + tenantId + '/analytics';
+        document.getElementById('navChannels').href = '/portal/' + tenantId + '/channels';
+        document.getElementById('navDeveloper').href = '/portal/' + tenantId + '/developer';
+        document.getElementById('navProfile').href = '/portal/' + tenantId + '/profile';
+    }
+
+    function setTenantIdentity() {
+        document.getElementById('tenantName').textContent = localStorage.getItem('tenant_name') || tenantId;
+        document.getElementById('tenantIdLabel').textContent = tenantId;
+    }
+
+    async function logout() {
+        try { await fetch('/api/v1/tenant/auth/logout', { method: 'POST' }); } catch (_) {}
+        clearAuth();
+        window.location.href = '/portal/login';
+    }
+
+    function renderChannels(channels) {
+        const tbody = document.getElementById('channelRows');
+        tbody.innerHTML = '';
+        activeChannels = [];
+        channels.forEach((item) => {
+            if (item.available && item.enabled) {
+                activeChannels.push(item.channel);
+            }
+            const tr = document.createElement('tr');
+            const availability = item.available
+                ? 'Available'
+                : ('Unavailable: ' + (item.availability_reason || 'Missing config'));
+            tr.innerHTML =
+                '<td>' + item.channel.toUpperCase() + '</td>' +
+                '<td><input type="checkbox" data-channel="' + item.channel + '"' + (item.enabled ? ' checked' : '') + (item.available ? '' : ' disabled') + '></td>' +
+                '<td style="' + (item.available ? 'color:#2e7d32;' : 'color:#b42318;') + '">' + availability + '</td>';
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function loadChannels() {
+        const res = await fetch('/api/v1/tenant/settings/channels', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load channel settings');
+        renderChannels(data.channels || []);
+    }
+
+    async function saveChannels() {
+        const msg = document.getElementById('statusMsg');
+        msg.textContent = '';
+        msg.className = 'status';
+
+        const inputs = Array.from(document.querySelectorAll('input[type="checkbox"][data-channel]'));
+        const channels = inputs.map((el) => ({
+            channel: el.getAttribute('data-channel'),
+            enabled: el.checked
+        }));
+
+        const res = await fetch('/api/v1/tenant/settings/channels', {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ channels })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            msg.textContent = data.detail || 'Failed to save preferences';
+            msg.className = 'status error';
+            return;
+        }
+        renderChannels(data.channels || []);
+        await loadDefaultPriority();
+        msg.textContent = 'Channel preferences saved.';
+    }
+
+    let currentPriority = [];
+
+    function movePriorityItem(fromIndex, toIndex) {
+        if (toIndex < 0 || toIndex >= currentPriority.length) return;
+        const next = currentPriority.slice();
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        currentPriority = next;
+        renderPriorityControls(currentPriority);
+    }
+
+    function renderPriorityControls(selected) {
+        const base = activeChannels.slice();
+        const prioritized = (selected || []).filter((ch) => base.includes(ch));
+        const remainder = base.filter((ch) => !prioritized.includes(ch));
+        currentPriority = prioritized.concat(remainder);
+
+        const root = document.getElementById('priorityControls');
+        root.innerHTML = '';
+        if (!currentPriority.length) {
+            const empty = document.createElement('div');
+            empty.style.fontSize = '13px';
+            empty.style.color = '#666';
+            empty.textContent = 'No active channels selected. Enable channels above to set priority.';
+            root.appendChild(empty);
+            return;
+        }
+
+        currentPriority.forEach((channel, index) => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.justifyContent = 'space-between';
+            row.style.border = '1px solid #d1d5db';
+            row.style.borderRadius = '8px';
+            row.style.padding = '8px 10px';
+            row.style.background = '#f8fafc';
+
+            const label = document.createElement('div');
+            label.textContent = (index + 1) + '. ' + channel;
+            label.style.fontSize = '13px';
+            label.style.fontWeight = '600';
+
+            const controls = document.createElement('div');
+            controls.style.display = 'flex';
+            controls.style.gap = '6px';
+
+            const upBtn = document.createElement('button');
+            upBtn.type = 'button';
+            upBtn.textContent = 'Up';
+            upBtn.style.marginTop = '0';
+            upBtn.disabled = index === 0;
+            upBtn.addEventListener('click', () => movePriorityItem(index, index - 1));
+
+            const downBtn = document.createElement('button');
+            downBtn.type = 'button';
+            downBtn.textContent = 'Down';
+            downBtn.style.marginTop = '0';
+            downBtn.disabled = index === currentPriority.length - 1;
+            downBtn.addEventListener('click', () => movePriorityItem(index, index + 1));
+
+            controls.appendChild(upBtn);
+            controls.appendChild(downBtn);
+            row.appendChild(label);
+            row.appendChild(controls);
+            root.appendChild(row);
+        });
+    }
+
+    function getSelectedPriority() {
+        return currentPriority.slice();
+    }
+
+    async function loadDefaultPriority() {
+        const res = await fetch('/api/v1/tenant/settings/channel-priority', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load default priority');
+        renderPriorityControls(data.default_channel_priority || []);
+    }
+
+    async function saveDefaultPriority() {
+        const msg = document.getElementById('statusMsg');
+        const payload = { default_channel_priority: getSelectedPriority() };
+        const res = await fetch('/api/v1/tenant/settings/channel-priority', {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            msg.textContent = data.detail || 'Failed to save default priority';
+            msg.className = 'status error';
+            return;
+        }
+        msg.textContent = 'Default channel priority saved.';
+        msg.className = 'status';
+    }
+
+    async function loadDefaultDeliveryMode() {
+        const res = await fetch('/api/v1/tenant/settings/delivery-mode', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load default delivery mode');
+
+        const select = document.getElementById('defaultDeliveryMode');
+        const mode = data.default_delivery_mode || 'parallel_all';
+        select.value = (mode === 'sequential_failover') ? 'sequential_failover' : 'parallel_all';
+    }
+
+    async function saveDefaultDeliveryMode() {
+        const msg = document.getElementById('statusMsg');
+        const payload = {
+            default_delivery_mode: document.getElementById('defaultDeliveryMode').value
+        };
+        const res = await fetch('/api/v1/tenant/settings/delivery-mode', {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            msg.textContent = data.detail || 'Failed to save default delivery mode';
+            msg.className = 'status error';
+            return;
+        }
+        msg.textContent = 'Default delivery mode saved.';
+        msg.className = 'status';
+    }
+
+    async function initPage() {
+        try {
+            await loadChannels();
+            await loadDefaultPriority();
+            await loadDefaultDeliveryMode();
+        } catch (e) {
+            const msg = document.getElementById('statusMsg');
+            msg.textContent = e.message;
+            msg.className = 'status error';
+        }
+    }
+
+    wireNav();
+    setTenantIdentity();
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+    document.getElementById('saveBtn').addEventListener('click', saveChannels);
+    document.getElementById('savePriorityBtn').addEventListener('click', saveDefaultPriority);
+    document.getElementById('saveDeliveryModeBtn').addEventListener('click', saveDefaultDeliveryMode);
+    initPage();
+</script>
+</body>
+</html>

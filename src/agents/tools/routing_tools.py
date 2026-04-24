@@ -100,7 +100,9 @@ async def predict_best_channel(
             best_rate = 0.0
 
             for channel, stats in engagement_history.items():
-                provider_healthy = provider_health.get("providers", {}).get(channel, {}).get("is_healthy", False)
+                # Provider health summary currently returns {channel: provider_name}
+                # so channel presence implies a healthy provider was found.
+                provider_healthy = bool(provider_health.get("providers", {}).get(channel))
                 if provider_healthy and stats.get("success_rate", 0) > best_rate:
                     best_channel = channel
                     best_rate = stats["success_rate"]
@@ -196,7 +198,7 @@ async def check_quiet_hours(
 @tool
 async def send_notification_via_channel(
     user_id: str,
-    client_id: str,
+    tenant_id: str,
     channel: str,
     content: str,
     notification_type: str,
@@ -208,7 +210,7 @@ async def send_notification_via_channel(
 
     Args:
         user_id: The user's ID
-        client_id: The client's ID
+        tenant_id: The tenant's ID
         channel: Channel to use (email, sms, push, etc)
         content: Notification content
         notification_type: Type of notification
@@ -219,36 +221,71 @@ async def send_notification_via_channel(
         Notification ID, status, and channel used
     """
     try:
-        from src.models import Notification
+        from src.models import (
+            Notification,
+            NotificationChannel,
+            NotificationStatus,
+            ChannelStatus,
+            Priority as DBPriority,
+        )
 
         async with AsyncSessionLocal() as db:
+            priority_map = {
+                "critical": DBPriority.CRITICAL,
+                "high": DBPriority.HIGH,
+                "medium": DBPriority.MEDIUM,
+                "low": DBPriority.LOW,
+            }
+
+            provider_map = {
+                "email": "mailgun",
+                "sms": "twilio",
+                "whatsapp": "twilio",
+                "slack": "slack_api",
+                "push": "fcm",
+                "voice": "twilio",
+                "inapp": "websocket",
+            }
+
             # Create notification record
             notification = Notification(
-                id=str(uuid.uuid4()),
-                client_id=client_id,
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
                 user_id=user_id,
                 type=notification_type,
-                content=content,
-                priority=priority,
-                status="pending",
-                metadata=metadata or {}
+                priority=priority_map.get(str(priority).lower(), DBPriority.MEDIUM),
+                status=NotificationStatus.QUEUED,
+                data={
+                    "body": content or "",
+                    "subject": metadata.get("subject", notification_type) if metadata else notification_type,
+                    **(metadata or {}),
+                },
+                llm_decision={
+                    "channel": channel,
+                    "reasoning": "strands_tool_send_notification_via_channel"
+                }
             )
 
             db.add(notification)
+
+            channel_record = NotificationChannel(
+                id=uuid.uuid4(),
+                notification_id=notification.id,
+                channel=channel,
+                provider=provider_map.get(channel, "unknown"),
+                status=ChannelStatus.QUEUED,
+                attempts=0,
+            )
+            db.add(channel_record)
             await db.commit()
 
-            # TODO: Actually send via channel using existing service
-            # For now, mark as sent
-            notification.status = "sent"
-            await db.commit()
-
-            logger.info(f"Notification {notification.id} sent via {channel}")
+            logger.info(f"Notification {notification.id} queued for channel {channel}")
 
             return {
-                "notification_id": notification.id,
-                "status": "sent",
+                "notification_id": str(notification.id),
+                "status": "queued",
                 "channel": channel,
-                "sent_at": datetime.utcnow().isoformat()
+                "queued_at": datetime.utcnow().isoformat()
             }
     except Exception as e:
         logger.error(f"Failed to send notification: {e}")

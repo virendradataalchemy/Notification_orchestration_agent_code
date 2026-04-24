@@ -1,0 +1,152 @@
+:root {
+    --portal-bg: #f5f7fa;
+    --portal-text: #222;
+    --portal-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --portal-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    --portal-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+body {
+    background: var(--portal-bg);
+    color: var(--portal-text);
+}
+
+.navbar {
+    background: var(--portal-gradient);
+    color: #fff;
+}
+
+.navbar-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 70px;
+}
+
+.navbar-brand {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    text-decoration: none;
+}
+
+.navbar-user {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.navbar-links a,
+.nav-links a {
+    color: #fff;
+    text-decoration: none;
+    margin-right: 14px;
+    font-size: 13px;
+}
+
+.user-info {
+    text-align: right;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.user-tenant {
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.btn-logout {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 30px;
+}
+
+.panel {
+    background: #fff;
+    padding: 24px;
+}
+
+.panel,
+.stat-card,
+.actions-section,
+.template-card,
+.editor-panel,
+.preview-panel,
+.filters,
+.controls,
+.card {
+    box-shadow: var(--portal-card-shadow);
+    border-radius: 12px;
+}
+
+.btn-primary {
+    background: var(--portal-gradient);
+    color: #fff;
+}
+
+button {
+    background: var(--portal-gradient);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 14px;
+    cursor: pointer;
+}
+
+label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #555;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+    width: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    text-align: left;
+    padding: 10px;
+    border-bottom: 1px solid #eceff3;
+    font-size: 13px;
+}
+
+.status {
+    margin-top: 12px;
+    font-size: 13px;
+}
+
+.error {
+    color: #b42318;
+}

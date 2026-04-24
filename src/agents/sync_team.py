@@ -32,7 +32,7 @@ class NotificationTeam:
 
     async def process_notification(
         self,
-        client_id: str,
+        tenant_id: str,
         user_id: str,
         notification_type: str,
         content: str,
@@ -45,7 +45,7 @@ class NotificationTeam:
         Returns immediately after sending, doesn't wait for outcome.
 
         Args:
-            client_id: Client identifier
+            tenant_id: Tenant identifier
             user_id: User identifier
             notification_type: Type of notification
             content: Notification content
@@ -129,7 +129,7 @@ This prevents wasting resources on Router agent.
 Route this notification to the best channel:
 
 **User:** {user_id}
-**Client:** {client_id}
+**Tenant:** {tenant_id}
 **Type:** {notification_type}
 **Priority:** {priority}
 **Content:** {content[:200]}

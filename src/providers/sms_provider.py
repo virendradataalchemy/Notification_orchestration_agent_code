@@ -20,7 +20,11 @@ class SMSProvider(NotificationProvider):
             )
         else:
             self.client = None
-        self.from_number = settings.twilio_phone_number
+        self.from_number = (
+            self.config.get("from_number")
+            or self.config.get("sender_id")
+            or settings.twilio_phone_number
+        )
         self.executor = ThreadPoolExecutor(max_workers=5)
 
     async def send(self, message: Message) -> ProviderResponse:
@@ -61,16 +65,8 @@ class SMSProvider(NotificationProvider):
             if not body_text:
                 body_text = message.data.get('message', '') or f"SMS: {message.subject or 'Notification'}"
 
-            # Strip HTML tags for SMS — SMS only supports plain text
-            import re
-            body_text = re.sub(r'<[^>]+>', '', body_text)          # remove tags
-            body_text = re.sub(r'&[a-z]+;', ' ', body_text)        # decode entities
-            body_text = re.sub(r'\s+', ' ', body_text).strip()     # collapse whitespace
-            # Truncate to 1600 chars (Twilio limit)
-            body_text = body_text[:1600]
-
             # Send SMS in thread pool since Twilio client is sync
-            loop = asyncio.get_running_loop()
+            loop = asyncio.get_event_loop()
             twilio_message = await loop.run_in_executor(
                 self.executor,
                 lambda: self.client.messages.create(
@@ -122,7 +118,7 @@ class SMSProvider(NotificationProvider):
             )
 
         try:
-            loop = asyncio.get_running_loop()
+            loop = asyncio.get_event_loop()
             message = await loop.run_in_executor(
                 self.executor,
                 lambda: self.client.messages(message_id).fetch()

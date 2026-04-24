@@ -1,0 +1,799 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Demo App</title>
+    <style>
+        :root {
+            --bg: #eef3fb;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #64748b;
+            --border: #d7e0ef;
+            --primary: #2563eb;
+            --primary-2: #1d4ed8;
+            --secondary: #334155;
+            --success: #0f766e;
+            --danger: #b91c1c;
+            --info-bg: #eef7ff;
+            --info-border: #bfdbfe;
+            --shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: "Segoe UI", Roboto, Arial, sans-serif;
+            background:
+                radial-gradient(circle at 10% 0%, #e0eaff 0%, transparent 35%),
+                radial-gradient(circle at 100% 0%, #e8f7ff 0%, transparent 35%),
+                var(--bg);
+            color: var(--text);
+            padding: 24px;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 { margin-bottom: 6px; font-size: 32px; letter-spacing: -0.5px; }
+        .subtitle { color: var(--muted); margin-bottom: 20px; font-size: 15px; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+        }
+        .card h2 { font-size: 19px; margin-bottom: 12px; color: #0f172a; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #334155; }
+        input, select, textarea {
+            width: 100%; border: 1px solid #c7d2e5; border-radius: 9px; padding: 11px 12px;
+            font-size: 14px; background: #fff;
+        }
+        textarea { min-height: 110px; }
+        .info-box {
+            border: 1px solid var(--info-border); background: var(--info-bg); border-radius: 10px;
+            padding: 10px 12px; margin-bottom: 12px; font-size: 13px; color: #1e3a8a; line-height: 1.4;
+        }
+        button {
+            border: none; border-radius: 10px; padding: 10px 16px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+            color: #fff; font-weight: 700; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.28);
+        }
+        button:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+        .btn-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.45);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        button.secondary {
+            background: linear-gradient(135deg, var(--secondary) 0%, #1f2937 100%);
+            box-shadow: 0 4px 10px rgba(51, 65, 85, 0.25);
+        }
+        .status { margin-top: 8px; font-size: 13px; color: var(--success); white-space: pre-wrap; line-height: 1.35; }
+        .error { color: var(--danger); }
+        .muted { color: var(--muted); font-size: 12px; }
+        .preset-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 10px 0 6px;
+        }
+        .preset-btn {
+            background: #eaf1ff;
+            color: #1e3a8a;
+            border: 1px solid #c9dcff;
+            border-radius: 8px;
+            padding: 7px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .preset-btn:hover {
+            background: #dfe9ff;
+        }
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(120px, 1fr));
+            gap: 8px 10px;
+            margin-top: 4px;
+        }
+        .channel-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border: 1px solid #dbe5f2;
+            border-radius: 8px;
+            background: #f8fbff;
+            font-size: 13px;
+        }
+        .channel-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+        }
+        .channel-item.disabled {
+            opacity: 0.55;
+            background: #f8fafc;
+        }
+        .json-preview {
+            margin-top: 10px; background: #0f172a; color: #e2e8f0; border-radius: 8px;
+            padding: 12px; font-size: 12px; overflow-x: auto; white-space: pre; max-height: 220px;
+        }
+        @media (max-width: 900px) {
+            .row, .row3 { grid-template-columns: 1fr; }
+            .channel-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+            body { padding: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tenant Demo Application</h1>
+        <p class="subtitle">Client app sends recipient + message data. Sender identity and orchestration policy are fixed in platform settings.</p>
+
+        <div class="card">
+            <h2>0) API Endpoint</h2>
+            <div class="row">
+                <div>
+                    <label for="baseUrl">Platform Base URL</label>
+                    <input id="baseUrl" value="http://127.0.0.1:8000">
+                </div>
+                <div>
+                    <label for="apiKey">Tenant API Key</label>
+                    <input id="apiKey" placeholder="Paste tenant API key from portal developer settings">
+                </div>
+            </div>
+            <div class="row">
+                <div class="muted">No sender/channel policy choices are shown in client app.</div>
+                <div style="display:flex;justify-content:flex-end;align-items:flex-end;gap:8px;">
+                    <button class="secondary" onclick="loadChannelAvailability(true)">Refresh Available Channels</button>
+                </div>
+            </div>
+            <div id="availabilityStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+            <h2>1) Send Notification</h2>
+            <div class="info-box">
+                Platform-fixed config (sender IDs, channel priority, fallback policy) is managed in tenant settings and is not configurable here.
+            </div>
+            <div class="preset-row">
+                <button type="button" class="preset-btn" onclick="applySinglePreset('email_raw')">Preset: Email Raw</button>
+                <button type="button" class="preset-btn" onclick="applySinglePreset('whatsapp_template')">Preset: WhatsApp Template</button>
+                <button type="button" class="preset-btn" onclick="applySinglePreset('slack_template')">Preset: Slack Template</button>
+                <button type="button" class="preset-btn" onclick="applySinglePreset('sms_raw')">Preset: SMS Raw</button>
+                <button type="button" class="preset-btn" onclick="applySinglePreset('voice_raw')">Preset: Voice Raw</button>
+            </div>
+            <div class="row3">
+                <div>
+                    <label for="userId">Recipient User ID</label>
+                    <input id="userId" value="recipient_001">
+                </div>
+                <div>
+                    <label for="priority">Priority</label>
+                    <select id="priority">
+                        <option>critical</option>
+                        <option selected>high</option>
+                        <option>medium</option>
+                        <option>low</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="type">Notification Type</label>
+                    <input id="type" value="order_update">
+                </div>
+            </div>
+            <div class="row3">
+                <div>
+                    <label for="email">Recipient Email (optional)</label>
+                    <input id="email" placeholder="recipient@example.com">
+                </div>
+                <div>
+                    <label for="phone">Recipient Phone (optional)</label>
+                    <input id="phone" placeholder="+14155550123">
+                </div>
+                <div>
+                    <label for="slackId">Recipient Slack ID (optional)</label>
+                    <input id="slackId" placeholder="U12345678">
+                </div>
+            </div>
+            <div>
+                <label>Channels</label>
+                <div id="sendChannelOptions" class="channel-grid"></div>
+                <div class="muted">Only channels available for this tenant are selectable.</div>
+            </div>
+            <div class="row">
+                <div>
+                    <label for="templateId">Template ID (optional for all channels, required for WhatsApp)</label>
+                    <input id="templateId" placeholder="e.g. order_confirmation">
+                </div>
+                <div></div>
+            </div>
+            <div>
+                <label for="templateVars">Template Variables JSON (optional)</label>
+                <textarea id="templateVars" style="min-height:90px;">{
+  "user": {"name": "Alex"},
+  "order": {"id": "ORD-1001"}
+}</textarea>
+                <div class="muted">Used as <code>notification.data</code>. Works for any channel template.</div>
+            </div>
+            <div class="row">
+                <div>
+                    <label for="subject">Subject</label>
+                    <input id="subject" value="Order Update">
+                </div>
+                <div></div>
+            </div>
+            <div>
+                <label for="body">Body</label>
+                <textarea id="body">Your order #ORD-1001 has been shipped.</textarea>
+            </div>
+            <button id="sendNotificationBtn" onclick="sendNotification()">Send Notification</button>
+            <div id="sendStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+            <h2>2) Bulk Send</h2>
+            <div class="preset-row">
+                <button type="button" class="preset-btn" onclick="applyBulkPreset('email_raw_bulk')">Preset: Email Raw Bulk</button>
+                <button type="button" class="preset-btn" onclick="applyBulkPreset('whatsapp_template_bulk')">Preset: WhatsApp Template Bulk</button>
+                <button type="button" class="preset-btn" onclick="applyBulkPreset('mixed_raw_bulk')">Preset: Mixed Raw Bulk</button>
+                <button type="button" class="preset-btn" onclick="applyBulkPreset('sms_raw_bulk')">Preset: SMS Raw Bulk</button>
+                <button type="button" class="preset-btn" onclick="applyBulkPreset('voice_raw_bulk')">Preset: Voice Raw Bulk</button>
+            </div>
+            <div class="row3">
+                <div>
+                    <label>Channels</label>
+                    <div id="bulkChannelOptions" class="channel-grid"></div>
+                </div>
+                <div>
+                    <label for="bulkTemplateId">Template ID (optional for all channels, required for WhatsApp)</label>
+                    <input id="bulkTemplateId" placeholder="e.g. order_update_template_v1">
+                </div>
+                <div>
+                    <label for="bulkScheduleAt">Schedule At (optional ISO datetime)</label>
+                    <input id="bulkScheduleAt" placeholder="2026-04-17T18:00:00Z">
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <label for="bulkSubject">Subject (optional)</label>
+                    <input id="bulkSubject" placeholder="Bulk notification subject">
+                </div>
+                <div></div>
+            </div>
+            <div>
+                <label for="bulkBody">Body (optional if template_id provided)</label>
+                <textarea id="bulkBody" style="min-height:90px;">Hello {{user.name}}, your update is ready.</textarea>
+            </div>
+            <div>
+                <label for="bulkTemplateVars">Bulk Template Variables JSON (optional)</label>
+                <textarea id="bulkTemplateVars" style="min-height:90px;">{
+  "campaign": "spring_sale",
+  "company": {"name": "Acme"}
+}</textarea>
+                <div class="muted">Merged with each recipient's row <code>data</code> before send.</div>
+            </div>
+            <div>
+                <label for="bulkRecipients">Recipients (one per line: user_id,email,phone,slack_id)</label>
+                <textarea id="bulkRecipients" style="min-height:130px;">recipient_101,recipient101@example.com,+14155550101,U11111111
+recipient_102,recipient102@example.com,+14155550102,U22222222</textarea>
+            </div>
+            <div class="muted">Recipient fields are provided at send time. No customer directory is used here.</div>
+            <div class="muted" style="margin-top:8px;">Request Preview (POST /api/v1/notifications/batch-multichannel)</div>
+            <pre id="bulkPayloadPreview" class="json-preview">{}</pre>
+            <button onclick="sendBulk()">Send Bulk</button>
+            <div id="bulkStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+            <h2>3) Check Status</h2>
+            <div class="row">
+                <div>
+                    <label for="notificationId">Notification ID</label>
+                    <input id="notificationId" placeholder="Paste notification_id from send response">
+                </div>
+                <div style="display:flex;align-items:flex-end;">
+                    <button class="secondary" onclick="checkStatus()">Get Status</button>
+                </div>
+            </div>
+            <div id="statusResult" class="status"></div>
+        </div>
+    </div>
+
+    <script>
+        const allChannels = ['email', 'sms', 'whatsapp', 'slack', 'push', 'voice', 'inapp'];
+        let availableChannels = [];
+
+        let tenantApiKey = localStorage.getItem('demo_tenant_api_key') || '';
+        if (tenantApiKey) document.getElementById('apiKey').value = tenantApiKey;
+
+        function base() {
+            return document.getElementById('baseUrl').value.replace(/\/$/, '');
+        }
+
+        function setStatus(el, msg, isError=false) {
+            const node = document.getElementById(el);
+            node.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2);
+            node.className = 'status' + (isError ? ' error' : '');
+        }
+
+        function setSendButtonLoading(isLoading) {
+            const btn = document.getElementById('sendNotificationBtn');
+            if (!btn) return;
+            if (isLoading) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="btn-spinner"></span>Sending...';
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Send Notification';
+            }
+        }
+
+        function setApiKeyFromInput() {
+            tenantApiKey = document.getElementById('apiKey').value.trim();
+            if (tenantApiKey) localStorage.setItem('demo_tenant_api_key', tenantApiKey);
+        }
+
+        function parseBulkRecipients(text) {
+            const lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+            return lines.map((line, idx) => {
+                const parts = line.split(',').map((x) => x.trim());
+                if (!parts[0]) throw new Error('Invalid recipient line ' + (idx + 1) + ': user_id is required');
+                return {
+                    user_id: parts[0],
+                    email: parts[1] || null,
+                    phone: parts[2] || null,
+                    slack_id: parts[3] || null,
+                    data: { source: 'tenant_demo_app_bulk', row: idx + 1 }
+                };
+            });
+        }
+
+        function parseJsonInput(id, label) {
+            const raw = document.getElementById(id).value.trim();
+            if (!raw) return {};
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    return parsed;
+                }
+                throw new Error(label + ' must be a JSON object');
+            } catch (e) {
+                throw new Error(label + ' is invalid JSON: ' + e.message);
+            }
+        }
+
+        function buildChannelCheckboxes(targetId, selected) {
+            const host = document.getElementById(targetId);
+            if (!host) return;
+            const selectedSet = new Set(selected || []);
+            const html = allChannels.map((ch) => {
+                const isAvailable = availableChannels.includes(ch);
+                const checked = isAvailable && selectedSet.has(ch) ? 'checked' : '';
+                const disabled = isAvailable ? '' : 'disabled';
+                const disabledClass = isAvailable ? '' : ' disabled';
+                return (
+                    '<label class="channel-item' + disabledClass + '">' +
+                        '<input type="checkbox" name="' + targetId + '_channel" value="' + ch + '" ' + checked + ' ' + disabled + '>' +
+                        '<span>' + ch + '</span>' +
+                    '</label>'
+                );
+            }).join('');
+            host.innerHTML = html;
+            if (targetId === 'bulkChannelOptions') {
+                host.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+                    el.addEventListener('change', updateBulkPreview);
+                });
+            }
+        }
+
+        function selectedChannels(targetId) {
+            return Array.from(document.querySelectorAll('#' + targetId + ' input[type="checkbox"]:checked'))
+                .map((el) => el.value);
+        }
+
+        function setSelectedChannels(targetId, channels) {
+            const selected = new Set(channels || []);
+            document.querySelectorAll('#' + targetId + ' input[type="checkbox"]').forEach((el) => {
+                el.checked = selected.has(el.value) && !el.disabled;
+            });
+            if (targetId === 'bulkChannelOptions') updateBulkPreview();
+        }
+
+        function resolveAvailableChannels(preferred) {
+            const result = (preferred || []).filter((ch) => availableChannels.includes(ch));
+            return result;
+        }
+
+        function applySinglePreset(kind) {
+            if (!availableChannels.length) {
+                setStatus('sendStatus', 'Load channel availability first (provide API key).', true);
+                return;
+            }
+            if (kind === 'email_raw') {
+                const channels = resolveAvailableChannels(['email']);
+                if (!channels.length) return setStatus('sendStatus', 'Email channel not available for this tenant.', true);
+                setSelectedChannels('sendChannelOptions', channels);
+                document.getElementById('type').value = 'order_update';
+                document.getElementById('priority').value = 'high';
+                document.getElementById('templateId').value = '';
+                document.getElementById('subject').value = 'Order Update';
+                document.getElementById('body').value = 'Your order #ORD-1001 has been shipped.';
+                document.getElementById('templateVars').value = JSON.stringify({
+                    user: { name: 'Alex' },
+                    order: { id: 'ORD-1001' }
+                }, null, 2);
+                return;
+            }
+            if (kind === 'whatsapp_template') {
+                const channels = resolveAvailableChannels(['whatsapp']);
+                if (!channels.length) return setStatus('sendStatus', 'WhatsApp channel not available for this tenant.', true);
+                setSelectedChannels('sendChannelOptions', channels);
+                document.getElementById('type').value = 'order_update';
+                document.getElementById('priority').value = 'high';
+                document.getElementById('templateId').value = 'whatsapp_order_update';
+                document.getElementById('subject').value = '';
+                document.getElementById('body').value = 'Fallback body for WhatsApp template flow.';
+                document.getElementById('templateVars').value = JSON.stringify({
+                    user: { name: 'Alex' },
+                    order: { id: 'ORD-1001', status: 'Shipped' }
+                }, null, 2);
+                if (!document.getElementById('phone').value.trim()) {
+                    document.getElementById('phone').value = '+14155550123';
+                }
+                return;
+            }
+            if (kind === 'slack_template') {
+                const channels = resolveAvailableChannels(['slack']);
+                if (!channels.length) return setStatus('sendStatus', 'Slack channel not available for this tenant.', true);
+                setSelectedChannels('sendChannelOptions', channels);
+                document.getElementById('type').value = 'ops_alert';
+                document.getElementById('priority').value = 'medium';
+                document.getElementById('templateId').value = 'slack_ops_alert';
+                document.getElementById('subject').value = 'Ops Alert';
+                document.getElementById('body').value = 'Fallback body for Slack template flow.';
+                document.getElementById('templateVars').value = JSON.stringify({
+                    service: 'payments',
+                    severity: 'warning',
+                    message: 'Latency increased beyond threshold'
+                }, null, 2);
+                if (!document.getElementById('slackId').value.trim()) {
+                    document.getElementById('slackId').value = 'U12345678';
+                }
+                return;
+            }
+            if (kind === 'sms_raw') {
+                const channels = resolveAvailableChannels(['sms']);
+                if (!channels.length) return setStatus('sendStatus', 'SMS channel not available for this tenant.', true);
+                setSelectedChannels('sendChannelOptions', channels);
+                document.getElementById('type').value = 'otp';
+                document.getElementById('priority').value = 'high';
+                document.getElementById('templateId').value = '';
+                document.getElementById('subject').value = '';
+                document.getElementById('body').value = 'Your OTP is 482913. It expires in 5 minutes.';
+                document.getElementById('templateVars').value = JSON.stringify({
+                    otp: '482913',
+                    expires_minutes: 5
+                }, null, 2);
+                if (!document.getElementById('phone').value.trim()) {
+                    document.getElementById('phone').value = '+14155550123';
+                }
+                return;
+            }
+            if (kind === 'voice_raw') {
+                const channels = resolveAvailableChannels(['voice']);
+                if (!channels.length) return setStatus('sendStatus', 'Voice channel not available for this tenant.', true);
+                setSelectedChannels('sendChannelOptions', channels);
+                document.getElementById('type').value = 'voice_alert';
+                document.getElementById('priority').value = 'high';
+                document.getElementById('templateId').value = '';
+                document.getElementById('subject').value = '';
+                document.getElementById('body').value = 'This is an important service notification. Please acknowledge this call.';
+                document.getElementById('templateVars').value = JSON.stringify({
+                    alert: 'service_notification'
+                }, null, 2);
+                if (!document.getElementById('phone').value.trim()) {
+                    document.getElementById('phone').value = '+14155550123';
+                }
+            }
+        }
+
+        function applyBulkPreset(kind) {
+            if (!availableChannels.length) {
+                setStatus('bulkStatus', 'Load channel availability first (provide API key).', true);
+                return;
+            }
+            if (kind === 'email_raw_bulk') {
+                const channels = resolveAvailableChannels(['email']);
+                if (!channels.length) return setStatus('bulkStatus', 'Email channel not available for this tenant.', true);
+                setSelectedChannels('bulkChannelOptions', channels);
+                document.getElementById('bulkTemplateId').value = '';
+                document.getElementById('bulkSubject').value = 'Weekly Update';
+                document.getElementById('bulkBody').value = 'Hello {{user.name}}, your weekly summary is ready.';
+                document.getElementById('bulkTemplateVars').value = JSON.stringify({
+                    campaign: 'weekly_update'
+                }, null, 2);
+                updateBulkPreview();
+                return;
+            }
+            if (kind === 'whatsapp_template_bulk') {
+                const channels = resolveAvailableChannels(['whatsapp']);
+                if (!channels.length) return setStatus('bulkStatus', 'WhatsApp channel not available for this tenant.', true);
+                setSelectedChannels('bulkChannelOptions', channels);
+                document.getElementById('bulkTemplateId').value = 'whatsapp_order_update';
+                document.getElementById('bulkSubject').value = '';
+                document.getElementById('bulkBody').value = 'Fallback body for WhatsApp template flow.';
+                document.getElementById('bulkTemplateVars').value = JSON.stringify({
+                    company: { name: 'Acme' }
+                }, null, 2);
+                updateBulkPreview();
+                return;
+            }
+            if (kind === 'mixed_raw_bulk') {
+                const channels = resolveAvailableChannels(['email', 'sms', 'slack']);
+                if (!channels.length) return setStatus('bulkStatus', 'No non-WhatsApp channels available for mixed preset.', true);
+                setSelectedChannels('bulkChannelOptions', channels);
+                document.getElementById('bulkTemplateId').value = '';
+                document.getElementById('bulkSubject').value = 'Service Notice';
+                document.getElementById('bulkBody').value = 'Hello {{user.name}}, scheduled maintenance starts at {{maintenance_start}}.';
+                document.getElementById('bulkTemplateVars').value = JSON.stringify({
+                    maintenance_start: '2026-04-20T02:00:00Z'
+                }, null, 2);
+                updateBulkPreview();
+                return;
+            }
+            if (kind === 'sms_raw_bulk') {
+                const channels = resolveAvailableChannels(['sms']);
+                if (!channels.length) return setStatus('bulkStatus', 'SMS channel not available for this tenant.', true);
+                setSelectedChannels('bulkChannelOptions', channels);
+                document.getElementById('bulkTemplateId').value = '';
+                document.getElementById('bulkSubject').value = '';
+                document.getElementById('bulkBody').value = 'Reminder: your appointment is scheduled for tomorrow at 10:00 AM.';
+                document.getElementById('bulkTemplateVars').value = JSON.stringify({
+                    reminder_type: 'appointment'
+                }, null, 2);
+                updateBulkPreview();
+                return;
+            }
+            if (kind === 'voice_raw_bulk') {
+                const channels = resolveAvailableChannels(['voice']);
+                if (!channels.length) return setStatus('bulkStatus', 'Voice channel not available for this tenant.', true);
+                setSelectedChannels('bulkChannelOptions', channels);
+                document.getElementById('bulkTemplateId').value = '';
+                document.getElementById('bulkSubject').value = '';
+                document.getElementById('bulkBody').value = 'This is a bulk voice announcement for scheduled maintenance tonight.';
+                document.getElementById('bulkTemplateVars').value = JSON.stringify({
+                    announcement: 'scheduled_maintenance'
+                }, null, 2);
+                updateBulkPreview();
+            }
+        }
+
+        function updateBulkPreview() {
+            const preview = document.getElementById('bulkPayloadPreview');
+            try {
+                const payload = buildBulkPayload();
+                preview.textContent = JSON.stringify(payload, null, 2);
+            } catch (e) {
+                preview.textContent = 'Preview error: ' + e.message;
+            }
+        }
+
+        function buildBulkPayload() {
+            const templateId = document.getElementById('bulkTemplateId').value.trim();
+            const channels = selectedChannels('bulkChannelOptions');
+            const scheduleAt = document.getElementById('bulkScheduleAt').value.trim();
+            const body = document.getElementById('bulkBody').value;
+            const subject = document.getElementById('bulkSubject').value.trim();
+            const bulkVars = parseJsonInput('bulkTemplateVars', 'Bulk template variables');
+            const recipients = parseBulkRecipients(document.getElementById('bulkRecipients').value).map((r) => ({
+                ...r,
+                data: { ...bulkVars, ...(r.data || {}) }
+            }));
+            const payload = {
+                template_id: templateId || null,
+                channels,
+                subject: subject || null,
+                body: body || null,
+                data: bulkVars,
+                recipients
+            };
+            if (scheduleAt) payload.schedule_at = scheduleAt;
+            return payload;
+        }
+        async function loadChannelAvailability(showStatus) {
+            setApiKeyFromInput();
+            if (!tenantApiKey) {
+                availableChannels = [];
+                buildChannelCheckboxes('sendChannelOptions', []);
+                buildChannelCheckboxes('bulkChannelOptions', []);
+                return setStatus('availabilityStatus', 'API key required', true);
+            }
+            try {
+                const res = await fetch(base() + '/api/v1/tenant/settings/channels', {
+                    headers: { 'X-API-Key': tenantApiKey }
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    availableChannels = [];
+                    buildChannelCheckboxes('sendChannelOptions', []);
+                    buildChannelCheckboxes('bulkChannelOptions', []);
+                    return setStatus('availabilityStatus', data, true);
+                }
+                availableChannels = (data.channels || [])
+                    .filter((c) => c.available && c.enabled)
+                    .map((c) => c.channel);
+                buildChannelCheckboxes('sendChannelOptions', availableChannels.includes('email') ? ['email'] : availableChannels.slice(0, 1));
+                buildChannelCheckboxes('bulkChannelOptions', availableChannels.filter((c) => c !== 'whatsapp').slice(0, 2));
+                const lines = (data.channels || []).map((c) => {
+                    const state = (c.available && c.enabled) ? 'available' : 'unavailable';
+                    const reason = c.availability_reason ? ' (' + c.availability_reason + ')' : '';
+                    return c.channel + ': ' + state + reason;
+                });
+                if (showStatus) setStatus('availabilityStatus', lines.join('\n'));
+                else document.getElementById('availabilityStatus').textContent = '';
+            } catch (e) {
+                availableChannels = [];
+                buildChannelCheckboxes('sendChannelOptions', []);
+                buildChannelCheckboxes('bulkChannelOptions', []);
+                setStatus('availabilityStatus', e.message, true);
+            }
+        }
+
+        async function sendNotification() {
+            setApiKeyFromInput();
+            if (!tenantApiKey) return setStatus('sendStatus', 'API key required', true);
+
+            const recipient = {
+                user_id: document.getElementById('userId').value.trim(),
+                email: document.getElementById('email').value.trim() || null,
+                phone: document.getElementById('phone').value.trim() || null,
+                slack_id: document.getElementById('slackId').value.trim() || null
+            };
+            if (!recipient.user_id) return setStatus('sendStatus', 'recipient user_id is required', true);
+            if (!recipient.email && !recipient.phone && !recipient.slack_id) {
+                return setStatus('sendStatus', 'Provide at least one recipient identifier (email/phone/slack_id)', true);
+            }
+
+            const channels = selectedChannels('sendChannelOptions');
+            if (!channels.length) return setStatus('sendStatus', 'Select at least one channel', true);
+
+            const templateId = document.getElementById('templateId').value.trim();
+            if (channels.includes('whatsapp') && !templateId) {
+                return setStatus('sendStatus', 'template_id is required when whatsapp channel is requested', true);
+            }
+            let templateVars = {};
+            try {
+                templateVars = parseJsonInput('templateVars', 'Template variables');
+            } catch (e) {
+                return setStatus('sendStatus', e.message, true);
+            }
+
+            const payload = {
+                recipient,
+                notification: {
+                    type: document.getElementById('type').value.trim(),
+                    priority: document.getElementById('priority').value,
+                    channels,
+                    template_id: templateId || null,
+                    subject: document.getElementById('subject').value.trim() || null,
+                    body: document.getElementById('body').value,
+                    data: { ...templateVars, source: 'tenant_demo_app' }
+                }
+            };
+
+            setSendButtonLoading(true);
+            try {
+                const res = await fetch(base() + '/api/v1/notifications/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': tenantApiKey },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) return setStatus('sendStatus', data, true);
+                if (data.notification_id) document.getElementById('notificationId').value = data.notification_id;
+                setStatus('sendStatus', data);
+            } catch (e) {
+                setStatus('sendStatus', e.message, true);
+            } finally {
+                setSendButtonLoading(false);
+            }
+        }
+
+        async function sendBulk() {
+            setApiKeyFromInput();
+            if (!tenantApiKey) return setStatus('bulkStatus', 'API key required', true);
+
+            const channels = selectedChannels('bulkChannelOptions');
+            if (!channels.length) return setStatus('bulkStatus', 'At least one channel is required for batch send', true);
+
+            const templateId = document.getElementById('bulkTemplateId').value.trim();
+            const body = document.getElementById('bulkBody').value;
+            if (channels.includes('whatsapp') && !templateId) {
+                return setStatus('bulkStatus', 'template_id is required when whatsapp channel is requested', true);
+            }
+            if (!templateId && !body) {
+                return setStatus('bulkStatus', 'Provide template_id or body for batch send', true);
+            }
+
+            let recipients;
+            try {
+                recipients = parseBulkRecipients(document.getElementById('bulkRecipients').value);
+            } catch (e) {
+                return setStatus('bulkStatus', e.message, true);
+            }
+            if (!recipients.length) return setStatus('bulkStatus', 'At least one recipient is required', true);
+            for (let i = 0; i < recipients.length; i++) {
+                const r = recipients[i];
+                if (!r.email && !r.phone && !r.slack_id) {
+                    return setStatus('bulkStatus', 'Recipient line ' + (i + 1) + ' needs at least one identifier (email/phone/slack_id)', true);
+                }
+            }
+
+            const payload = buildBulkPayload();
+            try {
+                const res = await fetch(base() + '/api/v1/notifications/batch-multichannel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': tenantApiKey },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) return setStatus('bulkStatus', data, true);
+                setStatus('bulkStatus', data);
+            } catch (e) {
+                setStatus('bulkStatus', e.message, true);
+            }
+        }
+
+        async function checkStatus() {
+            setApiKeyFromInput();
+            const id = document.getElementById('notificationId').value.trim();
+            if (!tenantApiKey || !id) return setStatus('statusResult', 'API key and notification ID required', true);
+            try {
+                const res = await fetch(base() + '/api/v1/notifications/' + encodeURIComponent(id), {
+                    headers: {'X-API-Key': tenantApiKey}
+                });
+                const data = await res.json();
+                if (!res.ok) return setStatus('statusResult', data, true);
+                setStatus('statusResult', data);
+            } catch (e) {
+                setStatus('statusResult', e.message, true);
+            }
+        }
+
+        document.getElementById('apiKey').addEventListener('change', () => {
+            setApiKeyFromInput();
+            loadChannelAvailability(false).then(updateBulkPreview);
+        });
+        document.getElementById('apiKey').addEventListener('input', () => {
+            setApiKeyFromInput();
+        });
+        ['bulkTemplateId', 'bulkTemplateVars', 'bulkSubject', 'bulkBody', 'bulkScheduleAt', 'bulkRecipients', 'templateVars'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', updateBulkPreview);
+        });
+        if (tenantApiKey) loadChannelAvailability(false).then(updateBulkPreview);
+        else {
+            buildChannelCheckboxes('sendChannelOptions', []);
+            buildChannelCheckboxes('bulkChannelOptions', []);
+            updateBulkPreview();
+        }
+    </script>
+</body>
+</html>

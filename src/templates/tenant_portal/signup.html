@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Portal - Sign Up</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --text: #10213a;
+            --muted: #5a6a82;
+            --brand: #0f766e;
+            --accent: #2563eb;
+            --border: #d6dfec;
+            --danger: #a30e0e;
+            --success: #136b3a;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 8% 8%, #dbf8f1 0%, transparent 28%),
+                radial-gradient(circle at 91% 11%, #dbeafe 0%, transparent 30%),
+                linear-gradient(180deg, #fbfdff 0%, var(--bg) 100%);
+            min-height: 100vh;
+            padding: 24px 16px;
+            color: var(--text);
+        }
+
+        .shell {
+            max-width: 1060px;
+            margin: 0 auto;
+        }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .top strong {
+            font-size: 20px;
+        }
+
+        .top nav a {
+            text-decoration: none;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+            margin-left: 10px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 640px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            box-shadow: 0 18px 48px rgba(16, 33, 58, 0.12);
+            padding: 30px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 31px;
+            margin-bottom: 7px;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 22px;
+            font-size: 14px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .full { grid-column: 1 / -1; }
+
+        label {
+            display: block;
+            font-size: 13px;
+            color: #344962;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+        }
+
+        .hint {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
+        .btn {
+            width: 100%;
+            margin-top: 16px;
+            padding: 13px;
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-weight: 800;
+            font-size: 14px;
+            background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
+            cursor: pointer;
+        }
+
+        .btn:disabled { opacity: 0.62; cursor: not-allowed; }
+
+        .alert {
+            display: none;
+            margin-bottom: 12px;
+            padding: 11px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .error {
+            display: block;
+            background: #ffe3e3;
+            border: 1px solid #ffcaca;
+            color: var(--danger);
+        }
+
+        .ok {
+            display: block;
+            background: #dff8ea;
+            border: 1px solid #bdeecf;
+            color: var(--success);
+        }
+
+        .footer {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .footer a { color: #1c4db0; text-decoration: none; font-weight: 700; }
+
+        @media (max-width: 760px) {
+            .grid { grid-template-columns: 1fr; }
+            .card { padding: 22px; }
+            h1 { font-size: 26px; }
+            .top { align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <header class="top">
+            <strong>Notification Platform</strong>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/portal/login">Login</a>
+                <a href="/portal/how-to-use">How To Use</a>
+            </nav>
+        </header>
+
+        <div class="card">
+            <h1>Create Tenant Account</h1>
+            <p class="subtitle">Register your organization and start template-driven multi-channel notifications.</p>
+
+            <div id="alert" class="alert"></div>
+
+            <form id="signupForm" class="grid">
+                <div class="full">
+                    <label for="tenant_name">Organization Name</label>
+                    <input id="tenant_name" required placeholder="Acme Corp">
+                </div>
+                <div>
+                    <label for="admin_name">Admin Name</label>
+                    <input id="admin_name" required placeholder="Jane Doe">
+                </div>
+                <div>
+                    <label for="admin_email">Admin Email</label>
+                    <input id="admin_email" type="email" required placeholder="admin@acme.com">
+                </div>
+                <div>
+                    <label for="username">Username</label>
+                    <input id="username" required placeholder="acme.corp">
+                </div>
+                <div>
+                    <label for="tenant_id">Tenant ID (optional)</label>
+                    <input id="tenant_id" placeholder="tenant_acme_corp">
+                    <div class="hint">If empty, it is generated from organization name.</div>
+                </div>
+                <div>
+                    <label for="password">Password</label>
+                    <input id="password" type="password" required placeholder="At least 8 chars">
+                </div>
+                <div>
+                    <label for="confirm_password">Confirm Password</label>
+                    <input id="confirm_password" type="password" required placeholder="Repeat password">
+                </div>
+                <div class="full">
+                    <button id="submitBtn" class="btn" type="submit">Create Account</button>
+                </div>
+            </form>
+
+            <div class="footer">
+                Already have an account? <a href="/portal/login">Sign in</a> | <a href="/portal/how-to-use">How To Use</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('signupForm');
+        const alertBox = document.getElementById('alert');
+        const submitBtn = document.getElementById('submitBtn');
+
+        function show(message, type) {
+            alertBox.textContent = message;
+            alertBox.className = 'alert ' + type;
+        }
+
+        function setPortalCookie(token, expiresInSeconds) {
+            document.cookie =
+                'tenant_access_token=' + encodeURIComponent(token) +
+                '; path=/; max-age=' + String(expiresInSeconds) + '; SameSite=Lax';
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            alertBox.className = 'alert';
+
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('confirm_password').value;
+
+            if (password !== confirm) {
+                show('Passwords do not match.', 'error');
+                return;
+            }
+
+            const payload = {
+                tenant_name: document.getElementById('tenant_name').value.trim(),
+                admin_name: document.getElementById('admin_name').value.trim(),
+                admin_email: document.getElementById('admin_email').value.trim(),
+                username: document.getElementById('username').value.trim().toLowerCase(),
+                password: password,
+                tenant_id: document.getElementById('tenant_id').value.trim() || null
+            };
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating...';
+
+            try {
+                const res = await fetch('/api/v1/tenant/auth/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    show(data.detail || 'Signup failed.', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Create Account';
+                    return;
+                }
+
+                localStorage.setItem('tenant_access_token', data.access_token);
+                localStorage.setItem('tenant_id', data.tenant_id);
+                localStorage.setItem('tenant_name', data.tenant_name);
+                localStorage.setItem('token_expires_at', Date.now() + (data.expires_in * 1000));
+                setPortalCookie(data.access_token, data.expires_in);
+
+                show('Account created. Save your API key now: ' + data.api_key, 'ok');
+
+                setTimeout(() => {
+                    window.location.href = '/portal/' + data.tenant_id + '/dashboard';
+                }, 1400);
+            } catch (err) {
+                show('Network error while creating account.', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Account';
+            }
+        });
+    </script>
+</body>
+</html>

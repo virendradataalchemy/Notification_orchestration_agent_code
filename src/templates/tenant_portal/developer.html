@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Settings</title>
+    <link rel="stylesheet" href="/portal/assets/portal_shared.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; margin: 0; background: #f5f7fa; color: #222; }
+        .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-top: 16px; }
+        .label { font-size: 12px; color: #555; margin-bottom: 5px; }
+        .value { font-family: monospace; font-size: 14px; }
+        .danger { background: #b42318; }
+        .status { white-space: pre-wrap; }
+        .new-key { background: #fff8e1; border: 1px solid #f2c94c; padding: 12px; border-radius: 6px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+<nav class="navbar">
+    <div class="navbar-content">
+        <a class="navbar-brand" href="#">Tenant Portal</a>
+        <div class="navbar-user">
+            <div class="nav-links">
+                <a id="navDashboard" href="#">Dashboard</a>
+                <a id="navTemplates" href="#">Templates</a>
+                <a id="navAnalytics" href="#">Analytics</a>
+                <a id="navChannels" href="#">Channel Settings</a>
+                <a id="navDeveloper" href="#"><strong>Developer Settings</strong></a>
+                <a id="navProfile" href="#">Profile</a>
+            </div>
+            <div class="user-info">
+                <div class="user-name" id="tenantName"></div>
+                <div class="user-tenant" id="tenantIdLabel"></div>
+            </div>
+            <button class="btn-logout" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="panel">
+    <h1>Developer Settings</h1>
+    <p>Manage tenant API credentials for programmatic integration.</p>
+
+    <div class="card">
+        <div class="label">Current API Key Prefix</div>
+        <div class="value" id="apiPrefix">Loading...</div>
+        <div class="label" style="margin-top:10px;">Last Updated</div>
+        <div class="value" id="updatedAt">-</div>
+        <p style="margin-top:10px; font-size:13px; color:#666;">
+            Full API keys are never re-displayed after creation. Rotate to generate a new key.
+        </p>
+    </div>
+
+    <div class="card">
+        <button class="danger" id="rotateBtn">Rotate API Key</button>
+        <div id="newKeyBox" class="new-key" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+        <h2 style="font-size: 18px; margin-bottom: 10px;">Sender Identities</h2>
+        <p style="font-size:13px; color:#666; margin-bottom:12px;">
+            These are tenant-owned sender values used by platform delivery. Request payloads do not set sender identity.
+        </p>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <div>
+                <label for="senderEmail">Email Sender (Mailgun From)</label>
+                <input id="senderEmail" placeholder="no-reply@yourdomain.com">
+            </div>
+            <div>
+                <label for="senderSms">SMS Sender Number</label>
+                <input id="senderSms" placeholder="+14155550123">
+            </div>
+            <div>
+                <label for="senderWhatsapp">WhatsApp Sender Number</label>
+                <input id="senderWhatsapp" placeholder="whatsapp:+14155550123 or +14155550123">
+            </div>
+            <div>
+                <label for="senderVoice">Voice Caller ID</label>
+                <input id="senderVoice" placeholder="+14155550123">
+            </div>
+            <div>
+                <label for="senderSlack">Slack Default Channel ID</label>
+                <input id="senderSlack" placeholder="C03ABCXYZ">
+            </div>
+        </div>
+        <div style="margin-top:12px;">
+            <button id="saveSenderBtn">Save Sender Settings</button>
+        </div>
+        <div id="senderStatus" class="status"></div>
+    </div>
+
+    <div id="statusMsg" class="status"></div>
+    </div>
+</div>
+
+<script>
+    const pathParts = window.location.pathname.split('/');
+    const tenantId = pathParts[2];
+    const token = localStorage.getItem('tenant_access_token');
+    const loggedTenantId = localStorage.getItem('tenant_id');
+    const expiresRaw = localStorage.getItem('token_expires_at');
+
+    function clearAuth() {
+        localStorage.removeItem('tenant_access_token');
+        localStorage.removeItem('tenant_id');
+        localStorage.removeItem('tenant_name');
+        localStorage.removeItem('token_expires_at');
+        document.cookie = 'tenant_access_token=; path=/; max-age=0; SameSite=Lax';
+    }
+
+    if (!token || !loggedTenantId || !expiresRaw || Date.now() >= Number(expiresRaw)) {
+        clearAuth();
+        window.location.href = '/portal/login';
+    } else if (loggedTenantId !== tenantId) {
+        window.location.href = '/portal/' + loggedTenantId + '/developer';
+    }
+
+    function wireNav() {
+        document.querySelector('.navbar-brand').href = '/portal/' + tenantId + '/dashboard';
+        document.getElementById('navDashboard').href = '/portal/' + tenantId + '/dashboard';
+        document.getElementById('navTemplates').href = '/portal/' + tenantId + '/templates';
+        document.getElementById('navAnalytics').href = '/portal/' + tenantId + '/analytics';
+        document.getElementById('navChannels').href = '/portal/' + tenantId + '/channels';
+        document.getElementById('navDeveloper').href = '/portal/' + tenantId + '/developer';
+        document.getElementById('navProfile').href = '/portal/' + tenantId + '/profile';
+    }
+
+    function setTenantIdentity() {
+        document.getElementById('tenantName').textContent = localStorage.getItem('tenant_name') || tenantId;
+        document.getElementById('tenantIdLabel').textContent = tenantId;
+    }
+
+    async function logout() {
+        try { await fetch('/api/v1/tenant/auth/logout', { method: 'POST' }); } catch (_) {}
+        clearAuth();
+        window.location.href = '/portal/login';
+    }
+
+    async function loadDeveloper() {
+        const res = await fetch('/api/v1/tenant/settings/developer', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load developer settings');
+        document.getElementById('apiPrefix').textContent = data.api_key_prefix || '-';
+        document.getElementById('updatedAt').textContent = data.updated_at || '-';
+    }
+
+    async function rotateApiKey() {
+        const msg = document.getElementById('statusMsg');
+        const newKeyBox = document.getElementById('newKeyBox');
+        msg.textContent = '';
+        msg.className = 'status';
+        newKeyBox.style.display = 'none';
+
+        if (!confirm('Rotate API key now? Existing key will stop working.')) {
+            return;
+        }
+
+        const res = await fetch('/api/v1/tenant/settings/developer/rotate-api-key', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            msg.textContent = data.detail || 'Rotation failed';
+            msg.className = 'status error';
+            return;
+        }
+
+        newKeyBox.style.display = 'block';
+        newKeyBox.textContent = 'NEW API KEY (copy now): ' + data.api_key;
+        document.getElementById('apiPrefix').textContent = data.api_key_prefix || '-';
+        document.getElementById('updatedAt').textContent = new Date().toISOString();
+        msg.textContent = 'API key rotated successfully.';
+    }
+
+    async function loadSenderSettings() {
+        const res = await fetch('/api/v1/tenants/me/providers', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.detail || 'Failed to load sender settings');
+        }
+
+        const byProvider = {};
+        (data || []).forEach((row) => { byProvider[row.provider] = row.config || {}; });
+        document.getElementById('senderEmail').value = byProvider.email?.from_email || byProvider.email?.sender_email || '';
+        document.getElementById('senderSms').value = byProvider.sms?.from_number || byProvider.sms?.sender_id || '';
+        document.getElementById('senderWhatsapp').value = byProvider.whatsapp?.from_number || byProvider.whatsapp?.sender_id || '';
+        document.getElementById('senderVoice').value = byProvider.voice?.from_number || byProvider.voice?.sender_id || '';
+        document.getElementById('senderSlack').value = byProvider.slack?.channel_id || '';
+    }
+
+    async function upsertProvider(provider, config) {
+        const res = await fetch('/api/v1/tenants/me/providers', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                provider: provider,
+                config: config,
+                is_active: true
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.detail || ('Failed to save ' + provider + ' sender'));
+        }
+    }
+
+    async function saveSenderSettings() {
+        const msg = document.getElementById('senderStatus');
+        msg.textContent = '';
+        msg.className = 'status';
+
+        try {
+            const email = document.getElementById('senderEmail').value.trim();
+            const sms = document.getElementById('senderSms').value.trim();
+            const whatsapp = document.getElementById('senderWhatsapp').value.trim();
+            const voice = document.getElementById('senderVoice').value.trim();
+            const slack = document.getElementById('senderSlack').value.trim();
+
+            if (email) await upsertProvider('email', { from_email: email });
+            if (sms) await upsertProvider('sms', { from_number: sms });
+            if (whatsapp) await upsertProvider('whatsapp', { from_number: whatsapp });
+            if (voice) await upsertProvider('voice', { from_number: voice });
+            if (slack) await upsertProvider('slack', { channel_id: slack });
+
+            msg.textContent = 'Sender settings saved.';
+            await loadSenderSettings();
+        } catch (e) {
+            msg.textContent = e.message;
+            msg.className = 'status error';
+        }
+    }
+
+    wireNav();
+    setTenantIdentity();
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+    document.getElementById('rotateBtn').addEventListener('click', rotateApiKey);
+    document.getElementById('saveSenderBtn').addEventListener('click', saveSenderSettings);
+    loadDeveloper().catch((e) => {
+        const msg = document.getElementById('statusMsg');
+        msg.textContent = e.message;
+        msg.className = 'status error';
+    });
+    loadSenderSettings().catch((e) => {
+        const msg = document.getElementById('senderStatus');
+        msg.textContent = e.message;
+        msg.className = 'status error';
+    });
+</script>
+</body>
+</html>

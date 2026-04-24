@@ -1,14 +1,13 @@
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
 
 from src.config import settings
 from src.core import init_db, init_redis, close_redis
-from src.core.logger import setup_logging
-from src.middleware import ClientAuthMiddleware
+from src.middleware import TenantAuthMiddleware
 from src.services.usage_tracker import initialize_usage_tracker
 from src.api.routers import (
     notifications_router,
@@ -18,23 +17,23 @@ from src.api.routers import (
     health_router,
     dashboard_router,
     admin_router,
-    client_management_router,
+    tenant_management_router,
     usage_router,
-    client_dashboard_router,
-    client_templates_router,
-    client_auth_router,
-    tracking_router,
-    client_portal_router,
-    integration_router,
+    tenant_dashboard_router,
+    tenant_templates_router,
+    tenant_portal_router,
+    tenant_auth_router,
+    channels_router,
+    tenant_settings_router,
+    admin_auth_router,
+    admin_auth_portal_router,
 )
-from src.api.routers.twilio_webhooks import router as twilio_webhooks_router
-from src.api.routers.orchestration import router as orchestration_router
-from src.api.routers.inapp import router as inapp_router
-from src.api.routers.device_tokens import router as device_tokens_router
-from src.api.routers.pipeline import router as pipeline_router
 
 # Configure logging
-setup_logging(log_level=settings.log_level)
+logging.basicConfig(
+    level=getattr(logging, settings.log_level),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
@@ -74,7 +73,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="Multi-Channel Notification Orchestration Platform",
-    description="Centralized multi-client platform for managing notifications across multiple channels",
+    description="Centralized multi-tenant platform for managing notifications across multiple channels",
     version=settings.api_version,
     docs_url=f"{settings.api_prefix}/docs",
     redoc_url=f"{settings.api_prefix}/redoc",
@@ -91,34 +90,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Client authentication middleware (disabled for development)
-# app.add_middleware(ClientAuthMiddleware)
+# Tenant authentication middleware (disabled for development)
+# app.add_middleware(TenantAuthMiddleware)
 
 
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all HTTP requests and add cache headers for read endpoints."""
+    """Log all HTTP requests."""
     start_time = datetime.utcnow()
 
+    # Process request
     response = await call_next(request)
 
+    # Calculate duration
     duration = (datetime.utcnow() - start_time).total_seconds()
+
+    # Log request
     logger.info(
-        f"{request.method:<6} {request.url.path:<45} → {response.status_code}  ({duration:.3f}s)"
+        f"{request.method} {request.url.path} - "
+        f"Status: {response.status_code} - "
+        f"Duration: {duration:.3f}s"
     )
 
-    # Add Cache-Control headers for safe GET endpoints
-    if request.method == "GET" and response.status_code == 200:
-        path = request.url.path
-        if any(path.startswith(p) for p in (
-            "/api/client-dashboard/",
-            "/api/v1/clients/by-",
-            "/admin/api/clients",
-            "/admin/api/dashboard",
-        )):
-            response.headers.setdefault("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
-
+    # Add rate limit headers if present
     if hasattr(request.state, 'rate_limit_remaining'):
         response.headers['X-RateLimit-Remaining'] = str(request.state.rate_limit_remaining)
         response.headers['X-RateLimit-Reset'] = str(request.state.rate_limit_reset)
@@ -142,54 +137,25 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-from fastapi.staticfiles import StaticFiles
-import os
-
-
 # Include routers
 app.include_router(health_router)
 app.include_router(dashboard_router)
 app.include_router(admin_router)  # Admin dashboard (no auth required for demo)
-app.include_router(client_dashboard_router)  # Multi-client dashboard
-app.include_router(client_portal_router)  # Client self-service UI portal
-app.include_router(client_auth_router, prefix=settings.api_prefix)  # Client portal authentication
-app.include_router(orchestration_router)  # Intelligent orchestration agent
-app.include_router(inapp_router, prefix=settings.api_prefix)  # In-app notifications
-app.include_router(device_tokens_router, prefix=settings.api_prefix)  # Device tokens for push
+app.include_router(tenant_dashboard_router)  # Multi-tenant dashboard
+app.include_router(tenant_portal_router)  # Tenant self-service UI portal
+app.include_router(tenant_auth_router, prefix=settings.api_prefix)  # Tenant portal authentication
 app.include_router(notifications_router, prefix=settings.api_prefix)
 app.include_router(templates_router, prefix=settings.api_prefix)
-app.include_router(client_templates_router, prefix=settings.api_prefix)  # Client self-service templates
+app.include_router(tenant_templates_router, prefix=settings.api_prefix)  # Tenant self-service templates
 app.include_router(preferences_router, prefix=settings.api_prefix)
-app.include_router(webhooks_router, prefix=settings.api_prefix)
-app.include_router(twilio_webhooks_router)  # Twilio webhooks for call recording
-app.include_router(client_management_router, prefix=settings.api_prefix)
+# Mount webhooks without api_prefix so external providers can hit them directly at /webhooks
+app.include_router(webhooks_router)
+app.include_router(tenant_management_router, prefix=settings.api_prefix)
 app.include_router(usage_router, prefix=settings.api_prefix)
-app.include_router(tracking_router, prefix=settings.api_prefix)  # Tracking, logs, and unsubscribe
-app.include_router(integration_router, prefix=settings.api_prefix)  # External B2B integration API
-app.include_router(pipeline_router, prefix=settings.api_prefix)
-
-
-# Serve React frontend after API routes so the SPA catch-all does not shadow them.
-frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
-if os.path.exists(frontend_dist):
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
-
-    @app.get("/{full_path:path}", response_class=HTMLResponse)
-    async def serve_frontend(request: Request, full_path: str):
-        """Serve the React frontend for all non-API routes."""
-        if full_path.startswith(("api/", "admin/api/", "docs", "redoc", "openapi.json")):
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={"detail": "Not Found"},
-            )
-
-        index_path = os.path.join(frontend_dist, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-else:
-    @app.get("/", response_class=JSONResponse)
-    async def root():
-        return {"message": "Notification Orchestration API. Frontend not built."}
+app.include_router(channels_router, prefix=settings.api_prefix)
+app.include_router(tenant_settings_router, prefix=settings.api_prefix)
+app.include_router(admin_auth_router, prefix=settings.api_prefix)
+app.include_router(admin_auth_portal_router)
 
 
 if __name__ == "__main__":

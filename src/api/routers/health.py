@@ -1,22 +1,21 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from redis.asyncio import Redis
 from datetime import datetime
+from pathlib import Path
 
-from src.core import get_db_optional, get_redis_client, supabase_client
+from src.core import get_db, get_redis_client
 from src.api.schemas import HealthResponse
 from src.config import settings
 
 router = APIRouter(tags=["health"])
-templates = Jinja2Templates(directory="src/templates")
 
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check(
-    db: AsyncSession | None = Depends(get_db_optional),
+    db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis_client)
 ):
     """
@@ -28,14 +27,8 @@ async def health_check(
 
     # Check database
     try:
-        if supabase_client.configured:
-            await supabase_client.health_check()
-            services["database"] = "healthy (supabase-rest)"
-        else:
-            if db is None:
-                raise RuntimeError("Direct database session is unavailable")
-            await db.execute(text("SELECT 1"))
-            services["database"] = "healthy"
+        await db.execute(text("SELECT 1"))
+        services["database"] = "healthy"
     except Exception as e:
         services["database"] = f"unhealthy: {str(e)}"
 
@@ -59,8 +52,25 @@ async def health_check(
     )
 
 
-@router.get("/", response_class=HTMLResponse)
-@router.get("/app", response_class=HTMLResponse)
-async def root(request: Request):
-    """Main landing page - User Dashboard with client grid."""
-    return templates.TemplateResponse(request, "user_dashboard.html")
+@router.get("/")
+async def root():
+    """Platform landing page."""
+    template_path = Path(__file__).parent.parent.parent / "templates" / "platform_home.html"
+    with open(template_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+
+@router.get("/status", response_class=HTMLResponse)
+async def status_page():
+    """Human-friendly health status page."""
+    template_path = Path(__file__).parent.parent.parent / "templates" / "platform_status.html"
+    with open(template_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+
+@router.get("/channels", response_class=HTMLResponse)
+async def channels_page():
+    """Human-friendly channel capabilities page."""
+    template_path = Path(__file__).parent.parent.parent / "templates" / "platform_channels.html"
+    with open(template_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
