@@ -6,7 +6,7 @@ from sqlalchemy import select
 from redis.asyncio import Redis
 from src.core import get_db, get_redis_client, verify_token
 from src.config import settings
-from src.models import Tenant
+from src.models import Tenant, TenantUser
 import hashlib
 import time
 
@@ -63,10 +63,27 @@ async def get_authenticated_tenant(
             )
 
         tenant_id = payload.get("tenant_id")
-        if not tenant_id:
+        user_id = payload.get("user_id")
+
+        if not tenant_id or not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload"
+            )
+
+        # Look up user first
+        user_query = select(TenantUser).where(
+            TenantUser.id == user_id,
+            TenantUser.tenant_id == tenant_id,
+            TenantUser.is_active == True
+        )
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or not active"
             )
 
         # Look up tenant by ID from JWT
@@ -83,6 +100,11 @@ async def get_authenticated_tenant(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Tenant not found or not active"
             )
+
+        # Attach user info to tenant object for RBAC in routers
+        tenant.current_user_id = user.id
+        tenant.current_user_role = user.role
+        tenant.current_user_email = user.email
 
         return tenant
 

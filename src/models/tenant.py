@@ -19,6 +19,7 @@ class Tenant(Base, TimestampMixin):
     id = Column(String(50), primary_key=True)  # e.g., "tenant_acme_corp"
     name = Column(String(255), nullable=False)  # Company name
     status = Column(String(20), nullable=False, default="active", index=True)  # active|suspended|deleted
+    tenant_type = Column(String(20), nullable=False, default="client", index=True)  # client|marketing
 
     # Portal Authentication (username/password for web UI)
     username = Column(String(100), unique=True, nullable=True, index=True)  # For portal login

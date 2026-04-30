@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tenant Portal - Login</title>
+    <title>Login Portal</title>
     <style>
         :root {
             --bg: #f5f7fb;
@@ -205,7 +205,7 @@
 
         <div class="login-container">
             <div class="logo">
-                <h1>Tenant Portal Login</h1>
+                <h1>Login Portal</h1>
                 <p>Sign in to manage templates, channels, and delivery activity.</p>
             </div>
 
@@ -240,10 +240,10 @@
             </form>
 
             <div class="api-key-info">
-                <strong>New tenant?</strong><br>
+                <strong>New account?</strong><br>
                 Create account once and receive API key + portal access in the same flow.<br><br>
                 <strong>Need access reset?</strong><br>
-                Contact your tenant administrator.
+                Contact your administrator.
             </div>
 
             <div class="help-text">
@@ -288,7 +288,9 @@
 
         const autoRedirectTenantId = shouldAutoRedirect();
         if (autoRedirectTenantId) {
-            window.location.href = '/portal/' + autoRedirectTenantId + '/dashboard';
+            const role = localStorage.getItem('tenant_type') || 'admin';
+            const targetPath = (role === 'marketing') ? 'marketing' : 'dashboard';
+            window.location.href = '/portal/' + autoRedirectTenantId + '/' + targetPath;
         }
 
         function showAlert(message, type) {
@@ -344,13 +346,20 @@
                     localStorage.setItem('tenant_access_token', data.access_token);
                     localStorage.setItem('tenant_id', data.tenant_id);
                     localStorage.setItem('tenant_name', data.tenant_name);
+                    localStorage.setItem('tenant_type', data.tenant_type);
+                    
+                    // Reset active view on fresh login so it defaults to the user's primary role
+                    localStorage.removeItem('portal_active_view');
+
                     localStorage.setItem('token_expires_at', Date.now() + (data.expires_in * 1000));
                     setPortalCookie(data.access_token, data.expires_in);
 
+                    const targetPath = (data.tenant_type === 'marketing') ? 'marketing' : 'dashboard';
                     showAlert('Login successful! Redirecting...', 'success');
-
+                    console.log('Redirecting to:', '/portal/' + data.tenant_id + '/' + targetPath);
+                    
                     setTimeout(() => {
-                        window.location.href = '/portal/' + data.tenant_id + '/dashboard';
+                        window.location.href = '/portal/' + data.tenant_id + '/' + targetPath;
                     }, 1000);
                 } else if (response.status === 401) {
                     showAlert('Invalid username or password. Please try again.');

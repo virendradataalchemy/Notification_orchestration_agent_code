@@ -150,3 +150,47 @@ td {
 .error {
     color: #b42318;
 }
+
+/* View Switcher */
+.view-switcher {
+    position: relative;
+    display: inline-block;
+    margin-right: 20px;
+}
+
+.view-switcher select {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 6px 30px 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    appearance: none;
+    outline: none;
+}
+
+.view-switcher select option {
+    background: #fff;
+    color: #333;
+}
+
+.view-switcher::after {
+    content: '▼';
+    font-size: 10px;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.admin-only, .root-only {
+    display: none; /* Hidden by default, shown via JS based on role */
+}
+
+.active-view-admin .admin-only,
+.active-view-admin .root-only {
+    display: initial;
+}

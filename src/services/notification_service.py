@@ -34,7 +34,7 @@ from .template_engine import TemplateEngine
 from .tenant_template_engine import TenantTemplateEngine
 from .usage_tracker import usage_tracker
 from .orchestration_agent import OrchestrationAgent
-from .channel_policy import channels_requiring_templates
+from .channel_policy import channels_requiring_templates, get_provider_for_channel
 
 
 class NotificationService:
@@ -712,6 +712,7 @@ class NotificationService:
             )
 
         # Create notifications for each recipient
+        notification_ids = []
         for recipient in request.recipients:
             base_data = dict(request.data or {})
             base_data.update(recipient.data or {})
@@ -772,6 +773,7 @@ class NotificationService:
                 scheduled_at=request.schedule_at,
             )
             self.db.add(notification)
+            notification_ids.append(str(notification.id))
 
             channel = NotificationChannel(
                 id=uuid.uuid4(),
@@ -785,7 +787,15 @@ class NotificationService:
 
         await self.db.commit()
 
-        # TODO: Queue batch for processing
+        # Queue batch for processing
+        if not request.schedule_at:
+            try:
+                from src.tasks.notification_tasks import send_notification_medium
+                for nid in notification_ids:
+                    send_notification_medium.apply_async(args=[nid])
+                logger.info(f"Queued {len(notification_ids)} notifications for batch processing")
+            except Exception as e:
+                logger.error(f"Failed to queue batch notifications: {e}")
 
         return BatchNotificationResponse(
             batch_id=batch_id,
@@ -854,6 +864,7 @@ class NotificationService:
                 detail="Either template_id or body is required for batch-multichannel requests."
             )
 
+        notification_ids = []
         for recipient in request.recipients:
             # Build primary plan per recipient
             if has_client_channel_preference:
@@ -960,6 +971,7 @@ class NotificationService:
                 scheduled_at=request.schedule_at,
             )
             self.db.add(notification)
+            notification_ids.append(str(notification.id))
             total_notifications += 1
 
             for channel_name in selected_channels:
@@ -977,6 +989,16 @@ class NotificationService:
 
         await self.db.commit()
 
+        # Queue multi-channel batch for processing
+        if not request.schedule_at:
+            try:
+                from src.tasks.notification_tasks import send_notification_medium
+                for nid in notification_ids:
+                    send_notification_medium.apply_async(args=[nid])
+                logger.info(f"Queued {len(notification_ids)} multi-channel notifications for batch processing")
+            except Exception as e:
+                logger.error(f"Failed to queue multi-channel batch notifications: {e}")
+
         return BatchMultiChannelNotificationResponse(
             batch_id=batch_id,
             status="processing",
@@ -989,16 +1011,7 @@ class NotificationService:
 
     def _get_provider_for_channel(self, channel: str) -> str:
         """Get the provider name for a channel."""
-        provider_map = {
-            "email": "mailgun",  # Changed to Mailgun as primary
-            "sms": "twilio",
-            "whatsapp": "twilio",
-            "slack": "slack_api",
-            "push": "fcm",
-            "voice": "twilio",
-            "inapp": "websocket",
-        }
-        return provider_map.get(channel, "unknown")
+        return get_provider_for_channel(channel)
 
     async def _get_tenant_provider_config_map(self, tenant_id: str) -> Dict[str, Dict[str, Any]]:
         """Load active tenant provider config keyed by channel/provider name."""
@@ -1019,20 +1032,28 @@ class NotificationService:
         required_sender_channels = {"email", "sms", "whatsapp", "voice"}
         missing = []
 
+        logger.info(f"Validating sender config for channels: {selected_channels}")
+        logger.info(f"Available provider configs: {list(provider_config_by_channel.keys())}")
+
         for channel in selected_channels:
             if channel not in required_sender_channels:
                 continue
+            
             cfg = provider_config_by_channel.get(channel) or {}
+            logger.info(f"Config for {channel}: {cfg}")
+            
             sender = cfg.get("from_email") or cfg.get("sender_email") or cfg.get("from_number") or cfg.get("sender_id")
             if not sender:
                 missing.append(channel)
 
         if missing:
+            logger.warning(f"Missing sender identity for: {missing}. Available configs: {list(provider_config_by_channel.keys())}")
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "Tenant sender identity is not configured for channels: "
-                    f"{missing}. Configure sender under tenant provider settings before sending."
+                    f"Tenant sender identity is not configured for channels: {missing}. "
+                    f"Available configs: {list(provider_config_by_channel.keys())}. "
+                    "Configure sender under tenant provider settings before sending."
                 ),
             )
 

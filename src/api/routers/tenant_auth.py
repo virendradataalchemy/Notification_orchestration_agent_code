@@ -13,9 +13,11 @@ from typing import Optional, Dict, List
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr, Field
 import re
+import uuid
 
 from src.core import get_db
-from src.models import Tenant, UserPreference
+from src.models import Tenant, UserPreference, TenantUser
+from src.api.dependencies import get_authenticated_tenant
 from src.api.schemas import TenantLoginRequest, TenantLoginResponse
 from src.core.security import create_access_token
 from src.config import settings
@@ -30,6 +32,7 @@ class TenantSignupRequest(BaseModel):
     username: Optional[str] = Field(default=None, min_length=3, max_length=100)
     password: str = Field(..., min_length=8, max_length=128)
     tenant_id: Optional[str] = Field(default=None, max_length=50)
+    tenant_type: str = Field(default="client", pattern="^(client|marketing)$")
     preference_user_id: Optional[str] = Field(
         default=None,
         min_length=1,
@@ -55,67 +58,6 @@ def _to_tenant_id(raw_name: str) -> str:
     return f"tenant_{base[:40]}"
 
 
-# Dependency for JWT-based authentication (for portal)
-async def get_authenticated_tenant_from_jwt(
-    authorization: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_db)
-) -> Tenant:
-    """
-    Get authenticated tenant from JWT token.
-
-    Used for tenant portal authentication (username/password flow).
-    Different from API key authentication used for programmatic access.
-    """
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid authorization header",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token = authorization.replace("Bearer ", "")
-
-    try:
-        payload = jwt.decode(
-            token,
-            settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm]
-        )
-        tenant_id: str = payload.get("tenant_id")
-
-        if not tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Get tenant from database
-    query = select(Tenant).where(
-        Tenant.id == tenant_id,
-        Tenant.status == "active",
-        Tenant.deleted_at.is_(None)
-    )
-    result = await db.execute(query)
-    tenant = result.scalar_one_or_none()
-
-    if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Tenant not found or not active",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return tenant
-
-
 @router.post(
     "/login",
     response_model=TenantLoginResponse,
@@ -132,37 +74,35 @@ async def tenant_login(
     Returns a JWT token for accessing the tenant portal.
     This token is different from the API key used for programmatic access.
 
-    - **username**: Tenant username (e.g., 'acme.corp')
-    - **password**: Tenant password
-
-    Returns JWT token valid for 8 hours.
+    - **username**: Tenant username (e.g., 'acme.corp' or team member username)
+    - **password**: Password
     """
-    # Find tenant by username
-    query = select(Tenant).where(
-        Tenant.username == credentials.username.lower(),
-        Tenant.status == "active",
-        Tenant.deleted_at.is_(None)
+    # Find user by username
+    query = select(TenantUser).where(
+        TenantUser.username == credentials.username.lower(),
+        TenantUser.is_active == True
     )
     result = await db.execute(query)
-    tenant = result.scalar_one_or_none()
+    user = result.scalar_one_or_none()
 
-    # Check if tenant exists
-    if not tenant:
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Verify password
-    if not tenant.password_hash:
+    # Get tenant
+    tenant = await db.get(Tenant, user.tenant_id)
+    if not tenant or tenant.status != "active" or tenant.deleted_at:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Password authentication not configured for this tenant",
+            detail="Tenant account is not active",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if not Tenant.verify_password(credentials.password, tenant.password_hash):
+    # Verify password
+    if not Tenant.verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -173,19 +113,26 @@ async def tenant_login(
     token_expiration = 8 * 60 * 60  # 8 hours in seconds
     access_token = create_access_token(
         data={
-            "sub": tenant.id,
+            "sub": str(user.id),
             "tenant_id": tenant.id,
+            "user_id": str(user.id),
             "tenant_name": tenant.name,
+            "role": user.role,
             "type": "portal_access"
         },
         expires_delta=timedelta(seconds=token_expiration)
     )
+
+    # Update last login
+    user.last_login_at = datetime.utcnow()
+    await db.commit()
 
     return TenantLoginResponse(
         access_token=access_token,
         token_type="bearer",
         tenant_id=tenant.id,
         tenant_name=tenant.name,
+        tenant_type=user.role,  # Map user role to tenant_type for UI compatibility
         expires_in=token_expiration
     )
 
@@ -295,6 +242,7 @@ async def tenant_signup(
         id=tenant_id,
         name=payload.tenant_name,
         status="active",
+        tenant_type=payload.tenant_type,
         username=username,
         password_hash=Tenant.hash_password(payload.password),
         api_key_hash=api_key_hash,
@@ -305,6 +253,20 @@ async def tenant_signup(
         tenant_metadata={"created_via": "portal_signup", "created_at": datetime.utcnow().isoformat()}
     )
     db.add(tenant)
+
+    # Create root user in tenant_users table
+    user_id = uuid.uuid4()
+    root_user = TenantUser(
+        id=user_id,
+        tenant_id=tenant_id,
+        email=str(payload.admin_email),
+        username=username,
+        password_hash=Tenant.hash_password(payload.password),
+        full_name=payload.admin_name or payload.tenant_name,
+        role='root',
+        is_active=True
+    )
+    db.add(root_user)
 
     # Optional initial user/channel preference seed
     if has_preference_user and has_preferred_channels:
@@ -324,9 +286,11 @@ async def tenant_signup(
     token_expiration = 8 * 60 * 60
     access_token = create_access_token(
         data={
-            "sub": tenant.id,
+            "sub": str(user_id),
             "tenant_id": tenant.id,
+            "user_id": str(user_id),
             "tenant_name": tenant.name,
+            "role": 'root',
             "type": "portal_access"
         },
         expires_delta=timedelta(seconds=token_expiration)
@@ -336,6 +300,8 @@ async def tenant_signup(
         "message": "Tenant account created successfully",
         "tenant_id": tenant.id,
         "tenant_name": tenant.name,
+        "tenant_type": 'root',
+        "user_id": str(user_id),
         "username": tenant.username,
         "api_key": api_key,
         "api_key_prefix": api_key_prefix,
@@ -371,7 +337,7 @@ async def tenant_logout():
     description="Get a new access token before expiration"
 )
 async def refresh_token(
-    current_tenant: Tenant = Depends(get_authenticated_tenant_from_jwt),
+    current_tenant: Tenant = Depends(get_authenticated_tenant),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -391,9 +357,11 @@ async def refresh_token(
     token_expiration = 8 * 60 * 60  # 8 hours
     access_token = create_access_token(
         data={
-            "sub": current_tenant.id,
+            "sub": str(current_tenant.current_user_id),
             "tenant_id": current_tenant.id,
+            "user_id": str(current_tenant.current_user_id),
             "tenant_name": current_tenant.name,
+            "role": current_tenant.current_user_role,
             "type": "portal_access"
         },
         expires_delta=timedelta(seconds=token_expiration)
@@ -404,5 +372,6 @@ async def refresh_token(
         token_type="bearer",
         tenant_id=current_tenant.id,
         tenant_name=current_tenant.name,
+        tenant_type=current_tenant.current_user_role,
         expires_in=token_expiration
     )

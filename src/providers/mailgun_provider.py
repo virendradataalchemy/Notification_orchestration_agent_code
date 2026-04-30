@@ -17,15 +17,15 @@ class MailgunProvider(NotificationProvider):
 
     def __init__(self, config: dict = None):
         super().__init__(config)
-        self.api_key = settings.mailgun_api_key
-        self.domain = settings.mailgun_domain or "sandbox123456.mailgun.org"
+        self.api_key = self.config.get("api_key") or settings.mailgun_api_key
+        self.domain = self.config.get("domain") or settings.mailgun_domain or "sandbox123456.mailgun.org"
         self.from_email = (
             self.config.get("from_email")
             or self.config.get("sender_email")
             or settings.mailgun_from_email
             or "noreply@dataalchemy.ai"
         )
-        self.base_url = settings.mailgun_base_url or "https://api.mailgun.net/v3"
+        self.base_url = self.config.get("base_url") or settings.mailgun_base_url or "https://api.mailgun.net/v3"
 
     async def send(self, message: Message) -> ProviderResponse:
         """

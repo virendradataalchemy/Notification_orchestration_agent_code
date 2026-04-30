@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from src.core import get_db, verify_token
-from src.models import Tenant
+from src.models import Tenant, TenantUser
 
 router = APIRouter(prefix="/portal", tags=["tenant-portal-ui"])
 
@@ -36,7 +36,19 @@ async def _get_portal_tenant_from_cookie(
         return None
 
     tenant_id = payload.get("tenant_id")
-    if not tenant_id:
+    user_id = payload.get("user_id")
+    if not tenant_id or not user_id:
+        return None
+
+    # Verify user
+    user_query = select(TenantUser).where(
+        TenantUser.id == user_id,
+        TenantUser.tenant_id == tenant_id,
+        TenantUser.is_active == True
+    )
+    user_result = await db.execute(user_query)
+    user = user_result.scalar_one_or_none()
+    if not user:
         return None
 
     query = select(Tenant).where(
@@ -45,7 +57,11 @@ async def _get_portal_tenant_from_cookie(
         Tenant.deleted_at.is_(None)
     )
     result = await db.execute(query)
-    return result.scalar_one_or_none()
+    tenant = result.scalar_one_or_none()
+    if tenant:
+        tenant.current_user_role = user.role
+        tenant.current_user_id = user.id
+    return tenant
 
 
 @router.get("/", include_in_schema=False)
@@ -57,7 +73,7 @@ async def portal_root():
 @router.get("/assets/{asset_name}", include_in_schema=False)
 async def portal_assets(asset_name: str):
     """Serve shared tenant portal assets."""
-    allowed_assets = {"portal_shared.css"}
+    allowed_assets = {"portal_shared.css", "portal_auth.js"}
     if asset_name not in allowed_assets:
         raise HTTPException(status_code=404, detail="Asset not found")
 
@@ -83,6 +99,15 @@ async def tenant_signup_page(request: Request):
     """Tenant portal signup page."""
     return templates.TemplateResponse("signup.html", {
         "request": request
+    })
+
+
+@router.get("/accept-invite", response_class=HTMLResponse)
+async def accept_invite_page(request: Request, token: str):
+    """Page to set up account after receiving invitation."""
+    return templates.TemplateResponse("accept_invite.html", {
+        "request": request,
+        "token": token
     })
 
 
@@ -257,3 +282,49 @@ async def analytics_page(
         return RedirectResponse(url=f"/portal/{tenant.id}/analytics")
 
     return templates.TemplateResponse("analytics.html", {"request": request, "tenant_id": tenant_id})
+
+
+@router.get("/{tenant_id}/marketing", response_class=HTMLResponse)
+async def marketing_dashboard_page(
+    request: Request,
+    tenant_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Marketing team dashboard."""
+    tenant = await _get_portal_tenant_from_cookie(request, db)
+    if not tenant:
+        return RedirectResponse(url="/portal/login")
+    if tenant.id != tenant_id:
+        return RedirectResponse(url=f"/portal/{tenant.id}/marketing")
+
+    return templates.TemplateResponse("marketing.html", {
+        "request": request,
+        "tenant_id": tenant_id,
+        "tenant_name": tenant.name
+    })
+
+
+@router.get("/{tenant_id}/team", response_class=HTMLResponse)
+async def team_management_page(
+    request: Request,
+    tenant_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Team management page (Admin only)."""
+    tenant = await _get_portal_tenant_from_cookie(request, db)
+    if not tenant:
+        return RedirectResponse(url="/portal/login")
+    if tenant.id != tenant_id:
+        return RedirectResponse(url=f"/portal/{tenant.id}/team")
+    
+    # Check permissions
+    if tenant.current_user_role not in ["root", "admin"]:
+        # Redirect to dashboard if not admin
+        return RedirectResponse(url=f"/portal/{tenant.id}/dashboard")
+
+    return templates.TemplateResponse("team.html", {
+        "request": request,
+        "tenant_id": tenant_id,
+        "tenant_name": tenant.name,
+        "user_role": tenant.current_user_role
+    })

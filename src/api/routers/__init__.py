@@ -15,6 +15,7 @@ from .channels import router as channels_router
 from .tenant_settings import router as tenant_settings_router
 from .admin_auth import api_router as admin_auth_router
 from .admin_auth import portal_router as admin_auth_portal_router
+from .tenant_team import router as tenant_team_router
 
 __all__ = [
     "notifications_router",
@@ -34,4 +35,5 @@ __all__ = [
     "tenant_settings_router",
     "admin_auth_router",
     "admin_auth_portal_router",
+    "tenant_team_router",
 ]

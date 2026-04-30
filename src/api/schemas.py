@@ -221,6 +221,7 @@ class TemplatePreviewRequest(BaseModel):
     subject: Optional[str] = Field(None, description="Template subject (optional)")
     body: str = Field(..., description="Template body with Jinja2 variables")
     sample_data: Dict[str, Any] = Field(..., description="Sample data for rendering")
+    wrap_variables: bool = Field(False, description="Wrap variables in spans for visual editing")
 
 
 class TemplatePreviewResponse(BaseModel):
@@ -314,6 +315,7 @@ class TenantLoginResponse(BaseModel):
     token_type: str = Field(default="bearer", description="Token type")
     tenant_id: str
     tenant_name: str
+    tenant_type: str = Field(default="client", description="Type of tenant account (client/marketing)")
     expires_in: int = Field(description="Token expiration in seconds")
 
 
@@ -339,3 +341,17 @@ class HealthResponse(BaseModel):
     timestamp: datetime
     version: str
     services: Dict[str, str]
+
+
+class AITemplateGenerateRequest(BaseModel):
+    """Request to generate a template using AI."""
+    content: str = Field(..., description="Raw content or instructions for the template")
+    channel: Channel = Field(..., description="Target channel for the template")
+
+
+class AITemplateGenerateResponse(BaseModel):
+    """AI generated template response."""
+    name: Optional[str] = Field(None, description="Suggested template name")
+    subject: Optional[str] = None
+    body: str
+    description: str

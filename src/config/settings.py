@@ -119,6 +119,10 @@ class Settings(BaseSettings):
     qwen_model_id: str = "qwen.qwen3-next-80b-a3b"
     mistral_api_key: Optional[str] = None
 
+    # Candidate Service (Future Integration)
+    candidate_service_api_key: Optional[str] = None
+    candidate_service_base_url: Optional[str] = None
+
     # Monitoring
     sentry_dsn: Optional[str] = None
     prometheus_port: int = 9090

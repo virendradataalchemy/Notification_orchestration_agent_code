@@ -29,13 +29,17 @@ from src.api.schemas import (
     TemplatePreviewRequest,
     TemplatePreviewResponse,
     TemplateCloneRequest,
-    Channel
+    Channel,
+    AITemplateGenerateRequest,
+    AITemplateGenerateResponse
 )
 from src.models import Template, Tenant
 from src.services.tenant_template_engine import TenantTemplateEngine
+from src.services.llm_service import BedrockLLMService
 
 router = APIRouter(prefix="/tenant/templates", tags=["tenant-templates"])
 template_engine = TenantTemplateEngine()
+llm_service = BedrockLLMService()
 
 
 def _build_template_id(tenant_id: str, name: str, channel: str) -> str:
@@ -429,7 +433,11 @@ async def preview_template(
         )
 
     # Render body
-    rendered_body = template_engine.render_string(preview.body, preview.sample_data)
+    rendered_body = template_engine.render_string(
+        preview.body, 
+        preview.sample_data, 
+        wrap_variables=preview.wrap_variables
+    )
 
     # Render subject if provided
     rendered_subject = None
@@ -634,6 +642,26 @@ async def validate_template_syntax(
         "variables_found": all_variables,
         "variables_count": len(all_variables)
     }
+
+
+@router.post(
+    "/ai-generate",
+    response_model=AITemplateGenerateResponse,
+    summary="Generate template using AI",
+    description="Use AI to generate a professional template based on raw content"
+)
+async def ai_generate_template(
+    request: AITemplateGenerateRequest,
+    tenant: Tenant = Depends(get_authenticated_tenant)
+):
+    """
+    Generate a professional template using AI.
+    """
+    generated = await llm_service.generate_template(
+        content=request.content,
+        channel=request.channel.value
+    )
+    return generated
 
 
 # Helper functions

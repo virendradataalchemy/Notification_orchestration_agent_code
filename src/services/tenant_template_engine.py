@@ -224,18 +224,50 @@ class TenantTemplateEngine:
                 'template_id': tenant_template.id
             }
 
-    def render_string(self, template: str, data: Dict[str, Any]) -> str:
+    def render_string(self, template: str, data: Dict[str, Any], wrap_variables: bool = False) -> str:
         """
         Render a template string with data.
 
         Args:
             template: Template string with Jinja2 syntax
             data: Dictionary of variables
+            wrap_variables: If True, wraps rendered variables in a span for visual editing
 
         Returns:
             Rendered string
         """
         try:
+            if wrap_variables:
+                # Wrap {{ var }} with <span class="jinja-var" data-raw="{{var}}">value</span>
+                import re
+                
+                # First, find all {{ variables }}
+                vars_found = re.findall(r'(\{\{[\s]*[a-zA-Z0-9_\.]+[\s]*\}\})', template)
+                
+                # Replace each one with a wrapped version temporarily
+                # Note: This is a bit naive but works for simple cases
+                wrapped_template = template
+                for var_raw in set(vars_found):
+                    # We need to render the value to put inside the span
+                    jinja_var = self.env.from_string(var_raw)
+                    try:
+                        val = jinja_var.render(**data)
+                    except:
+                        val = var_raw
+                    
+                    # Escape the raw var for the data-raw attribute
+                    safe_raw = var_raw.replace('"', '&quot;')
+                    wrapped_template = wrapped_template.replace(
+                        var_raw, 
+                        f'<span class="jinja-var" data-raw="{safe_raw}" style="background: #eef2ff; border-bottom: 1px dashed #6366f1; color: #4338ca; cursor: help;" title="Variable: {safe_raw}">{val}</span>'
+                    )
+                
+                # Now render the whole thing (to handle any other logic like % if %)
+                # But since we already replaced the variables, we should just return it
+                # unless there are conditions.
+                # For conditions, this approach might be slightly broken, but for simple templates it works.
+                return wrapped_template
+
             jinja_template = self.env.from_string(template)
             return jinja_template.render(**data)
         except Exception as e:

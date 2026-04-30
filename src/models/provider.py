@@ -1,25 +1,25 @@
-from __future__ import annotations
-
-from typing import Optional
-
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from sqlalchemy import Column, String, Integer, DateTime, Boolean, UniqueConstraint
+from datetime import datetime
 from .base import Base
 
+class ProviderHealth(Base):
+    """Tracks global health and success rates for each provider/channel combination."""
 
-class Provider(Base):
-    __tablename__ = "providers"
+    __tablename__ = "provider_health"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
-    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id"), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    config_ref: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
-    updated_at: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    provider_name = Column(String(100), nullable=False)
+    channel = Column(String(50), nullable=False, index=True)
+    
+    success_count = Column(Integer, nullable=False, default=0)
+    failure_count = Column(Integer, nullable=False, default=0)
+    avg_latency_ms = Column(Integer, nullable=True)
+    is_healthy = Column(Boolean, nullable=False, default=True, index=True)
+    last_check = Column(DateTime, nullable=False, default=datetime.utcnow)
 
-    channel = relationship("Channel", back_populates="providers")
-    attempts = relationship("CommunicationAttempt", back_populates="provider")
+    __table_args__ = (
+        UniqueConstraint('provider_name', 'channel', name='uq_provider_channel'),
+    )
+
+    def __repr__(self):
+        return f"<ProviderHealth(provider={self.provider_name}, channel={self.channel}, healthy={self.is_healthy})>"

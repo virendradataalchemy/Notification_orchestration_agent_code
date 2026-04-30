@@ -8,9 +8,13 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from uuid import UUID
 
+from colorama import init, Fore, Style
 from celery import Task
 from sqlalchemy import select, text
 from sqlalchemy.orm import selectinload
+
+# Initialize colorama for Windows/Unix compatibility
+init(autoreset=True)
 
 from src.celery_app import celery_app
 from src.core.database import AsyncSessionLocal
@@ -23,6 +27,7 @@ from src.models import (
 )
 from src.services.provider_manager import ProviderManager
 from src.services.orchestration_agent import OrchestrationAgent
+from src.services.channel_policy import get_provider_for_channel
 from src.providers.base import Message, ProviderStatus
 
 logger = logging.getLogger(__name__)
@@ -74,7 +79,7 @@ def send_notification_critical(self, notification_id: str):
     Max retries: 3
     Retry delays: 5s, 25s, 125s
     """
-    logger.info(f"[CRITICAL] Processing notification {notification_id}")
+    logger.info(f"{Fore.MAGENTA}{Style.BRIGHT}[CRITICAL] Processing notification {notification_id}")
     return _send_notification_sync(notification_id, priority='critical')
 
 
@@ -86,7 +91,7 @@ def send_notification_high(self, notification_id: str):
     Max retries: 3
     Retry delays: 5s, 25s, 125s
     """
-    logger.info(f"[HIGH] Processing notification {notification_id}")
+    logger.info(f"{Fore.RED}{Style.BRIGHT}[HIGH] Processing notification {notification_id}")
     return _send_notification_sync(notification_id, priority='high')
 
 
@@ -98,7 +103,7 @@ def send_notification_medium(self, notification_id: str):
     Max retries: 3
     Retry delays: 5s, 25s, 125s
     """
-    logger.info(f"[MEDIUM] Processing notification {notification_id}")
+    logger.info(f"{Fore.YELLOW}{Style.BRIGHT}[MEDIUM] Processing notification {notification_id}")
     return _send_notification_sync(notification_id, priority='medium')
 
 
@@ -110,7 +115,7 @@ def send_notification_low(self, notification_id: str):
     Max retries: 2 (fewer retries for low priority)
     Retry delays: 5s, 25s
     """
-    logger.info(f"[LOW] Processing notification {notification_id}")
+    logger.info(f"{Fore.BLUE}{Style.BRIGHT}[LOW] Processing notification {notification_id}")
     return _send_notification_sync(notification_id, priority='low', max_attempts=2)
 
 
@@ -212,7 +217,7 @@ async def _send_notification_async(
                 for channel_record in notification.channels:
                     channel = channel_record.channel
 
-                    logger.info(f"Processing channel {channel} for notification {notification_id}")
+                    logger.info(f"{Fore.BLUE}Processing channel {channel} for notification {notification_id}")
 
                     result = await _send_via_channel(
                         db=db,
@@ -249,10 +254,14 @@ async def _send_notification_async(
 
             await db.commit()
 
+            success_count = len([r for r in results.values() if r['status'] == 'success'])
+            fail_count = len([r for r in results.values() if r['status'] == 'failed'])
+            
+            summary_color = Fore.GREEN if fail_count == 0 else (Fore.YELLOW if success_count > 0 else Fore.RED)
+
             logger.info(
-                f"Completed notification {notification_id}: "
-                f"{len([r for r in results.values() if r['status'] == 'success'])} "
-                f"succeeded, {len([r for r in results.values() if r['status'] == 'failed'])} failed"
+                f"{summary_color}{Style.BRIGHT}Completed notification {notification_id}: "
+                f"{success_count} succeeded, {fail_count} failed"
             )
 
             return {
@@ -372,17 +381,14 @@ async def _send_via_channel(
 
                 await db.commit()
 
-                logger.info(
-                    f"✓ Notification {notification_id} sent via {provider}/{channel} "
-                    f"in {elapsed_ms}ms (attempt {attempt + 1})"
-                )
+                logger.info(f"{Fore.GREEN}✓ Notification {notification_id} sent via {provider}/{channel} in {elapsed_ms}ms (attempt {attempt + 1})")
 
                 return {
                     'status': 'success',
                     'provider': provider,
                     'message_id': response.message_id,
                     'latency_ms': elapsed_ms,
-                    'attempts': attempt + 1
+                    'attempt': attempt + 1
                 }
 
             else:
@@ -393,7 +399,7 @@ async def _send_via_channel(
 
         except Exception as e:
             logger.warning(
-                f"✗ Attempt {attempt + 1}/{max_attempts} failed for {provider}/{channel}: {e}"
+                f"{Fore.RED}✗ Attempt {attempt + 1}/{max_attempts} failed for {provider}/{channel}: {e}"
             )
 
             # Log failure event
@@ -416,12 +422,12 @@ async def _send_via_channel(
                 failover_provider = await provider_mgr.get_failover_provider(channel, provider)
 
                 if failover_provider and failover_provider != provider:
-                    logger.info(f"→ Failing over to provider {failover_provider}")
+                    logger.info(f"{Fore.YELLOW}→ Failing over to provider {failover_provider}")
                     provider = failover_provider
 
                 # Exponential backoff
                 delay = delays[min(attempt, len(delays) - 1)]
-                logger.info(f"⏱ Retrying in {delay}s...")
+                logger.info(f"{Fore.CYAN}⏱ Retrying in {delay}s...")
                 await asyncio.sleep(delay)
 
             else:
@@ -453,12 +459,12 @@ async def _send_via_channel(
                 await db.commit()
 
                 logger.error(
-                    f"✗ Notification {notification_id} permanently failed on {channel} "
+                    f"{Fore.RED}{Style.BRIGHT}✗ Notification {notification_id} permanently failed on {channel} "
                     f"after {attempt + 1} attempts"
                 )
                 if not retryable_error:
                     logger.error(
-                        f"Non-retryable error for {provider}/{channel}; stopping retries: {e}"
+                        f"{Fore.RED}Non-retryable error for {provider}/{channel}; stopping retries: {e}"
                     )
 
                 return {
@@ -504,7 +510,7 @@ async def _process_channels_sequential(
 
     for channel_record in ordered_records:
         channel = channel_record.channel
-        logger.info(f"[SEQUENTIAL] Processing channel {channel} for notification {notification.id}")
+        logger.info(f"{Fore.BLUE}[SEQUENTIAL] Processing channel {channel} for notification {notification.id}")
         result = await _send_via_channel(
             db=db,
             notification=notification,

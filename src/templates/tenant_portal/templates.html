@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Templates - Tenant Portal</title>
+    <title>My Templates</title>
     <link rel="stylesheet" href="/portal/assets/portal_shared.css">
+    <script src="/portal/assets/portal_auth.js"></script>
     <style>
         * {
             margin: 0;
@@ -239,12 +240,14 @@
 <body>
     <nav class="navbar">
         <div class="navbar-content">
-            <a href="#" onclick="goToDashboard(); return false;" class="navbar-brand"> Tenant Portal</a>
+            <a href="#" class="navbar-brand">Dashboard</a>
             <div class="navbar-user">
                 <div class="navbar-links">
                     <a id="navDashboard" href="#">Dashboard</a>
+                    <a id="navTemplates" href="#" class="active">Templates</a>
                     <a id="navAnalytics" href="#">Analytics</a>
                     <a id="navChannels" href="#">Channels</a>
+                    <a id="navTeam" href="#">Team Management</a>
                     <a id="navDeveloper" href="#">Developer</a>
                     <a id="navProfile" href="#">Profile</a>
                 </div>
@@ -301,40 +304,6 @@
         const pathParts = window.location.pathname.split('/');
         const tenantId = pathParts[2];
         const accessToken = localStorage.getItem('tenant_access_token');
-        const loggedTenantId = localStorage.getItem('tenant_id');
-        const tokenExpiresAtRaw = localStorage.getItem('token_expires_at');
-
-        function clearPortalAuth() {
-            localStorage.removeItem('tenant_access_token');
-            localStorage.removeItem('tenant_id');
-            localStorage.removeItem('tenant_name');
-            localStorage.removeItem('token_expires_at');
-            document.cookie = 'tenant_access_token=; path=/; max-age=0; SameSite=Lax';
-        }
-
-        if (!accessToken || !loggedTenantId || !tokenExpiresAtRaw) {
-            clearPortalAuth();
-            window.location.href = '/portal/login';
-        } else if (!Number.isFinite(Number(tokenExpiresAtRaw)) || Date.now() >= Number(tokenExpiresAtRaw)) {
-            clearPortalAuth();
-            window.location.href = '/portal/login';
-        } else if (loggedTenantId !== tenantId) {
-            window.location.href = '/portal/' + loggedTenantId + '/templates';
-        }
-
-        function wireNav() {
-            document.getElementById('navDashboard').href = '/portal/' + tenantId + '/dashboard';
-            document.getElementById('navAnalytics').href = '/portal/' + tenantId + '/analytics';
-            document.getElementById('navChannels').href = '/portal/' + tenantId + '/channels';
-            document.getElementById('navDeveloper').href = '/portal/' + tenantId + '/developer';
-            document.getElementById('navProfile').href = '/portal/' + tenantId + '/profile';
-        }
-
-        async function logout() {
-            try { await fetch('/api/v1/tenant/auth/logout', { method: 'POST' }); } catch (_) {}
-            clearPortalAuth();
-            window.location.href = '/portal/login';
-        }
 
         function goToDashboard() {
             window.location.href = '/portal/' + tenantId + '/dashboard';
@@ -427,14 +396,15 @@
                 var icon = channelIcons[template.channel] || '    ';
                 var badge = template.tenant_id ? '<span class="badge badge-custom">Custom</span>' : '<span class="badge badge-global">Global</span>';
                 var subjectHtml = template.subject ? '<div class="template-body-subject">Subject: ' + escapeHtml(template.subject) + '</div>' : '';
-                var bodyPreview = escapeHtml(template.body.substring(0, 200)) + (template.body.length > 200 ? '...' : '');
+                var idHtml = '<div style="font-size: 11px; color: #64748b; margin-bottom: 8px; font-family: monospace; display: flex; align-items: center; gap: 5px;">' +
+                             '<span>ID:</span> <span style="background: #f1f5f9; padding: 1px 4px; border-radius: 3px;">' + template.id + '</span></div>';
                 var actions = '';
 
                 if (template.tenant_id) {
-                    actions = '<button class="btn-small btn-edit" onclick="editTemplate(\'' + template.id + '\')">       Edit</button>' +
-                             '<button class="btn-small btn-delete" onclick="deleteTemplate(\'' + template.id + '\', \'' + template.name + '\')">        Delete</button>';
+                    actions = '<a href="/portal/' + tenantId + '/templates/edit/' + template.id + '" class="btn-small btn-edit" style="text-decoration: none; display: inline-flex; align-items: center;">Edit</a>' +
+                             '<button class="btn-small btn-delete" onclick="deleteTemplate(\'' + template.id + '\', \'' + template.name + '\')">Delete</button>';
                 } else {
-                    actions = '<button class="btn-small btn-edit" onclick="cloneTemplate(\'' + template.id + '\')">     Clone</button>';
+                    actions = '<a href="/portal/' + tenantId + '/templates/create?clone=' + template.id + '" class="btn-small btn-edit" style="text-decoration: none; display: inline-flex; align-items: center;">Clone</a>';
                 }
 
                 html += '<div class="template-card">' +
@@ -450,11 +420,11 @@
                         '</div>' +
                     '</div>' +
                     '<div class="template-body">' +
+                        idHtml +
                         subjectHtml +
-                        '<div>' + bodyPreview + '</div>' +
                     '</div>' +
                     '<div class="template-actions">' +
-                        '<button class="btn-small btn-view" onclick="viewTemplate(\'' + template.id + '\')">        View</button>' +
+                        '<a href="/portal/' + tenantId + '/templates/view/' + template.id + '" class="btn-small btn-view" style="text-decoration: none; display: inline-flex; align-items: center;">View</a>' +
                         actions +
                     '</div>' +
                 '</div>';
@@ -506,8 +476,6 @@
         }
 
         // Load templates on page load
-        wireNav();
-        document.getElementById('logoutBtn').addEventListener('click', logout);
         loadTemplates();
     </script>
 </body>

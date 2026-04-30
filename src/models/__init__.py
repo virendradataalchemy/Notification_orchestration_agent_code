@@ -6,6 +6,11 @@ from .user_preference import UserPreference
 from .audit_log import AuditLog
 from .tenant_channel_preference import TenantChannelPreference
 from .inbound import InboundMessage, InboundIntent, InboundChannel, InboundStatus, IntentCategory, DetectionMethod
+from .engagement import UserEngagement
+from .provider import ProviderHealth
+from .event import NotificationEvent
+from .embedding import NotificationEmbedding
+from .tenant_user import TenantUser, TenantInvitation
 
 __all__ = [
     "Base",
@@ -26,4 +31,10 @@ __all__ = [
     "InboundStatus",
     "IntentCategory",
     "DetectionMethod",
+    "UserEngagement",
+    "ProviderHealth",
+    "NotificationEvent",
+    "NotificationEmbedding",
+    "TenantUser",
+    "TenantInvitation",
 ]

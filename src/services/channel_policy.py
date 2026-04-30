@@ -59,6 +59,20 @@ CHANNEL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
 }
 
 
+def get_provider_for_channel(channel: str) -> str:
+    """Get the default provider name for a channel."""
+    provider_map = {
+        "email": "mailgun",
+        "sms": "twilio",
+        "whatsapp": "twilio",
+        "slack": "slack_api",
+        "push": "fcm",
+        "voice": "twilio",
+        "inapp": "websocket",
+    }
+    return provider_map.get(channel, "unknown")
+
+
 def channels_requiring_templates() -> Set[str]:
     """Return channels that require template_id."""
     return {

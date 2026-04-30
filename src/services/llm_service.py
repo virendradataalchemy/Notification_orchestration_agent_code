@@ -343,3 +343,76 @@ Respond with ONLY the urgency level (one word)."""
         except Exception as e:
             logger.error(f"Failed to analyze urgency: {e}")
             return 'medium'
+
+    async def generate_template(self, content: str, channel: str) -> Dict[str, Any]:
+        """
+        Generate a professional notification template based on raw content and target channel.
+        """
+        prompt = f"""You are a professional communications expert. Generate a notification template based on the content below for the channel: {channel}.
+
+Raw Content/Instruction:
+"{content}"
+
+Channel Guidelines:
+- email: Provide a compelling subject line and an HTML-formatted body.
+- sms/whatsapp: Keep it concise (under 160 chars for SMS if possible). Use plaintext.
+- slack: Use markdown formatting.
+- push/inapp: Keep it short and actionable.
+
+Use Jinja2 variable placeholders like {{{{user_name}}}}, {{{{order_id}}}}, {{{{company_name}}}} where they make sense.
+
+Respond ONLY with valid JSON in this exact structure:
+{{
+    "name": "lowercase_with_underscores_name",
+    "subject": "Subject line (null if not email)",
+    "body": "The generated template body content",
+    "description": "Short description of the template"
+}}"""
+
+        try:
+            response = await asyncio.to_thread(
+                self.client.invoke_model,
+                modelId=self.model_id,
+                contentType='application/json',
+                accept='application/json',
+                body=json.dumps({
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'max_tokens': 1000,
+                    'temperature': 0.7,
+                })
+            )
+
+            result = json.loads(response['body'].read())
+            
+            # Extract content from Qwen format
+            content_str = "{}"
+            if 'choices' in result:
+                content_str = result['choices'][0]['message'].get('content', '{}')
+            elif 'content' in result:
+                content_str = result['content'][0].get('text', '{}')
+            elif 'completion' in result:
+                content_str = result['completion']
+            
+            clean_content = re.sub(r'```json\s?|\s?```', '', content_str).strip()
+            
+            start = clean_content.find('{')
+            end = clean_content.rfind('}') + 1
+            if start == -1 or end == 0:
+                raise ValueError("No JSON found in LLM response")
+
+            generated = json.loads(clean_content[start:end])
+            
+            return {
+                "name": generated.get("name"),
+                "subject": generated.get("subject"),
+                "body": generated.get("body", content),
+                "description": generated.get("description", f"AI generated {channel} template")
+            }
+
+        except Exception as e:
+            logger.error(f"AI Template Generation failed: {e}")
+            return {
+                "subject": "Notification" if channel == 'email' else None,
+                "body": content,
+                "description": "Original content (AI generation failed)"
+            }

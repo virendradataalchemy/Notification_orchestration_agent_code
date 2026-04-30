@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tenant Portal - Dashboard</title>
+    <title>Dashboard</title>
     <link rel="stylesheet" href="/portal/assets/portal_shared.css">
+    <script src="/portal/assets/portal_auth.js"></script>
     <style>
         * {
             margin: 0;
@@ -200,15 +201,17 @@
 <body>
     <nav class="navbar">
         <div class="navbar-content">
-            <div class="navbar-brand">
+            <a class="navbar-brand" href="#">
                 <span></span>
-                <span>Tenant Portal</span>
-            </div>
+                <span>Dashboard</span>
+            </a>
             <div class="navbar-user">
                 <div class="navbar-links">
+                    <a id="navDashboard" href="#" class="active">Dashboard</a>
                     <a id="navTemplates" href="#">Templates</a>
                     <a id="navAnalytics" href="#">Analytics</a>
                     <a id="navChannels" href="#">Channels</a>
+                    <a id="navTeam" href="#">Team Management</a>
                     <a id="navDeveloper" href="#">Developer</a>
                     <a id="navProfile" href="#">Profile</a>
                 </div>
@@ -238,42 +241,11 @@
         const pathParts = window.location.pathname.split('/');
         const tenantId = pathParts[2]; // /portal/acme_corp/dashboard
         const accessToken = localStorage.getItem('tenant_access_token');
-        const loggedTenantId = localStorage.getItem('tenant_id');
-        const tokenExpiresAtRaw = localStorage.getItem('token_expires_at');
 
-        function clearPortalAuth() {
-            localStorage.removeItem('tenant_access_token');
-            localStorage.removeItem('tenant_id');
-            localStorage.removeItem('tenant_name');
-            localStorage.removeItem('token_expires_at');
-            document.cookie = 'tenant_access_token=; path=/; max-age=0; SameSite=Lax';
-        }
+        // Removed local identity setting - handled by portal_auth.js
+    // function setTenantIdentity() { ... }
 
-        function wireNavLinks() {
-            document.getElementById('navTemplates').href = '/portal/' + tenantId + '/templates';
-            document.getElementById('navAnalytics').href = '/portal/' + tenantId + '/analytics';
-            document.getElementById('navChannels').href = '/portal/' + tenantId + '/channels';
-            document.getElementById('navDeveloper').href = '/portal/' + tenantId + '/developer';
-            document.getElementById('navProfile').href = '/portal/' + tenantId + '/profile';
-        }
-
-        async function logout() {
-            try { await fetch('/api/v1/tenant/auth/logout', { method: 'POST' }); } catch (_) {}
-            clearPortalAuth();
-            window.location.href = '/portal/login';
-        }
-
-        if (!accessToken || !loggedTenantId || !tokenExpiresAtRaw) {
-            clearPortalAuth();
-            window.location.href = '/portal/login';
-        } else if (!Number.isFinite(Number(tokenExpiresAtRaw)) || Date.now() >= Number(tokenExpiresAtRaw)) {
-            clearPortalAuth();
-            window.location.href = '/portal/login';
-        } else if (loggedTenantId !== tenantId) {
-            window.location.href = '/portal/' + loggedTenantId + '/dashboard';
-        }
-
-        async function loadDashboard() {
+    async function loadDashboard() {
             try {
                 // Fetch template statistics
                 const response = await fetch('/api/v1/tenant/templates/stats', {
@@ -319,18 +291,18 @@
 
         function renderDashboard(stats) {
             const channelIcons = {
-                email: '    ',
-                sms: '    ',
-                slack: '    ',
-                whatsapp: '    ',
-                push: '    '
+                email: '✉️',
+                sms: '📱',
+                slack: '💬',
+                whatsapp: '📞',
+                push: '🔔'
             };
 
             // Build channel cards HTML
             var channelsHtml = '';
             for (var channel in stats.templates_by_channel) {
                 var count = stats.templates_by_channel[channel];
-                var icon = channelIcons[channel] || '    ';
+                var icon = channelIcons[channel] || '📡';
                 channelsHtml += '<div class="channel-card">' +
                     '<div class="channel-icon">' + icon + '</div>' +
                     '<div class="channel-name">' + channel.toUpperCase() + '</div>' +
@@ -340,22 +312,22 @@
 
             var content = '<div class="stats-grid">' +
                     '<div class="stat-card">' +
-                        '<div class="stat-icon">    </div>' +
+                        '<div class="stat-icon">📄</div>' +
                         '<div class="stat-value">' + stats.total_tenant_templates + '</div>' +
                         '<div class="stat-label">Your Templates</div>' +
                     '</div>' +
                     '<div class="stat-card">' +
-                        '<div class="stat-icon">    </div>' +
+                        '<div class="stat-icon">🌍</div>' +
                         '<div class="stat-value">' + stats.total_global_templates_available + '</div>' +
                         '<div class="stat-label">Global Templates</div>' +
                     '</div>' +
                     '<div class="stat-card">' +
-                        '<div class="stat-icon">    </div>' +
+                        '<div class="stat-icon">🔌</div>' +
                         '<div class="stat-value">' + Object.keys(stats.templates_by_channel).length + '</div>' +
                         '<div class="stat-label">Active Channels</div>' +
                     '</div>' +
                     '<div class="stat-card">' +
-                        '<div class="stat-icon">   </div>' +
+                        '<div class="stat-icon">📊</div>' +
                         '<div class="stat-value">' + (stats.total_tenant_templates + stats.total_global_templates_available) + '</div>' +
                         '<div class="stat-label">Total Available</div>' +
                     '</div>' +
@@ -364,28 +336,28 @@
                     '<h2>Quick Actions</h2>' +
                     '<div class="action-buttons">' +
                         '<a href="/portal/' + tenantId + '/templates/create" class="action-btn">' +
-                            '<div class="action-icon">   </div>' +
+                            '<div class="action-icon">➕</div>' +
                             '<div class="action-content">' +
                                 '<h3>Create New Template</h3>' +
                                 '<p>Build custom templates for any channel</p>' +
                             '</div>' +
                         '</a>' +
                         '<a href="/portal/' + tenantId + '/templates" class="action-btn">' +
-                            '<div class="action-icon">    </div>' +
+                            '<div class="action-icon">📋</div>' +
                             '<div class="action-content">' +
                                 '<h3>My Templates</h3>' +
                                 '<p>View and manage your templates</p>' +
                             '</div>' +
                         '</a>' +
                         '<a href="/portal/' + tenantId + '/templates" class="action-btn">' +
-                            '<div class="action-icon">    </div>' +
+                            '<div class="action-icon">🔍</div>' +
                             '<div class="action-content">' +
                                 '<h3>Browse Global Templates</h3>' +
                                 '<p>Clone and customize platform templates</p>' +
                             '</div>' +
                         '</a>' +
                         '<a href="/portal/how-to-use" class="action-btn">' +
-                            '<div class="action-icon">    </div>' +
+                            '<div class="action-icon">📖</div>' +
                             '<div class="action-content">' +
                                 '<h3>API Usage Guide</h3>' +
                                 '<p>See onboarding, channel rules, and API examples</p>' +
@@ -413,6 +385,7 @@
         }
 
         async function loadDeliveryActivity() {
+            const listEl = document.getElementById('recent-delivery-list');
             try {
                 const response = await fetch(`/api/tenant-dashboard/tenant/${tenantId}/delivery-activity?limit=12`, {
                     headers: {
@@ -421,16 +394,22 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to load delivery activity');
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.detail || `Server error: ${response.status}`);
                 }
 
                 const payload = await response.json();
+                console.log('Delivery activity payload:', payload);
                 renderDeliveryActivity(payload.records || []);
 
             } catch (error) {
                 console.error('Error loading delivery activity:', error);
-                document.getElementById('recent-delivery-list').innerHTML =
-                    '<p style="text-align: center; color: #c33;">Failed to load delivery activity</p>';
+                listEl.innerHTML =
+                    `<div style="text-align: center; padding: 20px; color: #c33;">
+                        <p><strong>Failed to load delivery activity</strong></p>
+                        <p style="font-size: 12px; color: #666; margin-top: 5px;">${error.message}</p>
+                        <button onclick="loadDeliveryActivity()" style="margin-top: 10px; padding: 5px 15px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 12px;">Retry</button>
+                    </div>`;
             }
         }
 
@@ -446,7 +425,7 @@
             const container = document.getElementById('recent-delivery-list');
 
             if (!records || records.length === 0) {
-                container.innerHTML = '<p style="text-align: center; color: #999;">No delivery records yet</p>';
+                container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No delivery records yet</p>';
                 return;
             }
 
@@ -457,54 +436,95 @@
                 'low': '#16a34a'
             };
 
-            let html = '<div style="display: flex; flex-direction: column; gap: 15px;">';
+            const statusColors = {
+                'queued': { bg: '#eef2ff', text: '#3730a3' },
+                'sent': { bg: '#ecfdf5', text: '#065f46' },
+                'delivered': { bg: '#f0fdf4', text: '#166534' },
+                'failed': { bg: '#fef2f2', text: '#991b1b' },
+                'bounced': { bg: '#fff7ed', text: '#9a3412' }
+            };
+
+            const channelIcons = {
+                email: '✉️',
+                sms: '📱',
+                slack: '💬',
+                whatsapp: '📞',
+                push: '🔔'
+            };
+
+            let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
 
             for (let rec of records) {
-                const priorityColor = priorityColors[String(rec.priority || '').toLowerCase()] || '#666';
-                const preview = cleanMessagePreview(rec.message_preview || '');
-                const mode = rec.template_mode === 'template' ? 'Template' : 'Raw';
-                const errInline = rec.error_message
-                    ? '<span style="color:#c33;">' + rec.error_message + '</span>'
-                    : '-';
-                const detailsId = 'delivery_details_' + rec.notification_id + '_' + (rec.channel || 'x');
+                try {
+                    const priorityColor = priorityColors[String(rec.priority || '').toLowerCase()] || '#666';
+                    const statusInfo = statusColors[String(rec.status || '').toLowerCase()] || { bg: '#f3f4f6', text: '#374151' };
+                    const preview = cleanMessagePreview(rec.message_preview || '');
+                    const channelIcon = channelIcons[String(rec.channel || '').toLowerCase()] || '📡';
+                    const detailsId = 'delivery_details_' + (rec.notification_id || Math.random().toString(36).substr(2, 9)) + '_' + (rec.channel || 'x');
+                    
+                    let dateStr = 'N/A';
+                    if (rec.created_at) {
+                        try {
+                            dateStr = new Date(rec.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+                        } catch (e) { console.error('Date error:', e); }
+                    }
 
-                html += '<div style="background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; border-left: 4px solid ' + priorityColor + ';">' +
-                    '<div style="display:grid;grid-template-columns:1.2fr 0.8fr 1fr 0.8fr 1.2fr 1.2fr;gap:10px;align-items:start;">' +
-                        '<div>' +
-                            '<div style="font-size:0.75em;color:#999;">Time</div>' +
-                            '<div style="font-size:0.85em;color:#444;">' + new Date(rec.created_at).toLocaleString() + '</div>' +
-                        '</div>' +
-                        '<div>' +
-                            '<div style="font-size:0.75em;color:#999;">Channel</div>' +
-                            '<div style="font-weight:600;">' + (rec.channel || 'N/A') + '</div>' +
-                        '</div>' +
-                        '<div>' +
-                            '<div style="font-size:0.75em;color:#999;">Recipient</div>' +
-                            '<div style="font-family:monospace;">' + (rec.recipient || 'N/A') + '</div>' +
-                        '</div>' +
-                        '<div>' +
-                            '<div style="font-size:0.75em;color:#999;">Status</div>' +
-                            '<div style="font-weight:600;">' + (rec.status || 'queued') + '</div>' +
-                        '</div>' +
-                        '<div>' +
-                            '<div style="font-size:0.75em;color:#999;">Message</div>' +
-                            '<div style="color:#555;font-size:0.85em;">' + (preview || '-') + '</div>' +
-                        '</div>' +
-                        '<div>' +
-                            '<div style="font-size:0.75em;color:#999;">Error</div>' +
-                            '<div style="font-size:0.85em;">' + errInline + '</div>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div style="margin-top:10px;">' +
-                        '<button type="button" onclick="toggleDeliveryDetails(\'' + detailsId + '\')" style="background:#eef2ff;color:#3730a3;border:none;border-radius:6px;padding:6px 10px;font-size:0.75em;cursor:pointer;">Details</button>' +
-                    '</div>' +
-                    '<div id="' + detailsId + '" style="display:none;margin-top:8px;font-size:0.8em;color:#666;background:#f9fafb;border-radius:6px;padding:8px;">' +
-                        '<div>Type: ' + (rec.type || 'N/A') + '</div>' +
-                        '<div>Mode: ' + mode + (rec.template_id ? (' (' + rec.template_id + ')') : '') + '</div>' +
-                        '<div>Attempts: ' + (rec.attempts || 0) + '</div>' +
-                        '<div>Message ID: ' + (rec.message_id || '-') + '</div>' +
-                    '</div>' +
-                '</div>';
+                    html += `
+                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; display: flex; transition: transform 0.1s;">
+                            <div style="width: 4px; background: ${priorityColor}; flex-shrink: 0;"></div>
+                            <div style="flex-grow: 1; padding: 15px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 1.5fr 1fr 1.5fr; gap: 15px; align-items: center;">
+                                    <div>
+                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Time</div>
+                                        <div style="font-size: 13px; color: #1e293b; white-space: nowrap;">${dateStr}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Channel</div>
+                                        <div style="font-size: 13px; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                                            <span>${channelIcon}</span>
+                                            <span style="text-transform: uppercase; font-weight: 600;">${rec.channel || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Recipient</div>
+                                        <div style="font-size: 13px; color: #1e293b; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(rec.recipient || 'N/A')}">${escapeHtml(rec.recipient || 'N/A')}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Status</div>
+                                        <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; background: ${statusInfo.bg}; color: ${statusInfo.text};">
+                                            ${rec.status || 'queued'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Message Preview</div>
+                                        <div style="font-size: 12px; color: #475569; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;">
+                                            ${escapeHtml(preview || '-')}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="${detailsId}" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; font-size: 12px; color: #64748b;">
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                        <div><strong>Type:</strong> ${rec.type || 'N/A'}</div>
+                                        <div><strong>Provider:</strong> ${rec.provider || 'N/A'}</div>
+                                        <div><strong>Attempts:</strong> ${rec.attempts || 0}</div>
+                                        <div><strong>Message ID:</strong> <span style="font-family: monospace;">${rec.message_id || '-'}</span></div>
+                                        <div><strong>Template:</strong> ${rec.template_id || 'Raw Content'}</div>
+                                        ${rec.error_message ? `<div style="grid-column: 1 / -1; color: #e11d48;"><strong>Error:</strong> ${escapeHtml(rec.error_message)}</div>` : ''}
+                                    </div>
+                                </div>
+                                
+                                <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+                                    <button type="button" onclick="toggleDeliveryDetails('${detailsId}')" style="background: transparent; color: #6366f1; border: 1px solid #e0e7ff; border-radius: 6px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                        View Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } catch (e) {
+                    console.error('Record rendering error:', e, rec);
+                }
             }
 
             html += '</div>';
@@ -517,9 +537,14 @@
             el.style.display = el.style.display === 'none' ? 'block' : 'none';
         }
 
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         // Load dashboard on page load
-        wireNavLinks();
-        document.getElementById('logoutBtn').addEventListener('click', logout);
         loadDashboard();
     </script>
 </body>

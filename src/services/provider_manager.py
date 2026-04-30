@@ -2,6 +2,7 @@
 
 import logging
 from typing import Optional, Dict, Any, List
+from colorama import Fore, Style
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from datetime import datetime, timedelta
@@ -84,7 +85,7 @@ class ProviderManager:
                 if not row.is_healthy:
                     time_since_check = datetime.utcnow() - row.last_check
                     if time_since_check.total_seconds() >= self.recovery_time:
-                        logger.info(f"Attempting recovery for provider {row.provider_name}")
+                        logger.info(f"{Fore.CYAN}Attempting recovery for provider {row.provider_name} on channel {channel}")
                         await self._reset_provider_health(row.provider_name, channel)
                         return row.provider_name
 
@@ -229,7 +230,7 @@ class ProviderManager:
             row = result.fetchone()
 
             if row:
-                logger.info(f"Failover to provider {row.provider_name} for channel {channel}")
+                logger.info(f"{Fore.YELLOW}Failover to provider {row.provider_name} for channel {channel}")
                 return row.provider_name
 
         except Exception as e:
@@ -280,7 +281,7 @@ class ProviderManager:
             await self.db.execute(query, {'provider': provider, 'channel': channel})
             await self.db.commit()
 
-            logger.info(f"Reset health for provider {provider} on channel {channel}")
+            logger.info(f"{Fore.GREEN}Reset health for provider {provider} on channel {channel}")
 
         except Exception as e:
             logger.error(f"Failed to reset provider health: {e}")

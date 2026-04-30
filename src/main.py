@@ -27,6 +27,7 @@ from src.api.routers import (
     tenant_settings_router,
     admin_auth_router,
     admin_auth_portal_router,
+    tenant_team_router,
 )
 
 # Configure logging
@@ -154,6 +155,7 @@ app.include_router(tenant_management_router, prefix=settings.api_prefix)
 app.include_router(usage_router, prefix=settings.api_prefix)
 app.include_router(channels_router, prefix=settings.api_prefix)
 app.include_router(tenant_settings_router, prefix=settings.api_prefix)
+app.include_router(tenant_team_router, prefix=settings.api_prefix)
 app.include_router(admin_auth_router, prefix=settings.api_prefix)
 app.include_router(admin_auth_portal_router)
 

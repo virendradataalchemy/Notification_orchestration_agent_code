@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>How To Use - Notification Platform</title>
+    <link rel="stylesheet" href="/portal/assets/portal_shared.css">
+    <script src="/portal/assets/portal_auth.js"></script>
     <style>
         :root {
             --bg: #f5f7fb;
@@ -254,17 +256,27 @@
     </style>
 </head>
 <body>
-    <header class="topbar">
-        <div class="topbar-inner">
-            <div class="brand">Notification Platform</div>
-            <nav>
-                <a href="/">Home</a>
-                <a href="/portal/signup">Sign Up</a>
-                <a href="/portal/login">Login</a>
-                <a href="/channels">Channels</a>
-            </nav>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a class="navbar-brand" href="#">Dashboard</a>
+            <div class="navbar-user">
+                <div class="navbar-links">
+                    <a id="navDashboard" href="#">Dashboard</a>
+                    <a id="navTemplates" href="#">Templates</a>
+                    <a id="navAnalytics" href="#">Analytics</a>
+                    <a id="navChannels" href="#">Channels</a>
+                    <a id="navTeam" href="#">Team</a>
+                    <a id="navDeveloper" href="#">Developer</a>
+                    <a id="navProfile" href="#">Profile</a>
+                </div>
+                <div class="user-info">
+                    <div class="user-name" id="tenantName"></div>
+                    <div class="user-tenant" id="tenantIdLabel"></div>
+                </div>
+                <button class="btn-logout" id="logoutBtn">Logout</button>
+            </div>
         </div>
-    </header>
+    </nav>
 
     <main class="container">
         <section class="hero">
@@ -507,5 +519,13 @@ X-API-Key: your_tenant_api_key</pre>
             </div>
         </section>
     </main>
+    <script>
+        const tenantId = window.location.pathname.split('/')[2] || localStorage.getItem('tenant_id');
+        function setTenantIdentity() {
+            document.getElementById('tenantName').textContent = localStorage.getItem('tenant_name') || tenantId;
+            document.getElementById('tenantIdLabel').textContent = tenantId;
+        }
+        setTenantIdentity();
+    </script>
 </body>
 </html>

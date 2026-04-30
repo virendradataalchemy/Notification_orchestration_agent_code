@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tenant Portal - Sign Up</title>
+    <title>Create Account</title>
     <style>
         :root {
             --bg: #f5f7fb;
@@ -180,7 +180,7 @@
         </header>
 
         <div class="card">
-            <h1>Create Tenant Account</h1>
+            <h1>Create Account</h1>
             <p class="subtitle">Register your organization and start template-driven multi-channel notifications.</p>
 
             <div id="alert" class="alert"></div>
@@ -230,7 +230,7 @@
         const form = document.getElementById('signupForm');
         const alertBox = document.getElementById('alert');
         const submitBtn = document.getElementById('submitBtn');
-
+        
         function show(message, type) {
             alertBox.textContent = message;
             alertBox.className = 'alert ' + type;
@@ -284,13 +284,15 @@
                 localStorage.setItem('tenant_access_token', data.access_token);
                 localStorage.setItem('tenant_id', data.tenant_id);
                 localStorage.setItem('tenant_name', data.tenant_name);
+                localStorage.setItem('tenant_type', 'root');
                 localStorage.setItem('token_expires_at', Date.now() + (data.expires_in * 1000));
                 setPortalCookie(data.access_token, data.expires_in);
 
                 show('Account created. Save your API key now: ' + data.api_key, 'ok');
 
                 setTimeout(() => {
-                    window.location.href = '/portal/' + data.tenant_id + '/dashboard';
+                    const targetPath = 'dashboard'; // Root admin always starts at dashboard
+                    window.location.href = '/portal/' + data.tenant_id + '/' + targetPath;
                 }, 1400);
             } catch (err) {
                 show('Network error while creating account.', 'error');
