@@ -37,7 +37,8 @@ class NotificationTeam:
         notification_type: str,
         content: str,
         priority: str,
-        metadata: Dict[str, Any] = None
+        metadata: Dict[str, Any] = None,
+        owner_id: Any = None
     ) -> Dict[str, Any]:
         """
         Process notification synchronously (fast response < 1s).
@@ -51,14 +52,21 @@ class NotificationTeam:
             content: Notification content
             priority: Priority level (critical, high, medium, low)
             metadata: Additional metadata
+            owner_id: The team member ID who initiated this
 
         Returns:
             Processing result with notification ID, channel, and status
         """
         logger.info(
             f"Processing notification: user={user_id}, "
-            f"type={notification_type}, priority={priority}"
+            f"type={notification_type}, priority={priority}, owner={owner_id}"
         )
+        
+        # Add owner_id to metadata if present so tools can access it
+        if owner_id:
+            if metadata is None:
+                metadata = {}
+            metadata["owner_id"] = str(owner_id)
 
         # STEP 1: Analyzer Agent
         analyzer_task = f"""

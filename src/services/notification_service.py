@@ -119,7 +119,7 @@ class NotificationService:
         return None
 
     async def send_notification(
-        self, tenant_id: str, request: SendNotificationRequest
+        self, tenant_id: str, request: SendNotificationRequest, owner_id: str | None = None
     ) -> NotificationResponse:
         """
         Send a notification to a single recipient.
@@ -587,7 +587,8 @@ class NotificationService:
             data=notification_data,
             scheduled_at=None,  # For immediate delivery
             llm_decision=llm_decision,  # NEW: Store AI decision
-            idempotency_key=idempotency_key  # Use the variable we extracted earlier
+            idempotency_key=idempotency_key,  # Use the variable we extracted earlier
+            owner_id=owner_id if owner_id else None
         )
 
         self.db.add(notification)
@@ -678,7 +679,7 @@ class NotificationService:
         )
 
     async def send_batch_notifications(
-        self, tenant_id: str, request: BatchNotificationRequest
+        self, tenant_id: str, request: BatchNotificationRequest, owner_id: str | None = None
     ) -> BatchNotificationResponse:
         """
         Send notifications to multiple recipients in batch.
@@ -771,6 +772,7 @@ class NotificationService:
                 template_id=request.template_id,
                 data=notification_data,
                 scheduled_at=request.schedule_at,
+                owner_id=owner_id if owner_id else None
             )
             self.db.add(notification)
             notification_ids.append(str(notification.id))
@@ -805,7 +807,7 @@ class NotificationService:
         )
 
     async def send_batch_notifications_multichannel(
-        self, tenant_id: str, request: BatchMultiChannelNotificationRequest
+        self, tenant_id: str, request: BatchMultiChannelNotificationRequest, owner_id: str | None = None
     ) -> BatchMultiChannelNotificationResponse:
         """
         Send notifications to multiple recipients across multiple channels.
@@ -969,6 +971,7 @@ class NotificationService:
                 template_id=request.template_id,
                 data=notification_data,
                 scheduled_at=request.schedule_at,
+                owner_id=owner_id if owner_id else None
             )
             self.db.add(notification)
             notification_ids.append(str(notification.id))

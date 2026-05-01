@@ -8,6 +8,8 @@ import re
 from .base import NotificationProvider, Message, ProviderResponse, ProviderStatus
 from src.config import settings
 
+# NOTE: This provider (AWS SES) is currently deprecated in favor of Mailgun.
+# It is kept for historical reference but not used in the active delivery path.
 
 class EmailProvider(NotificationProvider):
     """Email provider using AWS SES."""
@@ -46,16 +48,20 @@ class EmailProvider(NotificationProvider):
                 # Use raw email for attachments
                 response = await self._send_raw_email(message)
             else:
+                # Build email body
+                body = {}
+                if '<html' in message.body.lower():
+                    body['Html'] = {'Data': message.body}
+                else:
+                    body['Text'] = {'Data': message.body}
+
                 # Use simple send for text-only
                 response = self.client.send_email(
                     Source=self.from_email,
                     Destination={'ToAddresses': [message.recipient]},
                     Message={
                         'Subject': {'Data': message.subject or "Notification"},
-                        'Body': {
-                            'Html': {'Data': message.body} if '<html' in message.body.lower() else {},
-                            'Text': {'Data': message.body} if '<html' not in message.body.lower() else {}
-                        }
+                        'Body': body
                     }
                 )
 
@@ -112,7 +118,7 @@ class EmailProvider(NotificationProvider):
         response = self.client.send_raw_email(
             Source=self.from_email,
             Destinations=[message.recipient],
-            RawMessage={'Data': msg.as_string()}
+            RawMessage={'Data': msg.as_bytes()}
         )
 
         return response

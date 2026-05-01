@@ -20,6 +20,9 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
+# Alias for convenience and backward compatibility
+async_session_maker = AsyncSessionLocal
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency to get database session."""

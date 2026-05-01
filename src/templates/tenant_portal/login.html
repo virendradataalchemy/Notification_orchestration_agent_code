@@ -289,7 +289,7 @@
         const autoRedirectTenantId = shouldAutoRedirect();
         if (autoRedirectTenantId) {
             const role = localStorage.getItem('tenant_type') || 'admin';
-            const targetPath = (role === 'marketing') ? 'marketing' : 'dashboard';
+            const targetPath = (role === 'marketing') ? 'marketing-dashboard' : 'dashboard';
             window.location.href = '/portal/' + autoRedirectTenantId + '/' + targetPath;
         }
 
@@ -354,7 +354,7 @@
                     localStorage.setItem('token_expires_at', Date.now() + (data.expires_in * 1000));
                     setPortalCookie(data.access_token, data.expires_in);
 
-                    const targetPath = (data.tenant_type === 'marketing') ? 'marketing' : 'dashboard';
+                    const targetPath = (data.tenant_type === 'marketing') ? 'marketing-dashboard' : 'dashboard';
                     showAlert('Login successful! Redirecting...', 'success');
                     console.log('Redirecting to:', '/portal/' + data.tenant_id + '/' + targetPath);
                     

@@ -601,6 +601,38 @@
     <script>
         let allNotifications = [];
 
+        function formatIST(dateString, options = {}) {
+            if (!dateString) return '';
+            
+            let date;
+            if (typeof dateString === 'string') {
+                // If it's a naive ISO string from Python (no Z, no offset), assume UTC
+                if (!dateString.includes('Z') && !dateString.includes('+') && !dateString.match(/[+-]\d{2}:\d{2}$/)) {
+                    if (dateString.includes(' ')) {
+                        date = new Date(dateString.replace(' ', 'T') + 'Z');
+                    } else {
+                        date = new Date(dateString + 'Z');
+                    }
+                } else {
+                    date = new Date(dateString);
+                }
+            } else {
+                date = new Date(dateString);
+            }
+
+            const defaultOptions = {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                timeZoneName: 'short'
+            };
+            return date.toLocaleString('en-IN', { ...defaultOptions, ...options });
+        }
+
         function switchTab(tabName) {
             // Remove active class from all tabs and contents
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
@@ -751,7 +783,7 @@
                             ${notif.channels.map(ch => `<span class="channel-badge">${ch.channel} (${ch.status})</span>`).join('')}
                         </div>
                         <div class="notification-time">
-                            ${new Date(notif.created_at).toLocaleString()}
+                            ${formatIST(notif.created_at)}
                         </div>
                     </div>
                 `;

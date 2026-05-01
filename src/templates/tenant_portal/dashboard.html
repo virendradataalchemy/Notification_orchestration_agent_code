@@ -196,6 +196,74 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Modal styling */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 16px;
+            max-width: 700px;
+            width: 90%;
+            position: relative;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .close-modal {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        .message-view-content {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.6;
+            border: 1px solid #e2e8f0;
+        }
+
+        .reply-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px dashed #e2e8f0;
+        }
+
+        .reply-bubble {
+            background: #f0fdf4;
+            color: #166534;
+            padding: 15px;
+            border-radius: 12px;
+            border-bottom-left-radius: 2px;
+            border: 1px solid #dcfce7;
+            font-size: 14px;
+        }
+
+        .no-reply-text {
+            color: #94a3b8;
+            font-style: italic;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -207,6 +275,7 @@
             </a>
             <div class="navbar-user">
                 <div class="navbar-links">
+                    <a id="navMarketingDashboard" href="#" style="display:none">Dashboard</a>
                     <a id="navDashboard" href="#" class="active">Dashboard</a>
                     <a id="navTemplates" href="#">Templates</a>
                     <a id="navAnalytics" href="#">Analytics</a>
@@ -236,6 +305,32 @@
         </div>
     </div>
 
+    <!-- Message View Modal -->
+    <div id="messageModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Message Details</h2>
+            <div style="margin-top: 15px; font-size: 13px; color: #64748b;">
+                <strong>To:</strong> <span id="modalRecipient"></span><br>
+                <strong>Channel:</strong> <span id="modalChannel"></span><br>
+                <strong>Sent:</strong> <span id="modalTime"></span>
+            </div>
+            <div class="message-view-content" id="modalBody"></div>
+            
+            <div id="modalReplySection" class="reply-section">
+                <h3 style="font-size: 14px; margin-bottom: 10px;">Reply Received:</h3>
+                
+                <div id="modalIntentSection" style="margin-bottom: 15px; display: none;">
+                    <div style="font-size: 11px; text-transform: uppercase; color: #64748b; margin-bottom: 4px; font-weight: 700;">AI Detected Intent</div>
+                    <div id="modalIntentBadge" style="display: inline-block;"></div>
+                    <div id="modalIntentRationale" style="font-size: 12px; color: #475569; margin-top: 6px; font-style: italic;"></div>
+                </div>
+
+                <div id="modalReplyContent"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Get tenant ID from URL path (/portal/{tenant_id}/dashboard)
         const pathParts = window.location.pathname.split('/');
@@ -245,7 +340,41 @@
         // Removed local identity setting - handled by portal_auth.js
     // function setTenantIdentity() { ... }
 
-    async function loadDashboard() {
+        let currentThreads = [];
+
+        function formatIST(dateString, options = {}) {
+            if (!dateString) return '';
+            
+            let date;
+            if (typeof dateString === 'string') {
+                // If it's a naive ISO string from Python (no Z, no offset), assume UTC
+                if (!dateString.includes('Z') && !dateString.includes('+') && !dateString.match(/[+-]\d{2}:\d{2}$/)) {
+                    if (dateString.includes(' ')) {
+                        date = new Date(dateString.replace(' ', 'T') + 'Z');
+                    } else {
+                        date = new Date(dateString + 'Z');
+                    }
+                } else {
+                    date = new Date(dateString);
+                }
+            } else {
+                date = new Date(dateString);
+            }
+
+            const defaultOptions = {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                timeZoneName: 'short'
+            };
+            return date.toLocaleString('en-IN', { ...defaultOptions, ...options });
+        }
+
+        async function loadDashboard() {
             try {
                 // Fetch template statistics
                 const response = await fetch('/api/v1/tenant/templates/stats', {
@@ -387,7 +516,8 @@
         async function loadDeliveryActivity() {
             const listEl = document.getElementById('recent-delivery-list');
             try {
-                const response = await fetch(`/api/tenant-dashboard/tenant/${tenantId}/delivery-activity?limit=12`, {
+                // Use the threaded activity for more detail and reply tracking
+                const response = await fetch(`/api/tenant-dashboard/tenant/${tenantId}/marketing-threaded-activity?limit=12`, {
                     headers: {
                         'Authorization': 'Bearer ' + accessToken
                     }
@@ -399,42 +529,26 @@
                 }
 
                 const payload = await response.json();
-                console.log('Delivery activity payload:', payload);
-                renderDeliveryActivity(payload.records || []);
+                currentThreads = payload.threads || [];
+                renderThreadedActivity(currentThreads);
 
             } catch (error) {
-                console.error('Error loading delivery activity:', error);
+                console.error('Error loading activity:', error);
                 listEl.innerHTML =
                     `<div style="text-align: center; padding: 20px; color: #c33;">
-                        <p><strong>Failed to load delivery activity</strong></p>
+                        <p><strong>Failed to load activity</strong></p>
                         <p style="font-size: 12px; color: #666; margin-top: 5px;">${error.message}</p>
                         <button onclick="loadDeliveryActivity()" style="margin-top: 10px; padding: 5px 15px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 12px;">Retry</button>
                     </div>`;
             }
         }
 
-        function cleanMessagePreview(text) {
-            const value = String(text || '').trim();
-            if (value.startsWith('[Template Error:')) {
-                return 'Template variable mismatch. Check template variables in send payload.';
-            }
-            return value;
-        }
-
-        function renderDeliveryActivity(records) {
+        function renderThreadedActivity(threads) {
             const container = document.getElementById('recent-delivery-list');
-
-            if (!records || records.length === 0) {
-                container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No delivery records yet</p>';
+            if (!threads || threads.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No activity records yet</p>';
                 return;
             }
-
-            const priorityColors = {
-                'critical': '#dc2626',
-                'high': '#ea580c',
-                'medium': '#ca8a04',
-                'low': '#16a34a'
-            };
 
             const statusColors = {
                 'queued': { bg: '#eef2ff', text: '#3730a3' },
@@ -454,81 +568,180 @@
 
             let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
 
-            for (let rec of records) {
-                try {
-                    const priorityColor = priorityColors[String(rec.priority || '').toLowerCase()] || '#666';
-                    const statusInfo = statusColors[String(rec.status || '').toLowerCase()] || { bg: '#f3f4f6', text: '#374151' };
-                    const preview = cleanMessagePreview(rec.message_preview || '');
-                    const channelIcon = channelIcons[String(rec.channel || '').toLowerCase()] || '📡';
-                    const detailsId = 'delivery_details_' + (rec.notification_id || Math.random().toString(36).substr(2, 9)) + '_' + (rec.channel || 'x');
-                    
-                    let dateStr = 'N/A';
-                    if (rec.created_at) {
-                        try {
-                            dateStr = new Date(rec.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-                        } catch (e) { console.error('Date error:', e); }
-                    }
-
-                    html += `
-                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; display: flex; transition: transform 0.1s;">
-                            <div style="width: 4px; background: ${priorityColor}; flex-shrink: 0;"></div>
-                            <div style="flex-grow: 1; padding: 15px;">
-                                <div style="display: grid; grid-template-columns: 1fr 1fr 1.5fr 1fr 1.5fr; gap: 15px; align-items: center;">
-                                    <div>
-                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Time</div>
-                                        <div style="font-size: 13px; color: #1e293b; white-space: nowrap;">${dateStr}</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Channel</div>
-                                        <div style="font-size: 13px; color: #1e293b; display: flex; align-items: center; gap: 6px;">
-                                            <span>${channelIcon}</span>
-                                            <span style="text-transform: uppercase; font-weight: 600;">${rec.channel || 'N/A'}</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Recipient</div>
-                                        <div style="font-size: 13px; color: #1e293b; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(rec.recipient || 'N/A')}">${escapeHtml(rec.recipient || 'N/A')}</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Status</div>
-                                        <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; background: ${statusInfo.bg}; color: ${statusInfo.text};">
-                                            ${rec.status || 'queued'}
+            threads.forEach((thread, index) => {
+                const rec = thread.outbound;
+                const statusInfo = statusColors[String(rec.status || '').toLowerCase()] || { bg: '#f3f4f6', text: '#374151' };
+                const channelIcon = channelIcons[String(thread.channel || '').toLowerCase()] || '📡';
+                const dateStr = formatIST(rec.timestamp, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+                
+                let replyHtml = '';
+                if (thread.inbound) {
+                    const intent = thread.inbound.ai_intent;
+                    if (intent) {
+                        const intentColors = {
+                            'accept': '#16a34a',
+                            'reject': '#dc2626',
+                            'request': '#2563eb',
+                            'query': '#ca8a04'
+                        };
+                        const color = intentColors[intent.toLowerCase()] || '#64748b';
+                        replyHtml = `<div style="margin-top: 8px;">
+                                        <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: ${color}15; color: ${color}; font-weight: 700; font-size: 11px; text-transform: uppercase; border: 1px solid ${color}30;">
+                                            AI: ${intent}
                                         </span>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Message Preview</div>
-                                        <div style="font-size: 12px; color: #475569; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;">
-                                            ${escapeHtml(preview || '-')}
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div id="${detailsId}" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; font-size: 12px; color: #64748b;">
-                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                                        <div><strong>Type:</strong> ${rec.type || 'N/A'}</div>
-                                        <div><strong>Provider:</strong> ${rec.provider || 'N/A'}</div>
-                                        <div><strong>Attempts:</strong> ${rec.attempts || 0}</div>
-                                        <div><strong>Message ID:</strong> <span style="font-family: monospace;">${rec.message_id || '-'}</span></div>
-                                        <div><strong>Template:</strong> ${rec.template_id || 'Raw Content'}</div>
-                                        ${rec.error_message ? `<div style="grid-column: 1 / -1; color: #e11d48;"><strong>Error:</strong> ${escapeHtml(rec.error_message)}</div>` : ''}
-                                    </div>
-                                </div>
-                                
-                                <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
-                                    <button type="button" onclick="toggleDeliveryDetails('${detailsId}')" style="background: transparent; color: #6366f1; border: 1px solid #e0e7ff; border-radius: 6px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                                        View Details
-                                    </button>
+                                     </div>`;
+                    } else {
+                        const replyPreview = thread.inbound.content ? (thread.inbound.content.substring(0, 50) + (thread.inbound.content.length > 50 ? '...' : '')) : '(Media/Attachment)';
+                        replyHtml = `<div style="margin-top: 8px; font-size: 12px; color: #166534; background: #f0fdf4; padding: 8px 12px; border-radius: 8px; border-left: 3px solid #16a34a;">
+                                        <strong>Reply:</strong> ${replyPreview}
+                                     </div>`;
+                    }
+                } else {
+                    replyHtml = `<div style="margin-top: 8px; font-size: 11px; color: #94a3b8; font-style: italic;">Awaiting customer reply...</div>`;
+                }
+
+                html += `
+                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; padding: 15px; transition: transform 0.1s;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1.5fr 1fr 2fr; gap: 15px; align-items: flex-start;">
+                            <div>
+                                <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Time</div>
+                                <div style="font-size: 13px; color: #1e293b; white-space: nowrap;">${dateStr}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Channel</div>
+                                <div style="font-size: 13px; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                                    <span>${channelIcon}</span>
+                                    <span style="text-transform: uppercase; font-weight: 600;">${thread.channel}</span>
                                 </div>
                             </div>
+                            <div>
+                                <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Recipient</div>
+                                <div style="font-size: 13px; color: #1e293b; font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis;" title="${thread.recipient}">${thread.recipient}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Status</div>
+                                <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; background: ${statusInfo.bg}; color: ${statusInfo.text};">
+                                    ${rec.status}
+                                </span>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Thread Status</div>
+                                ${replyHtml}
+                            </div>
                         </div>
-                    `;
-                } catch (e) {
-                    console.error('Record rendering error:', e, rec);
-                }
-            }
+                        <div style="margin-top: 15px; display: flex; justify-content: flex-end; border-top: 1px solid #f1f5f9; pt: 10px;">
+                            <button onclick="viewMessage(${index})" style="background: transparent; color: #6366f1; border: 1px solid #e0e7ff; border-radius: 6px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 10px;" onmouseover="this.style.background='#f0f3ff'" onmouseout="this.style.background='transparent'">
+                                View Full Thread
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
 
             html += '</div>';
             container.innerHTML = html;
+        }
+
+        function viewMessage(index) {
+            const thread = currentThreads[index];
+            if (!thread) return;
+
+            document.getElementById('modalTitle').textContent = 'Conversation Details';
+            document.getElementById('modalRecipient').textContent = thread.recipient;
+            document.getElementById('modalChannel').textContent = thread.channel.toUpperCase();
+            document.getElementById('modalTime').textContent = formatIST(thread.outbound.timestamp);
+            
+            const modalBody = document.getElementById('modalBody');
+            const isEmail = String(thread.channel).toLowerCase() === 'email';
+            
+            // If it's email and looks like HTML, render it in an iframe for security and style isolation
+            if (isEmail && thread.outbound.content && (thread.outbound.content.includes('<html') || thread.outbound.content.includes('<div') || thread.outbound.content.includes('<p>'))) {
+                modalBody.innerHTML = `<iframe id="emailPreviewFrame" style="width: 100%; border: none; min-height: 300px; background: white; border-radius: 8px;"></iframe>`;
+                modalBody.style.padding = '0';
+                modalBody.style.overflow = 'hidden';
+                
+                setTimeout(() => {
+                    const frame = document.getElementById('emailPreviewFrame');
+                    if (frame && frame.contentWindow) {
+                        const doc = frame.contentWindow.document;
+                        doc.open();
+                        doc.write(thread.outbound.content);
+                        doc.close();
+                        frame.style.height = (doc.body.scrollHeight + 20) + 'px';
+                    }
+                }, 50);
+            } else {
+                modalBody.textContent = thread.outbound.content || '(No content)';
+                modalBody.style.padding = '15px';
+                modalBody.style.overflowY = 'auto';
+            }
+            
+            const replySection = document.getElementById('modalReplySection');
+            const replyContent = document.getElementById('modalReplyContent');
+            const intentSection = document.getElementById('modalIntentSection');
+            const intentBadge = document.getElementById('modalIntentBadge');
+            const intentRationale = document.getElementById('modalIntentRationale');
+            
+            if (thread.inbound) {
+                replySection.style.display = 'block';
+                
+                // Show Intent if available
+                if (thread.inbound.ai_intent) {
+                    intentSection.style.display = 'block';
+                    const intent = thread.inbound.ai_intent;
+                    const intentColors = {
+                        'accept': '#16a34a',
+                        'reject': '#dc2626',
+                        'request': '#2563eb',
+                        'query': '#ca8a04'
+                    };
+                    const color = intentColors[intent.toLowerCase()] || '#64748b';
+                    intentBadge.innerHTML = `<span style="padding: 3px 10px; border-radius: 4px; background: ${color}15; color: ${color}; font-weight: 700; font-size: 12px; text-transform: uppercase; border: 1px solid ${color}30;">${intent}</span>`;
+                    intentRationale.textContent = thread.inbound.ai_rationale || '';
+                } else {
+                    intentSection.style.display = 'none';
+                }
+
+                const isInboundEmail = String(thread.channel).toLowerCase() === 'email';
+                
+                if (isInboundEmail && thread.inbound.content && (thread.inbound.content.includes('<html') || thread.inbound.content.includes('<div') || thread.inbound.content.includes('<p>'))) {
+                     replyContent.innerHTML = `<div class="reply-bubble" style="padding: 0; overflow: hidden; background: white; border: 1px solid #e2e8f0;">
+                        <div style="font-size: 11px; opacity: 0.7; margin: 10px 15px; color: #64748b;">Recieved: ${formatIST(thread.inbound.timestamp)}</div>
+                        <iframe id="replyPreviewFrame" style="width: 100%; border: none; min-height: 150px;"></iframe>
+                    </div>`;
+                    setTimeout(() => {
+                        const frame = document.getElementById('replyPreviewFrame');
+                        if (frame && frame.contentWindow) {
+                            const doc = frame.contentWindow.document;
+                            doc.open();
+                            doc.write(thread.inbound.content);
+                            doc.close();
+                            frame.style.height = (doc.body.scrollHeight + 10) + 'px';
+                        }
+                    }, 50);
+                } else {
+                    replyContent.innerHTML = `
+                        <div class="reply-bubble">
+                            <div style="font-size: 11px; opacity: 0.7; margin-bottom: 5px;">Recieved: ${formatIST(thread.inbound.timestamp)}</div>
+                            <div style="white-space: pre-wrap;">${thread.inbound.content || '(Media/Attachment recieved)'}</div>
+                        </div>
+                    `;
+                }
+            } else {
+                replySection.style.display = 'block';
+                replyContent.innerHTML = `<div class="no-reply-text">Still awaiting customer reply...</div>`;
+            }
+
+            document.getElementById('messageModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('messageModal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('messageModal');
+            if (event.target == modal) closeModal();
         }
 
         function toggleDeliveryDetails(id) {
@@ -546,6 +759,25 @@
 
         // Load dashboard on page load
         loadDashboard();
+
+        function setupWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/${tenantId}`;
+            const socket = new WebSocket(wsUrl);
+
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.event === 'inbound_message') {
+                    console.log('New message received! Refreshing activity...');
+                    loadDeliveryActivity();
+                }
+            };
+
+            socket.onclose = function() {
+                setTimeout(setupWebSocket, 5000);
+            };
+        }
+        setupWebSocket();
     </script>
 </body>
 </html>

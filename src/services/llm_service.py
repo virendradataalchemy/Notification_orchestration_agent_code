@@ -246,6 +246,7 @@ Respond ONLY with valid JSON in this exact format (no markdown tags):
 }}"""
 
         try:
+            # Bedrock Primary
             response = await asyncio.to_thread(
                 self.client.invoke_model,
                 modelId=self.model_id,
@@ -370,6 +371,7 @@ Respond ONLY with valid JSON in this exact structure:
 }}"""
 
         try:
+            # Bedrock Primary
             response = await asyncio.to_thread(
                 self.client.invoke_model,
                 modelId=self.model_id,
@@ -416,3 +418,13 @@ Respond ONLY with valid JSON in this exact structure:
                 "body": content,
                 "description": "Original content (AI generation failed)"
             }
+
+    async def generate_multi_channel_templates(self, content: str, channels: list[str]) -> Dict[str, Any]:
+        """
+        Generate professional notification templates for multiple channels at once using AI.
+        """
+        # Fallback to individual generation as multi-channel prompt is less reliable on Bedrock
+        results = {"templates": {}}
+        for channel in channels:
+            results["templates"][channel] = await self.generate_template(content, channel)
+        return results

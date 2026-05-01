@@ -51,8 +51,11 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = None
 
     # AWS SES
+    # aws_ses_region: str = "us-east-1"
+    # aws_ses_from_email: Optional[str] = None
+    # aws_ses_rate_limit: int = 14
     aws_ses_region: str = "us-east-1"
-    aws_ses_from_email: str
+    aws_ses_from_email: Optional[str] = None
     aws_ses_rate_limit: int = 14
 
     # AWS SQS
@@ -118,6 +121,7 @@ class Settings(BaseSettings):
     qwen_model: str = "qwen-2.5-72b"
     qwen_model_id: str = "qwen.qwen3-next-80b-a3b"
     mistral_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
 
     # Candidate Service (Future Integration)
     candidate_service_api_key: Optional[str] = None

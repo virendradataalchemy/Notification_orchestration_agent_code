@@ -349,9 +349,20 @@ class AITemplateGenerateRequest(BaseModel):
     channel: Channel = Field(..., description="Target channel for the template")
 
 
+class MultiChannelTemplateRequest(BaseModel):
+    """Request to generate multi-channel templates using AI."""
+    content: str = Field(..., description="Instructions for the templates")
+    channels: List[Channel] = Field(..., description="Channels to generate templates for")
+
+
 class AITemplateGenerateResponse(BaseModel):
     """AI generated template response."""
     name: Optional[str] = Field(None, description="Suggested template name")
     subject: Optional[str] = None
     body: str
     description: str
+
+
+class MultiChannelTemplateResponse(BaseModel):
+    """Response containing AI generated templates for multiple channels."""
+    templates: Dict[Channel, AITemplateGenerateResponse]

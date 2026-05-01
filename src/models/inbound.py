@@ -57,9 +57,13 @@ class InboundMessage(Base, TimestampMixin):
     # Extracted metadata during parsing (e.g., Message-Id headers)
     metadata_json = Column(JSON, nullable=True)
 
+    # Link to the marketing team member who owns this conversation (if applicable)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("tenant_users.id", ondelete="SET NULL"), nullable=True)
+
     # Relationships
     tenant = relationship("Tenant", backref="inbound_messages")
     intent = relationship("InboundIntent", back_populates="message", uselist=False, cascade="all, delete-orphan")
+    owner = relationship("TenantUser", backref="owned_messages")
 
 
 class InboundIntent(Base, TimestampMixin):

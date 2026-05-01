@@ -16,6 +16,7 @@ from .tenant_settings import router as tenant_settings_router
 from .admin_auth import api_router as admin_auth_router
 from .admin_auth import portal_router as admin_auth_portal_router
 from .tenant_team import router as tenant_team_router
+from .websocket import router as websocket_router
 
 __all__ = [
     "notifications_router",
@@ -36,4 +37,5 @@ __all__ = [
     "admin_auth_router",
     "admin_auth_portal_router",
     "tenant_team_router",
+    "websocket_router",
 ]

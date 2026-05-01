@@ -197,6 +197,38 @@
     </div>
 
     <script>
+        function formatIST(dateString, options = {}) {
+            if (!dateString) return '';
+            
+            let date;
+            if (typeof dateString === 'string') {
+                // If it's a naive ISO string from Python (no Z, no offset), assume UTC
+                if (!dateString.includes('Z') && !dateString.includes('+') && !dateString.match(/[+-]\d{2}:\d{2}$/)) {
+                    if (dateString.includes(' ')) {
+                        date = new Date(dateString.replace(' ', 'T') + 'Z');
+                    } else {
+                        date = new Date(dateString + 'Z');
+                    }
+                } else {
+                    date = new Date(dateString);
+                }
+            } else {
+                date = new Date(dateString);
+            }
+
+            const defaultOptions = {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                timeZoneName: 'short'
+            };
+            return date.toLocaleString('en-IN', { ...defaultOptions, ...options });
+        }
+
         function badge(text) {
             const t = String(text || "").toLowerCase();
             if (t.startsWith("healthy")) return '<span class="pill ok">' + text + '</span>';
@@ -213,7 +245,7 @@
                 document.getElementById('dbStatus').innerHTML = badge((data.services || {}).database || 'unknown');
                 document.getElementById('redisStatus').innerHTML = badge((data.services || {}).redis || 'unknown');
                 document.getElementById('version').textContent = data.version || '-';
-                document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleString();
+                document.getElementById('lastUpdated').textContent = 'Last updated: ' + formatIST(new Date());
             } catch (e) {
                 document.getElementById('overall').innerHTML = '<span class="pill bad">unreachable</span>';
                 document.getElementById('dbStatus').textContent = 'Could not load';

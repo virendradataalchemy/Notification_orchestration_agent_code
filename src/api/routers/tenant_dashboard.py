@@ -11,8 +11,9 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 
 from src.core import get_db
+from src.core.security import verify_token
 from src.api.dependencies import get_authenticated_tenant, require_admin_access
-from src.models import Notification, NotificationChannel, Tenant, ChannelStatus
+from src.models import Notification, NotificationChannel, Tenant, TenantUser, ChannelStatus
 
 router = APIRouter(tags=["tenant-dashboard"])
 
@@ -23,14 +24,14 @@ templates = Jinja2Templates(directory="src/templates")
 async def require_tenant_path_access(
     tenant_id: str,
     tenant: Tenant = Depends(get_authenticated_tenant)
-) -> str:
+) -> Tenant:
     """Ensure authenticated tenant can only access their own tenant_id path."""
     if tenant.id != tenant_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied for requested tenant"
         )
-    return tenant_id
+    return tenant
 
 
 async def require_tenant_or_admin_path_access(
@@ -40,18 +41,27 @@ async def require_tenant_or_admin_path_access(
     authorization: Optional[str] = Header(None),
     x_api_key: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_db)
-) -> str:
+) -> Tenant:
     """
     Allow access to tenant dashboard APIs for:
     - Admin users (any tenant_id)
     - Authenticated tenant users (only their own tenant_id)
     """
+    is_admin = False
     try:
         await require_admin_access(request, x_admin_key=x_admin_key, authorization=authorization)
-        return tenant_id
+        is_admin = True
     except HTTPException as admin_error:
         if admin_error.status_code != status.HTTP_401_UNAUTHORIZED:
             raise
+
+    if is_admin:
+        tenant_obj = await db.get(Tenant, tenant_id)
+        if not tenant_obj:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        # Mark as admin for internal routing logic if needed
+        tenant_obj.is_platform_admin = True
+        return tenant_obj
 
     tenant = await get_authenticated_tenant(x_api_key=x_api_key, authorization=authorization, db=db)
     if tenant.id != tenant_id:
@@ -59,7 +69,40 @@ async def require_tenant_or_admin_path_access(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied for requested tenant"
         )
-    return tenant_id
+    return tenant
+
+
+async def get_optional_authenticated_user(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db)
+) -> Optional[TenantUser]:
+    """Get authenticated user if token is present, else None."""
+    if not authorization or not authorization.startswith("Bearer "):
+        # Check cookie
+        token = request.cookies.get("tenant_access_token")
+    else:
+        token = authorization.replace("Bearer ", "")
+
+    if not token:
+        return None
+
+    payload = verify_token(token)
+    if not payload:
+        return None
+
+    user_id = payload.get("user_id")
+    tenant_id = payload.get("tenant_id")
+    if not user_id or not tenant_id:
+        return None
+
+    user_query = select(TenantUser).where(
+        TenantUser.id == user_id,
+        TenantUser.tenant_id == tenant_id,
+        TenantUser.is_active == True
+    )
+    result = await db.execute(user_query)
+    return result.scalar_one_or_none()
 
 
 @router.get("/tenant-dashboard", response_class=HTMLResponse)
@@ -229,7 +272,7 @@ async def get_tenant_dashboard_stats(
             "tenant_name": row.tenant_name,
             "type": row.type,
             "channel": row.channel,
-            "status": row.status,
+            "status": str(row.status),
             "created_at": row.created_at.isoformat() if row.created_at else None,
             "delivered_at": row.delivered_at.isoformat() if row.delivered_at else None,
             "error": row.error_message[:100] if row.error_message else None
@@ -307,23 +350,30 @@ async def tenant_detail_enhanced_page(
 async def get_tenant_overview(
     tenant_id: str,
     days: int = 30,
-    authorized_tenant_id: str = Depends(require_tenant_or_admin_path_access),
+    tenant: Tenant = Depends(require_tenant_or_admin_path_access),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get tenant overview with all channels summary."""
     since_date = datetime.utcnow() - timedelta(days=days)
 
-    # Get tenant info
-    tenant = await db.execute(
-        select(Tenant).where(Tenant.id == tenant_id)
-    )
-    tenant_obj = tenant.scalar_one_or_none()
+    # If it's a marketing user, filter by their own ID
+    owner_id_filter = None
+    if hasattr(tenant, "current_user_role") and tenant.current_user_role == "marketing":
+        owner_id_filter = tenant.current_user_id
 
+    # Get tenant info
+    tenant_obj = await db.get(Tenant, tenant_id)
     if not tenant_obj:
-        return {"error": "Tenant not found"}
+        raise HTTPException(status_code=404, detail="Tenant not found")
 
     # Get channel statistics
-    channel_stats_query = text("""
+    query_params = {"tenant_id": tenant_id, "since_date": since_date}
+    owner_clause = ""
+    if owner_id_filter:
+        owner_clause = "AND n.owner_id = :owner_id"
+        query_params["owner_id"] = owner_id_filter
+
+    channel_stats_query = text(f"""
         SELECT
             nc.channel,
             nc.status,
@@ -334,14 +384,12 @@ async def get_tenant_overview(
         JOIN notifications n ON nc.notification_id = n.id
         WHERE n.tenant_id = :tenant_id
             AND n.created_at >= :since_date
+            {owner_clause}
         GROUP BY nc.channel, nc.status
         ORDER BY nc.channel
     """)
 
-    result = await db.execute(
-        channel_stats_query,
-        {"tenant_id": tenant_id, "since_date": since_date}
-    )
+    result = await db.execute(channel_stats_query, query_params)
     channel_data = result.fetchall()
 
     # Organize by channel
@@ -360,7 +408,13 @@ async def get_tenant_overview(
                 "last_sent": None
             }
 
-        channels[row.channel][row.status.lower()] = row.count
+        status_key = str(row.status).lower()
+        if status_key in channels[row.channel]:
+            channels[row.channel][status_key] = row.count
+        else:
+            # Fallback for unexpected status names
+            channels[row.channel][status_key] = row.count
+            
         channels[row.channel]["total"] += row.count
 
         # Update timestamps - keep as datetime for comparison
@@ -403,14 +457,30 @@ async def get_tenant_channel_data(
     channel_name: str,
     days: int = 30,
     limit: int = 50,
-    authorized_tenant_id: str = Depends(require_tenant_or_admin_path_access),
+    tenant: Tenant = Depends(require_tenant_or_admin_path_access),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get detailed data for a specific channel of a tenant."""
     since_date = datetime.utcnow() - timedelta(days=days)
 
+    # If it's a marketing user, filter by their own ID
+    owner_id_filter = None
+    if hasattr(tenant, "current_user_role") and tenant.current_user_role == "marketing":
+        owner_id_filter = tenant.current_user_id
+
+    query_params = {
+        "tenant_id": tenant_id,
+        "channel_name": channel_name,
+        "since_date": since_date,
+        "limit": limit
+    }
+    owner_clause = ""
+    if owner_id_filter:
+        owner_clause = "AND n.owner_id = :owner_id"
+        query_params["owner_id"] = owner_id_filter
+
     # Get notifications for this channel
-    notifications_query = text("""
+    notifications_query = text(f"""
         SELECT
             n.id,
             n.type,
@@ -431,19 +501,12 @@ async def get_tenant_channel_data(
         WHERE n.tenant_id = :tenant_id
             AND nc.channel = :channel_name
             AND n.created_at >= :since_date
+            {owner_clause}
         ORDER BY n.created_at DESC
         LIMIT :limit
     """)
 
-    result = await db.execute(
-        notifications_query,
-        {
-            "tenant_id": tenant_id,
-            "channel_name": channel_name,
-            "since_date": since_date,
-            "limit": limit
-        }
-    )
+    result = await db.execute(notifications_query, query_params)
     rows = result.fetchall()
 
     notifications = []
@@ -469,7 +532,7 @@ async def get_tenant_channel_data(
         })
 
     # Get statistics for this channel
-    stats_query = text("""
+    stats_query = text(f"""
         SELECT
             nc.status,
             COUNT(*) as count
@@ -478,13 +541,11 @@ async def get_tenant_channel_data(
         WHERE n.tenant_id = :tenant_id
             AND nc.channel = :channel_name
             AND n.created_at >= :since_date
+            {owner_clause}
         GROUP BY nc.status
     """)
 
-    stats_result = await db.execute(
-        stats_query,
-        {"tenant_id": tenant_id, "channel_name": channel_name, "since_date": since_date}
-    )
+    stats_result = await db.execute(stats_query, query_params)
     stats_rows = stats_result.fetchall()
 
     stats = {
@@ -515,11 +576,22 @@ async def get_tenant_channel_data(
 async def get_tenant_recent_notifications(
     tenant_id: str,
     limit: int = 20,
-    authorized_tenant_id: str = Depends(require_tenant_or_admin_path_access),
+    tenant: Tenant = Depends(require_tenant_or_admin_path_access),
     db: AsyncSession = Depends(get_db)
 ) -> List[Dict[str, Any]]:
     """Get recent notifications for tenant with LLM decisions."""
-    notifications_query = text("""
+    # If it's a marketing user, filter by their own ID
+    owner_id_filter = None
+    if hasattr(tenant, "current_user_role") and tenant.current_user_role == "marketing":
+        owner_id_filter = tenant.current_user_id
+
+    query_params = {"tenant_id": tenant_id, "limit": limit}
+    owner_clause = ""
+    if owner_id_filter:
+        owner_clause = "AND n.owner_id = :owner_id"
+        query_params["owner_id"] = owner_id_filter
+
+    notifications_query = text(f"""
         SELECT
             n.id,
             n.type,
@@ -534,15 +606,13 @@ async def get_tenant_recent_notifications(
         FROM notifications n
         LEFT JOIN notification_channels nc ON nc.notification_id = n.id
         WHERE n.tenant_id = :tenant_id
+            {owner_clause}
         GROUP BY n.id, n.type, n.priority, n.user_id, n.status, n.llm_decision, n.created_at, n.data
         ORDER BY n.created_at DESC
         LIMIT :limit
     """)
 
-    result = await db.execute(
-        notifications_query,
-        {"tenant_id": tenant_id, "limit": limit}
-    )
+    result = await db.execute(notifications_query, query_params)
     rows = result.fetchall()
 
     notifications = []
@@ -569,84 +639,112 @@ async def get_tenant_recent_notifications(
 async def get_tenant_delivery_activity(
     tenant_id: str,
     limit: int = 50,
-    authorized_tenant_id: str = Depends(require_tenant_or_admin_path_access),
+    tenant: Tenant = Depends(require_tenant_or_admin_path_access),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get tenant delivery-first activity feed (channel-level)."""
-    activity_query = text("""
-        SELECT
-            n.id AS notification_id,
-            n.type,
-            n.priority,
-            n.template_id,
-            n.data,
-            n.created_at,
-            nc.channel,
-            nc.provider,
-            nc.status,
-            nc.attempts,
-            nc.message_id,
-            nc.error_message
-        FROM notification_channels nc
-        JOIN notifications n ON nc.notification_id = n.id
-        WHERE n.tenant_id = :tenant_id
-        ORDER BY n.created_at DESC, nc.created_at DESC
-        LIMIT :limit
-    """)
+    try:
+        # If it's a marketing user, filter by their own ID
+        owner_id_filter = None
+        if hasattr(tenant, "current_user_role") and tenant.current_user_role == "marketing":
+            owner_id_filter = getattr(tenant, "current_user_id", None)
 
-    result = await db.execute(
-        activity_query,
-        {"tenant_id": tenant_id, "limit": limit}
-    )
-    rows = result.fetchall()
+        query_params = {"tenant_id": tenant_id, "limit": limit}
+        owner_clause = ""
+        if owner_id_filter:
+            owner_clause = "AND n.owner_id = :owner_id"
+            query_params["owner_id"] = owner_id_filter
 
-    records: List[Dict[str, Any]] = []
-    for row in rows:
-        payload = row.data or {}
-        channel = row.channel
-        recipient = (
-            payload.get("email") if channel == "email" else
-            payload.get("phone") if channel in {"sms", "whatsapp", "voice"} else
-            payload.get("slack_id") if channel == "slack" else
-            (payload.get("device_tokens") or [None])[0] if channel == "push" else
-            payload.get("user_id") if channel == "inapp" else
-            payload.get("email") or payload.get("phone") or payload.get("slack_id")
-        )
-        body_text = payload.get("body") or ""
+        activity_query = text(f"""
+            SELECT
+                n.id AS notification_id,
+                n.type,
+                n.priority,
+                n.template_id,
+                n.data,
+                n.created_at,
+                nc.channel,
+                nc.provider,
+                nc.status,
+                nc.attempts,
+                nc.message_id,
+                nc.error_message
+            FROM notification_channels nc
+            JOIN notifications n ON nc.notification_id = n.id
+            WHERE n.tenant_id = :tenant_id
+                {owner_clause}
+            ORDER BY n.created_at DESC, nc.id DESC
+            LIMIT :limit
+        """)
 
-        records.append({
-            "notification_id": str(row.notification_id),
-            "type": row.type,
-            "priority": row.priority,
-            "channel": channel,
-            "provider": row.provider,
-            "recipient": recipient or "N/A",
-            "message_preview": (body_text[:120] + "...") if len(body_text) > 120 else body_text,
-            "template_mode": "template" if (row.template_id or payload.get("template_id")) else "raw",
-            "template_id": row.template_id or payload.get("template_id"),
-            "status": row.status,
-            "attempts": row.attempts or 0,
-            "message_id": row.message_id,
-            "error_message": row.error_message,
-            "created_at": row.created_at.isoformat() if row.created_at else None,
-        })
+        result = await db.execute(activity_query, query_params)
+        rows = result.fetchall()
 
-    return {
-        "tenant_id": tenant_id,
-        "count": len(records),
-        "records": records,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+        records: List[Dict[str, Any]] = []
+        for row in rows:
+            try:
+                payload = row.data or {}
+                channel = row.channel
+                recipient = (
+                    payload.get("email") if channel == "email" else
+                    payload.get("phone") if channel in {"sms", "whatsapp", "voice"} else
+                    payload.get("slack_id") if channel == "slack" else
+                    (payload.get("device_tokens") or [None])[0] if channel == "push" else
+                    payload.get("user_id") if channel == "inapp" else
+                    payload.get("email") or payload.get("phone") or payload.get("slack_id")
+                )
+                body_text = payload.get("body") or ""
+
+                records.append({
+                    "notification_id": str(row.notification_id),
+                    "type": row.type,
+                    "priority": str(row.priority), # Cast Enum to string
+                    "channel": channel,
+                    "provider": row.provider,
+                    "recipient": recipient or "N/A",
+                    "message_preview": (body_text[:120] + "...") if len(body_text) > 120 else body_text,
+                    "template_mode": "template" if (row.template_id or payload.get("template_id")) else "raw",
+                    "template_id": row.template_id or payload.get("template_id"),
+                    "status": str(row.status), # Cast Enum to string
+                    "attempts": row.attempts or 0,
+                    "message_id": row.message_id,
+                    "error_message": row.error_message,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                })
+            except Exception as row_err:
+                logger.error(f"Error processing delivery row: {row_err}")
+                continue
+
+        return {
+            "tenant_id": tenant_id,
+            "count": len(records),
+            "records": records,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Failed to get delivery activity: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/tenant-dashboard/tenant/{tenant_id}/provider-health")
 async def get_tenant_provider_health(
     tenant_id: str,
-    authorized_tenant_id: str = Depends(require_tenant_or_admin_path_access),
+    tenant: Tenant = Depends(require_tenant_or_admin_path_access),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get tenant-scoped provider performance statistics."""
-    provider_stats_query = text("""
+    # If it's a marketing user, filter by their own ID
+    owner_id_filter = None
+    if hasattr(tenant, "current_user_role") and tenant.current_user_role == "marketing":
+        owner_id_filter = tenant.current_user_id
+
+    query_params = {"tenant_id": tenant_id}
+    owner_clause = ""
+    if owner_id_filter:
+        owner_clause = "AND n.owner_id = :owner_id"
+        query_params["owner_id"] = owner_id_filter
+
+    provider_stats_query = text(f"""
         SELECT
             nc.provider as provider_name,
             nc.channel as channel,
@@ -656,11 +754,12 @@ async def get_tenant_provider_health(
         FROM notification_channels nc
         JOIN notifications n ON nc.notification_id = n.id
         WHERE n.tenant_id = :tenant_id
+            {owner_clause}
         GROUP BY nc.provider, nc.channel
         ORDER BY nc.channel, nc.provider
     """)
 
-    result = await db.execute(provider_stats_query, {"tenant_id": tenant_id})
+    result = await db.execute(provider_stats_query, query_params)
     rows = result.fetchall()
 
     provider_stats = []
@@ -702,14 +801,25 @@ async def get_tenant_provider_health(
 async def get_tenant_deduplication_stats(
     tenant_id: str,
     days: int = 30,
-    authorized_tenant_id: str = Depends(require_tenant_or_admin_path_access),
+    tenant: Tenant = Depends(require_tenant_or_admin_path_access),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get deduplication statistics for a tenant."""
     since_date = datetime.utcnow() - timedelta(days=days)
 
+    # If it's a marketing user, filter by their own ID
+    owner_id_filter = None
+    if hasattr(tenant, "current_user_role") and tenant.current_user_role == "marketing":
+        owner_id_filter = tenant.current_user_id
+
+    query_params = {"tenant_id": tenant_id, "since_date": since_date}
+    owner_clause = ""
+    if owner_id_filter:
+        owner_clause = "AND owner_id = :owner_id"
+        query_params["owner_id"] = owner_id_filter
+
     # Count notifications with idempotency keys
-    idempotency_query = text("""
+    idempotency_query = text(f"""
         SELECT
             COUNT(*) as total_with_idempotency,
             COUNT(DISTINCT idempotency_key) as unique_idempotency_keys
@@ -717,26 +827,22 @@ async def get_tenant_deduplication_stats(
         WHERE tenant_id = :tenant_id
             AND idempotency_key IS NOT NULL
             AND created_at >= :since_date
+            {owner_clause}
     """)
 
-    result = await db.execute(
-        idempotency_query,
-        {"tenant_id": tenant_id, "since_date": since_date}
-    )
+    result = await db.execute(idempotency_query, query_params)
     row = result.fetchone()
 
     # Count total notifications
-    total_query = text("""
+    total_query = text(f"""
         SELECT COUNT(*) as total
         FROM notifications
         WHERE tenant_id = :tenant_id
             AND created_at >= :since_date
+            {owner_clause}
     """)
 
-    total_result = await db.execute(
-        total_query,
-        {"tenant_id": tenant_id, "since_date": since_date}
-    )
+    total_result = await db.execute(total_query, query_params)
     total_row = total_result.fetchone()
 
     total_notifications = total_row.total if total_row else 0
@@ -765,11 +871,22 @@ async def get_tenant_deduplication_stats(
 async def get_tenant_llm_decisions(
     tenant_id: str,
     limit: int = 50,
-    authorized_tenant_id: str = Depends(require_tenant_or_admin_path_access),
+    tenant: Tenant = Depends(require_tenant_or_admin_path_access),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get LLM routing decisions for a tenant."""
-    decisions_query = text("""
+    # If it's a marketing user, filter by their own ID
+    owner_id_filter = None
+    if hasattr(tenant, "current_user_role") and tenant.current_user_role == "marketing":
+        owner_id_filter = tenant.current_user_id
+
+    query_params = {"tenant_id": tenant_id, "limit": limit}
+    owner_clause = ""
+    if owner_id_filter:
+        owner_clause = "AND n.owner_id = :owner_id"
+        query_params["owner_id"] = owner_id_filter
+
+    decisions_query = text(f"""
         SELECT
             n.id,
             n.type,
@@ -782,15 +899,13 @@ async def get_tenant_llm_decisions(
         LEFT JOIN notification_channels nc ON nc.notification_id = n.id
         WHERE n.tenant_id = :tenant_id
             AND n.llm_decision IS NOT NULL
+            {owner_clause}
         GROUP BY n.id, n.type, n.priority, n.llm_decision, n.created_at
         ORDER BY n.created_at DESC
         LIMIT :limit
     """)
 
-    result = await db.execute(
-        decisions_query,
-        {"tenant_id": tenant_id, "limit": limit}
-    )
+    result = await db.execute(decisions_query, query_params)
     rows = result.fetchall()
 
     decisions = []
@@ -831,3 +946,284 @@ async def get_tenant_llm_decisions(
         "decisions": decisions,
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+@router.get("/api/tenant-dashboard/tenant/{tenant_id}/marketing-activity")
+async def get_marketing_combined_activity(
+    tenant_id: str,
+    limit: int = 50,
+    tenant: Tenant = Depends(require_tenant_path_access),
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """Get combined inbound and outbound activity for a marketing team member."""
+    # This must be scoped to the current user (marketing member)
+    owner_id = getattr(tenant, "current_user_id", None)
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="User session required")
+
+    # 1. Get outbound notifications owned by this user
+    outbound_query = text("""
+        SELECT
+            n.id as id,
+            'outbound' as direction,
+            n.type as type,
+            nc.channel as channel,
+            nc.status as status,
+            n.user_id as recipient,
+            n.data->>'body' as content,
+            n.created_at as timestamp
+        FROM notifications n
+        JOIN notification_channels nc ON nc.notification_id = n.id
+        WHERE n.tenant_id = :tenant_id AND n.owner_id = :owner_id
+        ORDER BY n.created_at DESC
+        LIMIT :limit
+    """)
+
+    # 2. Get inbound messages owned by this user
+    inbound_query = text("""
+        SELECT
+            m.id as id,
+            'inbound' as direction,
+            'reply' as type,
+            m.channel as channel,
+            m.status as status,
+            m.sender_address as recipient,
+            m.parsed_content as content,
+            m.created_at as timestamp
+        FROM inbound_messages m
+        WHERE m.tenant_id = :tenant_id AND m.owner_id = :owner_id
+        ORDER BY m.created_at DESC
+        LIMIT :limit
+    """)
+
+    outbound_res = await db.execute(outbound_query, {"tenant_id": tenant_id, "owner_id": owner_id, "limit": limit})
+    inbound_res = await db.execute(inbound_query, {"tenant_id": tenant_id, "owner_id": owner_id, "limit": limit})
+
+    combined = []
+    for row in outbound_res.fetchall():
+        combined.append(dict(row._mapping))
+    for row in inbound_res.fetchall():
+        # Handle Enum serialization
+        row_dict = dict(row._mapping)
+        row_dict['channel'] = str(row_dict['channel'])
+        row_dict['status'] = str(row_dict['status'])
+        combined.append(row_dict)
+
+    # Sort by timestamp DESC
+    combined.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    # Trim to limit
+    combined = combined[:limit]
+
+    # Convert timestamps to ISO
+    for item in combined:
+        if isinstance(item['timestamp'], datetime):
+            item['timestamp'] = item['timestamp'].isoformat()
+
+    return {
+        "tenant_id": tenant_id,
+        "owner_id": str(owner_id),
+        "activity": combined
+    }
+
+
+@router.get("/api/tenant-dashboard/tenant/{tenant_id}/marketing-threaded-activity")
+async def get_marketing_threaded_activity(
+    tenant_id: str,
+    limit: int = 50,
+    tenant: Tenant = Depends(require_tenant_or_admin_path_access),
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """Get threaded activity (outbound + its direct reply) for marketing."""
+    try:
+        owner_id = getattr(tenant, "current_user_id", None)
+        user_role = getattr(tenant, "current_user_role", "admin" if getattr(tenant, "is_platform_admin", False) else "marketing")
+
+        # If marketing role, we filter outbound by their own ID
+        # If admin/root, we show all activity for the tenant
+        use_owner_filter = (user_role == "marketing")
+
+        outbound_where = "n.tenant_id = :tenant_id"
+        if use_owner_filter and owner_id:
+            outbound_where += " AND n.owner_id = :owner_id"
+
+        # This query pairs notifications with their most recent subsequent reply
+        query = text(f"""
+            WITH outbound AS (
+                SELECT 
+                    n.id as id,
+                    n.created_at as timestamp,
+                    n.user_id as recipient_id,
+                    n.data->>'email' as recipient_email,
+                    n.data->>'phone' as recipient_phone,
+                    n.data->>'body' as content,
+                    nc.channel as channel,
+                    nc.status as status,
+                    n.owner_id
+                FROM notifications n
+                JOIN notification_channels nc ON nc.notification_id = n.id
+                WHERE {outbound_where}
+            ),
+            inbound AS (
+                SELECT 
+                    m.id as id,
+                    m.created_at as timestamp,
+                    m.sender_address as sender,
+                    COALESCE(m.parsed_content, m.raw_payload->>'body', m.raw_payload->>'text', m.raw_payload->>'stripped-text') as content,
+                    m.channel as channel,
+                    m.status as status,
+                    m.owner_id,
+                    m.tenant_id,
+                    ii.intent as ai_intent,
+                    ii.confidence as ai_confidence,
+                    ii.rationale as ai_rationale
+                FROM inbound_messages m
+                LEFT JOIN inbound_intents ii ON m.id = ii.message_id
+                WHERE m.tenant_id = :tenant_id
+            )
+            SELECT 
+                o.id as out_id,
+                o.timestamp as out_time,
+                COALESCE(o.recipient_email, o.recipient_phone, o.recipient_id) as recipient,
+                o.content as out_content,
+                o.channel as channel,
+                o.status as out_status,
+                i.id as in_id,
+                i.timestamp as in_time,
+                i.content as in_content,
+                i.status as in_status,
+                i.ai_intent,
+                i.ai_confidence,
+                i.ai_rationale
+            FROM outbound o
+            LEFT JOIN LATERAL (
+                SELECT 
+                    m.id, m.timestamp, m.content, m.status,
+                    m.ai_intent, m.ai_confidence, m.ai_rationale
+                FROM inbound m
+                WHERE m.timestamp > o.timestamp
+                AND (
+                    m.sender = o.recipient_id 
+                    OR m.sender = o.recipient_email
+                    OR m.sender = o.recipient_phone
+                    OR (o.recipient_phone IS NOT NULL AND m.sender = 'whatsapp:' || o.recipient_phone)
+                    OR (o.recipient_phone IS NOT NULL AND 'whatsapp:' || m.sender = o.recipient_phone)
+                )
+                ORDER BY m.timestamp ASC
+                LIMIT 1
+            ) i ON TRUE
+            ORDER BY o.timestamp DESC
+            LIMIT :limit
+        """)
+
+        params = {"tenant_id": tenant_id, "limit": limit}
+        if use_owner_filter and owner_id:
+            params["owner_id"] = owner_id
+
+        result = await db.execute(query, params)
+        rows = result.fetchall()
+
+        activity = []
+        for row in rows:
+            try:
+                item = {
+                    "channel": str(row.channel),
+                    "recipient": row.recipient,
+                    "outbound": {
+                        "id": str(row.out_id),
+                        "timestamp": row.out_time.isoformat() if row.out_time else None,
+                        "content": row.out_content,
+                        "status": str(row.out_status)
+                    },
+                    "inbound": None
+                }
+                
+                if row.in_id:
+                    item["inbound"] = {
+                        "id": str(row.in_id),
+                        "timestamp": row.in_time.isoformat() if row.in_time else None,
+                        "content": row.in_content,
+                        "status": str(row.in_status),
+                        "ai_intent": str(row.ai_intent) if row.ai_intent else None,
+                        "ai_confidence": float(row.ai_confidence) if row.ai_confidence is not None else None,
+                        "ai_rationale": row.ai_rationale
+                    }
+                activity.append(item)
+            except Exception as row_err:
+                logger.error(f"Error processing activity row: {row_err}")
+                continue
+
+        return {
+            "tenant_id": tenant_id,
+            "owner_id": str(owner_id) if owner_id else None,
+            "role": user_role,
+            "threads": activity
+        }
+    except Exception as e:
+        logger.error(f"Failed to get threaded activity: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/tenant-dashboard/tenant/{tenant_id}/candidates")
+async def get_tenant_candidates(
+    tenant_id: str,
+    tenant: Tenant = Depends(require_tenant_or_admin_path_access),
+    db: AsyncSession = Depends(get_db)
+) -> List[Dict[str, Any]]:
+    """
+    Get a list of unique notification recipients (candidates) for this tenant.
+    Aggregates from recent notifications to find known users and their contact info.
+    """
+    # If it's a marketing user, filter by their own ID
+    owner_id_filter = None
+    if hasattr(tenant, "current_user_role") and tenant.current_user_role == "marketing":
+        owner_id_filter = tenant.current_user_id
+
+    query_params = {"tenant_id": tenant_id}
+    owner_clause = ""
+    if owner_id_filter:
+        owner_clause = "AND tenant_id = :tenant_id AND owner_id = :owner_id"
+        query_params["owner_id"] = owner_id_filter
+    else:
+        owner_clause = "AND tenant_id = :tenant_id"
+
+    query = text(f"""
+        WITH recent_recipients AS (
+            SELECT 
+                user_id,
+                data->>'email' as email,
+                data->>'phone' as phone,
+                created_at,
+                ROW_NUMBER() OVER(PARTITION BY user_id ORDER BY created_at DESC) as rn
+            FROM notifications
+            WHERE 1=1 {owner_clause}
+        )
+        SELECT user_id, email, phone
+        FROM recent_recipients
+        WHERE rn = 1
+        ORDER BY created_at DESC
+        LIMIT 100
+    """)
+    
+    result = await db.execute(query, query_params)
+    rows = result.fetchall()
+    
+    candidates = []
+    for row in rows:
+        candidates.append({
+            "user_id": row.user_id,
+            "email": row.email,
+            "phone": row.phone
+        })
+    
+    # If no real data, provide some mocks for a better UI experience
+    if not candidates:
+        candidates = [
+            {"user_id": "cust_001", "email": "alex.smith@example.com", "phone": "+14155550101"},
+            {"user_id": "cust_002", "email": "jordan.lee@test.org", "phone": "+14155550102"},
+            {"user_id": "cust_003", "email": "sam.taylor@company.net", "phone": "+14155550103"},
+            {"user_id": "cust_004", "email": "casey.morgan@web.com", "phone": "+14155550104"},
+            {"user_id": "cust_005", "email": "riley.quinn@service.io", "phone": "+14155550105"},
+        ]
+        
+    return candidates

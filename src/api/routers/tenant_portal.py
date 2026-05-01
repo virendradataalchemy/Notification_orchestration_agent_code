@@ -304,6 +304,26 @@ async def marketing_dashboard_page(
     })
 
 
+@router.get("/{tenant_id}/marketing-dashboard", response_class=HTMLResponse)
+async def marketing_detailed_dashboard_page(
+    request: Request,
+    tenant_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Detailed activity dashboard for marketing."""
+    tenant = await _get_portal_tenant_from_cookie(request, db)
+    if not tenant:
+        return RedirectResponse(url="/portal/login")
+    if tenant.id != tenant_id:
+        return RedirectResponse(url=f"/portal/{tenant.id}/marketing-dashboard")
+
+    return templates.TemplateResponse("marketing_dashboard.html", {
+        "request": request,
+        "tenant_id": tenant_id,
+        "tenant_name": tenant.name
+    })
+
+
 @router.get("/{tenant_id}/team", response_class=HTMLResponse)
 async def team_management_page(
     request: Request,

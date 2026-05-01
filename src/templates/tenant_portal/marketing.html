@@ -6,6 +6,8 @@
     <title>Marketing Hub - Send Messages</title>
     <link rel="stylesheet" href="/portal/assets/portal_shared.css">
     <script src="/portal/assets/portal_auth.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -76,7 +78,89 @@
 
         .status { margin-top: 10px; padding: 12px; border-radius: 8px; font-size: 14px; white-space: pre-wrap; }
         .status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fee2e2; }
-        .status.success { background: #f0fdf4; color: #166534; border: 1px solid #dcfce7; }
+        .status.success { background: #f0fdf4; color: #166534; border: solid 1px #dcfce7; }
+
+        /* Candidate list styles */
+        .candidate-box {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background: #f8fafc;
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .candidate-header {
+            padding: 10px 15px;
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .candidate-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 5px 0;
+        }
+        .candidate-item {
+            padding: 8px 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .candidate-item:hover {
+            background: #eff6ff;
+        }
+        .candidate-item input {
+            width: auto;
+        }
+        .candidate-info {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.2;
+        }
+        .candidate-name {
+            font-weight: 600;
+            font-size: 13px;
+            color: #1e293b;
+        }
+        .candidate-meta {
+            font-size: 11px;
+            color: #64748b;
+        }
+        .compact-textarea {
+            min-height: 60px !important;
+            font-size: 12px !important;
+            padding: 8px !important;
+        }
+
+        /* Inbound Activity Styles */
+        .inbound-badge {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #dcfce7;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .outbound-badge {
+            background: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #dcfce7;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
@@ -87,6 +171,7 @@
             </a>
             <div class="navbar-user">
                 <div class="navbar-links">
+                    <a id="navMarketingDashboard" href="#" style="display:none">Dashboard</a>
                     <a id="navDashboard" href="#" class="active">Send Messages</a>
                     <a id="navTemplates" href="#">Templates</a>
                     <a id="navAnalytics" href="#" style="display:none">Analytics</a>
@@ -173,26 +258,124 @@
 
             <div class="card">
                 <h2>Bulk Campaign Send</h2>
-                <div class="row3">
-                    <div>
-                        <label>Channels</label>
-                        <div id="bulkChannelOptions" class="channel-grid"></div>
-                    </div>
-                    <div>
-                        <label>Template ID</label>
-                        <input id="bulkTemplateId" oninput="fetchTemplatePreview(this.value)">
-                        <div style="margin-top: 8px;">
-                            <a id="bulkTemplatePreviewBtn" href="javascript:void(0)" style="font-size: 13px; color: #2563eb; text-decoration: none; display: none;" onclick="openTemplatePreview()">View Template ↗</a>
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px;">
+                    <!-- Left: Campaign Config -->
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label>Delivery Channels</label>
+                            <div id="bulkChannelOptions" class="channel-grid"></div>
+                        </div>
+                        
+                        <div class="row">
+                            <div>
+                                <label>Template ID (optional)</label>
+                                <input id="bulkTemplateId" oninput="fetchTemplatePreview(this.value)">
+                                <div style="margin-top: 5px;">
+                                    <a id="bulkTemplatePreviewBtn" href="javascript:void(0)" style="font-size: 12px; color: #2563eb; text-decoration: none; display: none;" onclick="openTemplatePreview()">View Template ↗</a>
+                                </div>
+                            </div>
+                            <div>
+                                <label>Campaign Subject</label>
+                                <input id="bulkSubject" placeholder="Marketing Update">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label>Manual Body (used if no template)</label>
+                            <textarea id="bulkBody" style="min-height: 80px;" placeholder="Message content..."></textarea>
+                        </div>
+
+                        <div>
+                            <label>Additional Manual Recipients (user_name,email,phone)</label>
+                            <textarea id="bulkRecipients" class="compact-textarea" placeholder="user123,test@example.com,+1000..."></textarea>
                         </div>
                     </div>
-                    <div>
-                        <label>Recipients (user_id,email,phone)</label>
-                        <textarea id="bulkRecipients" style="min-height: 120px;">user_1,user1@test.com,+1000000001
-user_2,user2@test.com,+1000000002</textarea>
+
+                    <!-- Right: Candidate Selection -->
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <label>Available Candidates</label>
+                        <div class="candidate-box">
+                            <div class="candidate-header">
+                                <input type="checkbox" id="selectAllCandidates" onchange="toggleAllCandidates(this.checked)">
+                                <span>Select All</span>
+                                <a href="javascript:void(0)" onclick="removeAllCandidates()" style="margin-left: 10px; font-size: 11px; color: #dc2626; text-decoration: none; font-weight: normal;">Remove All</a>
+                                <span id="candidateCount" style="margin-left: auto; opacity: 0.6; font-weight: normal;">0 selected</span>
+                            </div>
+                            <div id="candidateList" class="candidate-list">
+                                <div style="text-align: center; padding: 40px; color: #64748b;">
+                                    <p>Loading candidates...</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="font-size: 11px; color: #64748b; margin-top: 5px;">
+                            Candidates are unique recipients from your recent notification history.
+                        </p>
+
+                        <!-- File Import Section -->
+                        <div id="importSection" style="margin-top: 15px; padding: 15px; background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 10px;">
+                            <label style="margin-bottom: 8px;">Import Recipients (CSV/Excel)</label>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="file" id="recipientFile" accept=".csv,.xlsx,.xls" style="flex-grow: 1; font-size: 12px; padding: 5px; background: white; border: 1px solid #cbd5e1; border-radius: 4px;">
+                                    <button type="button" class="btn-primary-action" onclick="handleFileUpload()" style="padding: 8px 15px; font-size: 12px; background: #6366f1; white-space: nowrap;">
+                                        Parse File
+                                    </button>
+                                </div>
+                                <div style="font-size: 10px; color: #64748b;">
+                                    Required Format: <strong>user_id, email, phone</strong> (No header needed)
+                                </div>
+                                
+                                <!-- Preview Area (Hidden by default) -->
+                                <div id="importPreview" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #cbd5e1;">
+                                    <div style="font-size: 11px; font-weight: 700; color: #1e293b; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                        <span>Parsed Data Preview</span>
+                                        <span id="previewCount">0 rows</span>
+                                    </div>
+                                    <div id="previewTableContainer" style="max-height: 150px; overflow-y: auto; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
+                                        <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+                                            <thead style="position: sticky; top: 0; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                                                <tr>
+                                                    <th style="text-align: left; padding: 5px 8px;">User ID</th>
+                                                    <th style="text-align: left; padding: 5px 8px;">Email</th>
+                                                    <th style="text-align: left; padding: 5px 8px;">Phone</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="previewTableBody"></tbody>
+                                        </table>
+                                    </div>
+                                    <div style="margin-top: 10px; display: flex; gap: 8px;">
+                                        <button type="button" class="btn-primary-action" onclick="confirmImport()" style="flex: 1; padding: 8px; font-size: 12px; background: #16a34a;">
+                                            Confirm & Add to List
+                                        </button>
+                                        <button type="button" onclick="cancelImport()" style="padding: 8px; font-size: 12px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer;">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <button class="btn-primary-action" onclick="sendBulk()">Launch Bulk Campaign</button>
-                <div id="bulkStatus" class="status" style="display: none;"></div>
+
+                <div style="margin-top: 24px; display: flex; align-items: center; gap: 15px;">
+                    <button class="btn-primary-action" onclick="sendBulk()" style="padding: 12px 30px;">Launch Bulk Campaign</button>
+                    <div id="bulkStatus" class="status" style="display: none; margin-top: 0; flex-grow: 1;"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Recent Activity</h2>
+                <p style="font-size: 13px; color: #64748b; margin-bottom: 15px;">Combined view of messages sent and replies received by you.</p>
+                
+                <div id="marketingActivityList" style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="text-align: center; padding: 40px; color: #64748b;">
+                        <p>Loading activity...</p>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button class="btn-secondary" onclick="loadMarketingActivity()" style="padding: 8px 16px; font-size: 13px;">Refresh Activity</button>
+                </div>
             </div>
         </div>
     </div>
@@ -202,7 +385,41 @@ user_2,user2@test.com,+1000000002</textarea>
         const tenantId = pathParts[2];
         const accessToken = localStorage.getItem('tenant_access_token');
         let availableChannels = [];
+        let candidates = [];
+        let tempImported = [];
         let lastFetchedTemplate = null;
+
+        function formatIST(dateString, options = {}) {
+            if (!dateString) return '';
+            
+            let date;
+            if (typeof dateString === 'string') {
+                // If it's a naive ISO string from Python (no Z, no offset), assume UTC
+                if (!dateString.includes('Z') && !dateString.includes('+') && !dateString.match(/[+-]\d{2}:\d{2}$/)) {
+                    if (dateString.includes(' ')) {
+                        date = new Date(dateString.replace(' ', 'T') + 'Z');
+                    } else {
+                        date = new Date(dateString + 'Z');
+                    }
+                } else {
+                    date = new Date(dateString);
+                }
+            } else {
+                date = new Date(dateString);
+            }
+
+            const defaultOptions = {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                timeZoneName: 'short'
+            };
+            return date.toLocaleString('en-IN', { ...defaultOptions, ...options });
+        }
 
         async function loadChannels() {
             try {
@@ -217,6 +434,246 @@ user_2,user2@test.com,+1000000002</textarea>
                 renderCheckboxes('sendChannelOptions', availableChannels);
                 renderCheckboxes('bulkChannelOptions', availableChannels);
             } catch (e) { console.error(e); }
+        }
+
+        async function loadCandidates() {
+            const listEl = document.getElementById('candidateList');
+            try {
+                const res = await fetch(`/api/tenant-dashboard/tenant/${tenantId}/candidates`, {
+                    headers: { 'Authorization': 'Bearer ' + accessToken }
+                });
+                if (!res.ok) throw new Error('Failed to load candidates');
+                candidates = await res.json();
+                renderCandidates();
+            } catch (e) {
+                console.error(e);
+                listEl.innerHTML = `<div style="padding: 20px; text-align: center; color: #c33; font-size: 13px;">${e.message}</div>`;
+            }
+        }
+
+        function renderCandidates() {
+            const listEl = document.getElementById('candidateList');
+            if (!candidates || candidates.length === 0) {
+                listEl.innerHTML = '<div style="padding: 40px; text-align: center; color: #64748b;">No candidates found</div>';
+                updateSelectionCount();
+                return;
+            }
+
+            listEl.innerHTML = candidates.map((c, i) => `
+                <div class="candidate-item" onclick="toggleCandidate(${i})">
+                    <input type="checkbox" class="candidate-checkbox" data-index="${i}" onclick="event.stopPropagation(); updateSelectionCount()">
+                    <div class="candidate-info">
+                        <div class="candidate-name">${c.user_id}</div>
+                        <div class="candidate-meta">${c.email || ''} ${c.email && c.phone ? '•' : ''} ${c.phone || ''}</div>
+                    </div>
+                    <button type="button" onclick="event.stopPropagation(); removeCandidate(${i})" style="margin-left: auto; background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 16px; padding: 5px;" onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#94a3b8'">&times;</button>
+                </div>
+            `).join('');
+            updateSelectionCount();
+        }
+
+        function removeCandidate(index) {
+            if (confirm('Remove this candidate?')) {
+                candidates.splice(index, 1);
+                renderCandidates();
+            }
+        }
+
+        function removeAllCandidates() {
+            if (candidates.length === 0) return;
+            if (confirm('Remove all candidates from this list?')) {
+                candidates = [];
+                renderCandidates();
+            }
+        }
+
+        function toggleCandidate(index) {
+            const cb = document.querySelector(`.candidate-checkbox[data-index="${index}"]`);
+            if (cb) {
+                cb.checked = !cb.checked;
+                updateSelectionCount();
+            }
+        }
+
+        function toggleAllCandidates(checked) {
+            document.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = checked);
+            updateSelectionCount();
+        }
+
+        function updateSelectionCount() {
+            const checked = document.querySelectorAll('.candidate-checkbox:checked').length;
+            document.getElementById('candidateCount').textContent = `${checked} selected`;
+            
+            const total = document.querySelectorAll('.candidate-checkbox').length;
+            document.getElementById('selectAllCandidates').checked = checked === total && total > 0;
+        }
+
+        async function handleFileUpload() {
+            const fileInput = document.getElementById('recipientFile');
+            const status = document.getElementById('bulkStatus');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                status.textContent = 'Error: Please select a file first';
+                status.className = 'status error';
+                status.style.display = 'block';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const fileName = file.name.toLowerCase();
+            
+            status.textContent = 'Processing file...';
+            status.className = 'status';
+            status.style.display = 'block';
+            
+            try {
+                if (fileName.endsWith('.csv')) {
+                    Papa.parse(file, {
+                        header: false,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            processImportedData(results.data);
+                        },
+                        error: function(err) {
+                            console.error('CSV parse error:', err);
+                            status.textContent = 'Error: Failed to parse CSV file';
+                            status.className = 'status error';
+                        }
+                    });
+                } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            const firstSheetName = workbook.SheetNames[0];
+                            const worksheet = workbook.Sheets[firstSheetName];
+                            const json = XLSX.utils.sheet_to_json(worksheet);
+                            processImportedData(json);
+                        } catch (err) {
+                            console.error('Excel parse error:', err);
+                            status.textContent = 'Error: Failed to parse Excel file';
+                            status.className = 'status error';
+                        }
+                    };
+                    reader.onerror = function() {
+                        status.textContent = 'Error: Failed to read file';
+                        status.className = 'status error';
+                    };
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    status.textContent = 'Error: Unsupported file format. Please use CSV or Excel.';
+                    status.className = 'status error';
+                }
+            } catch (e) {
+                console.error('File upload error:', e);
+                status.textContent = 'Error: ' + e.message;
+                status.className = 'status error';
+            }
+        }
+
+        function processImportedData(data) {
+            const status = document.getElementById('bulkStatus');
+            const previewArea = document.getElementById('importPreview');
+            const tableBody = document.getElementById('previewTableBody');
+            const countEl = document.getElementById('previewCount');
+            
+            if (!data || !Array.isArray(data) || data.length === 0) {
+                status.textContent = 'Error: No data found in file';
+                status.className = 'status error';
+                status.style.display = 'block';
+                return;
+            }
+
+            tempImported = [];
+            data.forEach((row, i) => {
+                if (!row) return;
+
+                let uid = null, email = null, phone = null;
+
+                if (Array.isArray(row)) {
+                    uid = row[0];
+                    email = row[1];
+                    phone = row[2];
+                    
+                    if (i === 0 && row.some(c => {
+                        const s = String(c).toLowerCase();
+                        return s.includes('email') || s.includes('user_id') || s.includes('phone');
+                    })) return;
+                } else if (typeof row === 'object') {
+                    uid = row.user_id || row.userId || row.ID || row.Id || row.user || row.name;
+                    email = row.email || row.Email || row.mail;
+                    phone = row.phone || row.Phone || row.mobile || row.contact;
+                }
+
+                if (uid || email || phone) {
+                    tempImported.push({
+                        user_id: String(uid || ('user_' + (i + 1))).trim(),
+                        email: email ? String(email).trim() : null,
+                        phone: phone ? String(phone).trim() : null,
+                        is_imported: true
+                    });
+                }
+            });
+
+            if (tempImported.length === 0) {
+                status.textContent = 'Error: No valid recipient data found. Ensure format is (user_id, email, phone).';
+                status.className = 'status error';
+                status.style.display = 'block';
+                return;
+            }
+
+            // Show Preview
+            tableBody.innerHTML = tempImported.map(r => `
+                <tr>
+                    <td style="padding: 5px 8px; border-bottom: 1px solid #f1f5f9;">${r.user_id}</td>
+                    <td style="padding: 5px 8px; border-bottom: 1px solid #f1f5f9; color: #64748b;">${r.email || '-'}</td>
+                    <td style="padding: 5px 8px; border-bottom: 1px solid #f1f5f9; color: #64748b;">${r.phone || '-'}</td>
+                </tr>
+            `).join('');
+            
+            countEl.textContent = `${tempImported.length} rows parsed`;
+            previewArea.style.display = 'block';
+            status.textContent = 'File parsed successfully. Please review and confirm.';
+            status.className = 'status success';
+            status.style.display = 'block';
+        }
+
+        function confirmImport() {
+            if (tempImported.length === 0) return;
+            
+            const existingIds = new Set(candidates.map(c => c.user_id));
+            const filteredNew = tempImported.filter(r => !existingIds.has(r.user_id));
+            
+            const duplicateCount = tempImported.length - filteredNew.length;
+            
+            candidates = [...candidates, ...filteredNew];
+            renderCandidates();
+            
+            // Auto-select imported ones
+            setTimeout(() => {
+                const listEl = document.getElementById('candidateList');
+                tempImported.forEach(nr => {
+                    const idx = candidates.findIndex(c => c.user_id === nr.user_id);
+                    if (idx !== -1) {
+                        const cb = listEl.querySelector(`.candidate-checkbox[data-index="${idx}"]`);
+                        if (cb) cb.checked = true;
+                    }
+                });
+                updateSelectionCount();
+            }, 100);
+
+            const status = document.getElementById('bulkStatus');
+            status.textContent = `Import complete! Added ${filteredNew.length} new recipients.` + (duplicateCount > 0 ? ` (${duplicateCount} duplicates skipped)` : '');
+            status.className = 'status success';
+            
+            cancelImport(); // Hide preview and reset
+        }
+
+        function cancelImport() {
+            tempImported = [];
+            document.getElementById('importPreview').style.display = 'none';
+            document.getElementById('recipientFile').value = '';
         }
 
         function renderCheckboxes(containerId, channels) {
@@ -303,18 +760,33 @@ user_2,user2@test.com,+1000000002</textarea>
             status.textContent = 'Launching campaign...';
             status.className = 'status';
 
-            const recipients = document.getElementById('bulkRecipients').value.split('\n')
-                .filter(l => l.trim())
+            // Get recipients from candidate selection
+            const selectedIndices = Array.from(document.querySelectorAll('.candidate-checkbox:checked')).map(cb => parseInt(cb.getAttribute('data-index')));
+            const selectedCandidates = selectedIndices.map(idx => candidates[idx]);
+            
+            // Get additional recipients from manual textarea
+            const manualRecipients = document.getElementById('bulkRecipients').value.split('\n')
+                .filter(l => l.trim() && l.includes(','))
                 .map(l => {
                     const [uid, email, phone] = l.split(',').map(s => s.trim());
                     return { user_id: uid, email: email || null, phone: phone || null };
                 });
 
+            const recipients = [...selectedCandidates, ...manualRecipients];
+
+            if (recipients.length === 0) {
+                status.textContent = 'Error: No recipients selected or added manually.';
+                status.className = 'status error';
+                return;
+            }
+
             const payload = {
                 template_id: document.getElementById('bulkTemplateId').value || null,
+                subject: document.getElementById('bulkSubject').value || null,
+                body: document.getElementById('bulkBody').value || null,
                 channels: getSelected('bulkChannelOptions'),
                 recipients: recipients,
-                data: { campaign: 'marketing_broadcast' }
+                data: { campaign: 'marketing_broadcast', source: 'marketing_hub' }
             };
 
             try {
@@ -352,7 +824,75 @@ user_2,user2@test.com,+1000000002</textarea>
             }
         }
 
+        async function loadMarketingActivity() {
+            const listEl = document.getElementById('marketingActivityList');
+            try {
+                const res = await fetch(`/api/tenant-dashboard/tenant/${tenantId}/marketing-activity`, {
+                    headers: { 'Authorization': 'Bearer ' + accessToken }
+                });
+                if (!res.ok) throw new Error('Failed to load activity');
+                const data = await res.json();
+                renderMarketingActivity(data.activity);
+            } catch (e) {
+                console.error(e);
+                listEl.innerHTML = `<div style="padding: 20px; text-align: center; color: #c33; font-size: 13px;">${e.message}</div>`;
+            }
+        }
+
+        function renderMarketingActivity(activity) {
+            const listEl = document.getElementById('marketingActivityList');
+            if (!activity || activity.length === 0) {
+                listEl.innerHTML = '<div style="padding: 40px; text-align: center; color: #64748b;">No recent activity found. Start by sending a message!</div>';
+                return;
+            }
+
+            listEl.innerHTML = activity.map(item => {
+                const isInbound = item.direction === 'inbound';
+                const time = formatIST(item.timestamp);
+                const content = item.content || '(No content)';
+                const preview = content.length > 100 ? content.substring(0, 100) + '...' : content;
+                
+                return `
+                    <div style="padding: 15px; border: 1px solid #f1f5f9; border-radius: 8px; background: ${isInbound ? '#f0fdf4' : '#fff'};">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="${isInbound ? 'inbound-badge' : 'outbound-badge'}">${item.direction}</span>
+                                <span style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase;">${item.channel} • ${item.type}</span>
+                            </div>
+                            <span style="font-size: 11px; color: #94a3b8;">${time}</span>
+                        </div>
+                        <div style="margin-bottom: 5px;">
+                            <strong style="font-size: 13px; color: #1e293b;">${isInbound ? 'From: ' : 'To: '}${item.recipient}</strong>
+                        </div>
+                        <div style="font-size: 13px; color: #475569; line-height: 1.5; white-space: pre-wrap;">${preview}</div>
+                        ${item.status ? `<div style="margin-top: 8px; font-size: 10px; color: #94a3b8;">Status: <span style="text-transform: capitalize;">${item.status.toLowerCase()}</span></div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
         loadChannels();
+        loadCandidates();
+        loadMarketingActivity();
+
+        function setupWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/${tenantId}`;
+            const socket = new WebSocket(wsUrl);
+
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.event === 'inbound_message') {
+                    console.log('New message received! Refreshing activity...');
+                    loadMarketingActivity();
+                }
+            };
+
+            socket.onclose = function() {
+                setTimeout(setupWebSocket, 5000);
+            };
+        }
+        setupWebSocket();
     </script>
 </body>
 </html>

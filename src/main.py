@@ -28,6 +28,7 @@ from src.api.routers import (
     admin_auth_router,
     admin_auth_portal_router,
     tenant_team_router,
+    websocket_router,
 )
 
 # Configure logging
@@ -158,6 +159,7 @@ app.include_router(tenant_settings_router, prefix=settings.api_prefix)
 app.include_router(tenant_team_router, prefix=settings.api_prefix)
 app.include_router(admin_auth_router, prefix=settings.api_prefix)
 app.include_router(admin_auth_portal_router)
+app.include_router(websocket_router)
 
 
 if __name__ == "__main__":

@@ -18,16 +18,17 @@ class IntentEngineService:
         self.db = db_session
         self.llm_service = BedrockLLMService()
 
-        # Simple deterministic rules
+        # Simple deterministic rules (Ordered by priority)
         self.rules = {
-            IntentCategory.ACCEPT: [
-                r"\b(yes|confirm|accept|agree|interested|sure|sounds good)\b"
-            ],
             IntentCategory.REJECT: [
-                r"\b(no|reject|decline|not interested|stop|cancel|unsubscribe)\b"
+                r"\b(no|reject|decline|not interested|stop|cancel|unsubscribe|don't|dont|not want)\b",
+                r"\b(not|never|won't|wont)\s+(accept|agree|interested|confirm|sure|good)\b"
+            ],
+            IntentCategory.ACCEPT: [
+                r"\b(yes|confirm|accept|agree|interested|sure|sounds good|ok|okay|yep|yup|yeah)\b"
             ],
             IntentCategory.REQUEST: [
-                r"\b(reschedule|update|change time|send more info|call me)\b"
+                r"\b(reschedule|update|change time|send more info|call me|provide details)\b"
             ],
             IntentCategory.QUERY: [
                 r"\b(what|how|where|when|who|why|can you clarify|meaning)\b",

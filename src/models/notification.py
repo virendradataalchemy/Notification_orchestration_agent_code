@@ -50,6 +50,11 @@ class Notification(Base, TimestampMixin):
     scheduled_at = Column(DateTime, nullable=True, index=True)
     llm_decision = Column(JSONB, nullable=True)  # AI routing decision
     idempotency_key = Column(String(255), nullable=True, index=True)  # For deduplication
+    
+    # Track which team member (marketing/admin) initiated this notification
+    # Useful for threading replies back to the right person
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("tenant_users.id", ondelete="SET NULL"), nullable=True)
+
     sent_at = Column(DateTime, nullable=True)  # When notification was sent
     delivered_at = Column(DateTime, nullable=True)  # When all channels delivered
     failed_at = Column(DateTime, nullable=True)  # When all channels failed

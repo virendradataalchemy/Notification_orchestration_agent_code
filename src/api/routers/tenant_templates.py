@@ -31,7 +31,9 @@ from src.api.schemas import (
     TemplateCloneRequest,
     Channel,
     AITemplateGenerateRequest,
-    AITemplateGenerateResponse
+    AITemplateGenerateResponse,
+    MultiChannelTemplateRequest,
+    MultiChannelTemplateResponse
 )
 from src.models import Template, Tenant
 from src.services.tenant_template_engine import TenantTemplateEngine
@@ -662,6 +664,42 @@ async def ai_generate_template(
         channel=request.channel.value
     )
     return generated
+
+
+@router.post(
+    "/ai-generate-multi",
+    response_model=MultiChannelTemplateResponse,
+    summary="Generate templates for multiple channels using AI",
+    description="Use AI to generate professional templates for multiple channels at once"
+)
+async def ai_generate_multi_templates(
+    request: MultiChannelTemplateRequest,
+    tenant: Tenant = Depends(get_authenticated_tenant)
+):
+    """
+    Generate professional templates for multiple channels using AI.
+    """
+    channels = [c.value for c in request.channels]
+    result = await llm_service.generate_multi_channel_templates(
+        content=request.content,
+        channels=channels
+    )
+    
+    # Format response
+    templates = {}
+    for channel_str, template_data in result.get("templates", {}).items():
+        try:
+            channel_enum = Channel(channel_str)
+            templates[channel_enum] = AITemplateGenerateResponse(
+                name=template_data.get("name"),
+                subject=template_data.get("subject"),
+                body=template_data.get("body"),
+                description=template_data.get("description", f"AI generated {channel_str} template")
+            )
+        except ValueError:
+            continue
+            
+    return MultiChannelTemplateResponse(templates=templates)
 
 
 # Helper functions

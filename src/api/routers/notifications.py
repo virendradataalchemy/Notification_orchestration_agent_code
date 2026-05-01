@@ -48,7 +48,9 @@ async def send_notification(
     NOTE: This is the legacy endpoint. Use /notifications/agentic for self-learning routing.
     """
     service = NotificationService(db)
-    notification = await service.send_notification(tenant.id, request)
+    # Pass current user ID as owner if available
+    owner_id = getattr(tenant, "current_user_id", None)
+    notification = await service.send_notification(tenant.id, request, owner_id=owner_id)
     return notification
 
 
@@ -93,6 +95,9 @@ async def send_notification_agentic(
         # Get notification team
         team = get_notification_team()
 
+        # Pass current user ID as owner if available
+        owner_id = getattr(tenant, "current_user_id", None)
+
         # Process with agents
         result = await team.process_notification(
             tenant_id=tenant.id,
@@ -104,6 +109,7 @@ async def send_notification_agentic(
                 if hasattr(request.notification.priority, "value")
                 else str(request.notification.priority)
             ),
+            owner_id=owner_id,
             metadata={
                 **(request.notification.data or {}),
                 **(request.options.model_dump() if request.options else {}),
@@ -143,7 +149,8 @@ async def send_batch_notifications(
     Processing happens asynchronously.
     """
     service = NotificationService(db)
-    batch = await service.send_batch_notifications(tenant.id, request)
+    owner_id = getattr(tenant, "current_user_id", None)
+    batch = await service.send_batch_notifications(tenant.id, request, owner_id=owner_id)
     return batch
 
 
@@ -162,7 +169,8 @@ async def send_batch_notifications_multichannel(
     Send notifications to multiple recipients across multiple channels in one request.
     """
     service = NotificationService(db)
-    batch = await service.send_batch_notifications_multichannel(tenant.id, request)
+    owner_id = getattr(tenant, "current_user_id", None)
+    batch = await service.send_batch_notifications_multichannel(tenant.id, request, owner_id=owner_id)
     return batch
 
 

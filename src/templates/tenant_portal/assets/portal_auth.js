@@ -41,7 +41,7 @@
         // Auto-redirect marketing users if they are on the main dashboard
         const currentPath = window.location.pathname;
         if (activeView === 'marketing' && (currentPath.endsWith('/dashboard') || currentPath.endsWith('/dashboard/'))) {
-            window.location.href = `/portal/${tenantId}/marketing`;
+            window.location.href = `/portal/${tenantId}/marketing-dashboard`;
             return;
         }
 
@@ -179,7 +179,7 @@
                     
                     // Force redirection to landing pages on view switch
                     if (newView === 'marketing') {
-                        window.location.href = `/portal/${tenantId}/marketing`;
+                        window.location.href = `/portal/${tenantId}/marketing-dashboard`;
                     } else {
                         window.location.href = `/portal/${tenantId}/dashboard`;
                     }
@@ -201,7 +201,7 @@
         // Branding link
         const brands = document.querySelectorAll('.navbar-brand');
         brands.forEach(brand => {
-            const targetPath = (activeView === 'marketing') ? 'marketing' : 'dashboard';
+            const targetPath = (activeView === 'marketing') ? 'marketing-dashboard' : 'dashboard';
             const href = `/portal/${tenantId}/${targetPath}`;
             
             if (brand.tagName === 'A') {
@@ -229,6 +229,7 @@
 
         // Current links from HTML or newly injected
         const links = {
+            marketingDashboard: document.getElementById('navMarketingDashboard'),
             dashboard: document.getElementById('navDashboard'),
             templates: document.getElementById('navTemplates'),
             analytics: document.getElementById('navAnalytics'),
@@ -239,6 +240,7 @@
         };
 
         // Wire hrefs
+        if (links.marketingDashboard) links.marketingDashboard.href = `/portal/${tenantId}/marketing-dashboard`;
         if (links.dashboard) links.dashboard.href = `/portal/${tenantId}/dashboard`;
         if (links.templates) links.templates.href = `/portal/${tenantId}/templates`;
         if (links.analytics) links.analytics.href = `/portal/${tenantId}/analytics`;
@@ -249,6 +251,10 @@
 
         // Hide links based on view/role
         if (activeView === 'marketing') {
+            if (links.marketingDashboard) {
+                links.marketingDashboard.style.display = 'inline-block';
+                links.marketingDashboard.textContent = 'Dashboard';
+            }
             if (links.analytics) links.analytics.style.display = 'none';
             if (links.channels) links.channels.style.display = 'none';
             if (links.developer) links.developer.style.display = 'none';
@@ -261,6 +267,7 @@
                 links.dashboard.href = `/portal/${tenantId}/marketing`;
             }
         } else {
+            if (links.marketingDashboard) links.marketingDashboard.style.display = 'none';
             // Admin view - hide Team if not root/admin (extra safety)
             if (userRole === 'marketing') {
                 if (links.team) links.team.style.display = 'none';

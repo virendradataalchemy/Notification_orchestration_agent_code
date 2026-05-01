@@ -51,8 +51,8 @@ def get_provider_for_channel(channel: str, provider_name: str = None, config: di
     provider_map = {
         'email': {
             'mailgun': MailgunProvider,
-            'aws_ses': EmailProvider,
-            'default': MailgunProvider  # Changed to Mailgun as primary
+            # 'aws_ses': EmailProvider,  # Deprecated in favor of Mailgun
+            'default': MailgunProvider
         },
         'sms': {
             'twilio': SMSProvider,

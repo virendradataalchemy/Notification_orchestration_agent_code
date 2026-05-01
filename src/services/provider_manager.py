@@ -20,7 +20,7 @@ class ProviderManager:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.providers = {
-            'email': ['mailgun', 'aws_ses', 'azure_graph'],  # Mailgun is now primary
+            'email': ['mailgun', 'azure_graph'],  # Mailgun is primary, azure_graph is fallback
             'sms': ['twilio', 'aws_sns'],
             'push': ['fcm', 'apns'],
             'slack': ['slack_api'],

@@ -1,19 +1,20 @@
 from fastapi import APIRouter, Depends, Request, HTTPException, status, BackgroundTasks, UploadFile
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 import uuid
 import logging
 from pathlib import Path
 
 from src.core import get_db
 from src.api.schemas import WebhookEvent
-from src.models import Notification, NotificationChannel, ChannelStatus
+from src.models import Notification, NotificationChannel, ChannelStatus, Tenant
 from src.models.inbound import InboundMessage, InboundChannel, InboundStatus
 from src.tasks.inbound_tasks import process_inbound_message
 from datetime import datetime
 import json
 from src.agents.async_learner import get_async_learner
+from src.core.ws_manager import manager
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -218,11 +219,52 @@ async def mailgun_inbound_webhook(
 
     # TODO: Verify Mailgun signature here using form_data.get("signature") etc.
     
-    # We map inbound tenant using recipient or a specific webhook URL parameter
-    # For now, default to a placeholder tenant ID or parse from recipient logic
-    # TODO: Resolve tenant from recipient/domain mapping table.
-    # Using demo tenant for local/testing to satisfy FK constraint.
-    tenant_id = "demo_corp"
+    # Identify tenant
+    tenant_id = "demo_corp"  # Default fallback
+    
+    # Try to resolve tenant from recipient address
+    # recipient is usually something like 'notif-123@yourdomain.com' or 'tenant_id@yourdomain.com'
+    if recipient:
+        # If it's a Mailgun custom recipient, we might have tenant_id in it
+        if "@" in recipient:
+            local_part = recipient.split("@")[0]
+            # Check if local part is a known tenant_id
+            query = select(Tenant).where(Tenant.id == local_part)
+            res = await db.execute(query)
+            if res.scalar_one_or_none():
+                tenant_id = local_part
+
+    # Identify message owner (marketing member)
+    owner_id = None
+    # If the email is a reply, the Message-Id might be in In-Reply-To
+    in_reply_to = form_data.get("In-Reply-To") or form_data.get("References", "")
+    if in_reply_to:
+        # Try to find the original notification by message_id
+        # Mailgun usually puts the original message ID in these headers
+        # We need to look up NotificationChannel where message_id matches
+        original_msg_id = in_reply_to.strip("<>")
+        query = select(Notification).join(NotificationChannel).where(
+            NotificationChannel.message_id == original_msg_id
+        )
+        result = await db.execute(query)
+        original_notif = result.scalar_one_or_none()
+        if original_notif:
+            owner_id = original_notif.owner_id
+    
+    # Fallback owner_id discovery if In-Reply-To didn't work
+    if not owner_id:
+        # Search for the last outbound message to this sender in this tenant
+        query = select(Notification).where(
+            Notification.tenant_id == tenant_id,
+            or_(
+                Notification.user_id == sender,
+                Notification.data.op("->>")("email") == sender
+            )
+        ).order_by(Notification.created_at.desc()).limit(1)
+        result = await db.execute(query)
+        last_notif = result.scalar_one_or_none()
+        if last_notif:
+            owner_id = last_notif.owner_id
 
     attachment_files = await _save_mailgun_attachments(form_data)
     raw_payload = _form_to_json_safe_dict(form_data)
@@ -235,10 +277,12 @@ async def mailgun_inbound_webhook(
         channel=InboundChannel.EMAIL,
         raw_payload=raw_payload,
         status=InboundStatus.RECEIVED,
+        owner_id=owner_id,
         metadata_json={
             "message_id": message_id,
             "recipient": recipient,
             "attachments_count": len(attachment_files),
+            "in_reply_to": in_reply_to
         }
     )
     db.add(inbound_msg)
@@ -247,6 +291,14 @@ async def mailgun_inbound_webhook(
 
     # Queue parsing & intent detection
     process_inbound_message.delay(str(inbound_msg.id))
+
+    # Notify dashboard via WebSocket
+    await manager.broadcast_to_tenant(tenant_id, {
+        "event": "inbound_message",
+        "tenant_id": tenant_id,
+        "owner_id": owner_id,
+        "message_id": str(inbound_msg.id)
+    })
 
     return {"status": "processed", "id": str(inbound_msg.id)}
 
@@ -276,6 +328,25 @@ async def twilio_inbound_webhook(
     # Using demo tenant for local/testing to satisfy FK constraint.
     tenant_id = "demo_corp"
     
+    # Identify message owner (marketing member) for SMS/WhatsApp
+    # This is harder for SMS as we don't have reply headers, but we can look for the last outbound message to this phone number
+    owner_id = None
+    phone_clean = sender.replace("whatsapp:", "").strip()
+    
+    # Search in notification data for this phone number
+    query = select(Notification).where(
+        Notification.tenant_id == tenant_id,
+        or_(
+            Notification.data.op("->>")("phone") == phone_clean,
+            Notification.user_id == phone_clean
+        )
+    ).order_by(Notification.created_at.desc()).limit(1)
+    
+    result = await db.execute(query)
+    last_notif = result.scalar_one_or_none()
+    if last_notif:
+        owner_id = last_notif.owner_id
+
     raw_payload = _form_to_json_safe_dict(form_data)
     
     inbound_msg = InboundMessage(
@@ -284,6 +355,7 @@ async def twilio_inbound_webhook(
         channel=channel,
         raw_payload=raw_payload,
         status=InboundStatus.RECEIVED,
+        owner_id=owner_id,
         metadata_json={"message_sid": message_sid, "to": recipient}
     )
     db.add(inbound_msg)
@@ -292,6 +364,14 @@ async def twilio_inbound_webhook(
 
     # Queue parsing & intent detection
     process_inbound_message.delay(str(inbound_msg.id))
+
+    # Notify dashboard via WebSocket
+    await manager.broadcast_to_tenant(tenant_id, {
+        "event": "inbound_message",
+        "tenant_id": tenant_id,
+        "owner_id": owner_id,
+        "message_id": str(inbound_msg.id)
+    })
 
     return {"status": "processed", "id": str(inbound_msg.id)}
 

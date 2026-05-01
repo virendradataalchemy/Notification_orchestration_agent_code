@@ -247,6 +247,14 @@ async def send_notification_via_channel(
                 "inapp": "websocket",
             }
 
+            # Extract owner_id from metadata if present
+            owner_id = None
+            if metadata and "owner_id" in metadata:
+                try:
+                    owner_id = uuid.UUID(metadata["owner_id"])
+                except:
+                    pass
+
             # Create notification record
             notification = Notification(
                 id=uuid.uuid4(),
@@ -255,6 +263,7 @@ async def send_notification_via_channel(
                 type=notification_type,
                 priority=priority_map.get(str(priority).lower(), DBPriority.MEDIUM),
                 status=NotificationStatus.QUEUED,
+                owner_id=owner_id,
                 data={
                     "body": content or "",
                     "subject": metadata.get("subject", notification_type) if metadata else notification_type,
