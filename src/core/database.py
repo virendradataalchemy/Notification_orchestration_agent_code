@@ -11,6 +11,7 @@ engine = create_async_engine(
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
     echo=settings.debug,
+    connect_args={"statement_cache_size": 0},
 )
 
 # Create async session factory

@@ -9,6 +9,7 @@ import secrets
 
 from src.core import get_db
 from src.api.dependencies import get_authenticated_tenant
+from src.config import settings
 from src.models import Tenant, TenantUser, TenantInvitation
 from src.core.security import hash_password
 from src.services.notification_service import NotificationService
@@ -187,8 +188,7 @@ async def invite_team_member(
         # Use existing notification service to send the invite
         notification_service = NotificationService(db)
         
-        # Prepare invite link (TODO: configure base URL)
-        invite_link = f"http://localhost:8000/portal/accept-invite?token={token}"
+        invite_link = f"{settings.public_base_url}/portal/accept-invite?token={token}"
         
         email_body = f"""
         <html>

@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     debug: bool = True
     log_level: str = "INFO"
     api_version: str = "v1"
+    # Public URL for links in emails (webhooks, invites). Prefer APP_BASE_URL; else NGROK_URL.
+    app_base_url: Optional[str] = None
+    ngrok_url: Optional[str] = None
 
     # Server
     host: str = "0.0.0.0"
@@ -161,6 +164,25 @@ class Settings(BaseSettings):
     def api_prefix(self) -> str:
         """Get API prefix with version."""
         return f"/api/{self.api_version}"
+
+    @staticmethod
+    def _normalize_public_base(url: Optional[str]) -> Optional[str]:
+        if not url:
+            return None
+        u = str(url).strip()
+        if not u:
+            return None
+        return u.rstrip("/")
+
+    @property
+    def public_base_url(self) -> str:
+        """Base URL for absolute links (invites, callbacks). No trailing slash."""
+        base = self._normalize_public_base(self.app_base_url) or self._normalize_public_base(
+            self.ngrok_url
+        )
+        if base:
+            return base
+        return f"http://127.0.0.1:{self.port}"
 
     @property
     def cors_origins(self) -> list[str]:
