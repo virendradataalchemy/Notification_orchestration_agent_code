@@ -2,7 +2,7 @@ import re
 import logging
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.models.inbound import InboundMessage, InboundIntent, IntentCategory, DetectionMethod
+from src.models.inbound import InboundMessageParsed, InboundMessageRaw, InboundIntent, IntentCategory, DetectionMethod
 from src.services.llm_service import BedrockLLMService
 
 logger = logging.getLogger(__name__)
@@ -36,8 +36,8 @@ class IntentEngineService:
             ]
         }
 
-    async def detect_intent(self, inbound_message: InboundMessage) -> InboundIntent:
-        text = (inbound_message.parsed_content or "").lower().strip()
+    async def detect_intent(self, parsed_msg: InboundMessageParsed, raw_msg: InboundMessageRaw) -> InboundIntent:
+        text = (parsed_msg.parsed_content or "").lower().strip()
         
         # Layer 1: Rules
         detected_intent = None
@@ -55,22 +55,23 @@ class IntentEngineService:
 
         if detected_intent:
             intent_record = InboundIntent(
-                message_id=inbound_message.id,
+                parsed_message_id=parsed_msg.id,
                 intent=detected_intent,
                 confidence=1.0, # Deterministic is 100% confident
                 detection_method=DetectionMethod.RULES,
-                rationale=f"Matched Regex Pattern: {matched_rule}"
+                rationale=f"Matched Regex Pattern: {matched_rule}",
+                needs_review=False
             )
             self.db.add(intent_record)
-            logger.info(f"Rules engine matched {detected_intent} for message {inbound_message.id}")
+            logger.info(f"Rules engine matched {detected_intent} for message {parsed_msg.id}")
             return intent_record
 
         # Layer 2: LLM Fallback
-        logger.info(f"Rules failed, falling back to LLM for message {inbound_message.id}")
+        logger.info(f"Rules failed, falling back to LLM for message {parsed_msg.id}")
         
         fallback_text = text
         if not fallback_text:
-            raw = inbound_message.raw_payload or {}
+            raw = raw_msg.raw_payload or {}
             # Keep LLM input always as text; avoid passing dict payloads.
             fallback_text = (
                 raw.get("stripped-text")
@@ -80,6 +81,10 @@ class IntentEngineService:
                 or ""
             )
 
+        # Let's ensure text isn't a dict. If it is, cast it to string safely.
+        if isinstance(fallback_text, dict):
+            fallback_text = str(fallback_text)
+
         llm_decision = await self.llm_service.classify_inbound_intent(fallback_text)
         
         # Map string to Enum
@@ -88,12 +93,16 @@ class IntentEngineService:
         except ValueError:
             mapped_intent = IntentCategory.UNKNOWN
 
+        confidence = llm_decision.get("confidence", 0.0)
+        needs_review = confidence < 0.70 or mapped_intent == IntentCategory.UNKNOWN
+
         intent_record = InboundIntent(
-            message_id=inbound_message.id,
+            parsed_message_id=parsed_msg.id,
             intent=mapped_intent,
-            confidence=llm_decision["confidence"],
+            confidence=confidence,
             detection_method=DetectionMethod.LLM,
-            rationale=llm_decision["rationale"]
+            rationale=llm_decision.get("rationale"),
+            needs_review=needs_review
         )
         self.db.add(intent_record)
         return intent_record

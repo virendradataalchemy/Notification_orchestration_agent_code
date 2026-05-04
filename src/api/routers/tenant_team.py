@@ -64,6 +64,77 @@ async def list_team_members(
     result = await db.execute(query)
     return result.scalars().all()
 
+@router.get("/invites")
+async def list_pending_invites(
+    tenant: Tenant = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all pending invitations for the tenant."""
+    query = select(TenantInvitation).where(
+        TenantInvitation.tenant_id == tenant.id,
+        TenantInvitation.accepted_at.is_(None)
+    ).order_by(TenantInvitation.created_at.desc())
+    result = await db.execute(query)
+    invites = result.scalars().all()
+    
+    response = []
+    for inv in invites:
+        # Get the email of the user who invited them if available
+        invited_by = "Admin"
+        if inv.invited_by_user_id:
+            user_query = select(TenantUser).where(TenantUser.id == inv.invited_by_user_id)
+            user_res = await db.execute(user_query)
+            user = user_res.scalar_one_or_none()
+            if user:
+                invited_by = user.email
+                
+        # Inject the invited_by field into the response
+        inv_dict = {
+            "invite_id": inv.id,
+            "email": inv.email,
+            "token": inv.token,
+            "expires_at": inv.expires_at,
+            "role": inv.role,
+        }
+        # Since InviteResponse doesn't have invited_by and role fields natively yet in schemas, 
+        # we'll just return a dict and FastAPI will serialize it
+        # Actually, let's just return a list of dicts directly to bypass schema limits for now
+        response.append({
+            "id": inv.id,
+            "email": inv.email,
+            "role": inv.role,
+            "token": inv.token,
+            "expires_at": inv.expires_at,
+            "invited_by": invited_by
+        })
+    
+    return response
+
+@router.delete("/invites/{invite_id}")
+async def cancel_invite(
+    invite_id: uuid.UUID,
+    tenant: Tenant = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Cancel a pending invitation."""
+    query = select(TenantInvitation).where(
+        TenantInvitation.id == invite_id,
+        TenantInvitation.tenant_id == tenant.id
+    )
+    result = await db.execute(query)
+    invitation = result.scalar_one_or_none()
+    
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+        
+    if invitation.accepted_at:
+        raise HTTPException(status_code=400, detail="Invitation has already been accepted")
+        
+    await db.delete(invitation)
+    await db.commit()
+    
+    return {"status": "success", "message": "Invitation cancelled"}
+
 @router.post("/invite", response_model=InviteResponse)
 async def invite_team_member(
     request: InviteRequest,

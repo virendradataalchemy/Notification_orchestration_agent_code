@@ -38,6 +38,18 @@ class NotificationStatus(str, Enum):
     FAILED = "failed"
 
 
+class InboundMessageCanonical(BaseModel):
+    """Universal canonical format for incoming messages from any channel."""
+    tenant_id: str
+    channel: Channel
+    sender_address: str
+    provider_message_id: str
+    raw_payload: Dict[str, Any]
+    candidate_id: Optional[str] = None
+    owner_id: Optional[str] = None
+    retention_date: Optional[datetime] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
 # Request Schemas
 class RecipientInfo(BaseModel):
     """Recipient information."""

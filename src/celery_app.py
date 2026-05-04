@@ -25,6 +25,7 @@ celery_app.conf.update(
         'tasks.send_notification_medium': {'queue': 'medium', 'priority': 5},
         'tasks.send_notification_low': {'queue': 'low', 'priority': 3},
         'inbound.process_inbound_message': {'queue': 'medium', 'priority': 6},
+        'retention.clean_expired_inbound_data': {'queue': 'low', 'priority': 1},
     },
 
     # Retry configuration

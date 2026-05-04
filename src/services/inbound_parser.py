@@ -1,6 +1,8 @@
 import re
 from typing import Optional
-from src.models.inbound import InboundMessage, InboundChannel
+from src.models.inbound import InboundMessageRaw, InboundChannel
+
+PARSER_VERSION = "1.0"
 
 class InboundParserService:
     """
@@ -8,7 +10,7 @@ class InboundParserService:
     Extracts plaintext, removes email thread history, signatures, etc.
     """
 
-    def parse(self, inbound_message: InboundMessage) -> Optional[str]:
+    def parse(self, inbound_message: InboundMessageRaw) -> Optional[str]:
         if inbound_message.channel == InboundChannel.EMAIL:
             return self._parse_email(inbound_message.raw_payload)
         elif inbound_message.channel in [InboundChannel.SMS, InboundChannel.WHATSAPP]:

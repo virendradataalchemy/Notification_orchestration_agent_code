@@ -7,12 +7,16 @@ import logging
 from pathlib import Path
 
 from src.core import get_db
-from src.api.schemas import WebhookEvent
 from src.models import Notification, NotificationChannel, ChannelStatus, Tenant
-from src.models.inbound import InboundMessage, InboundChannel, InboundStatus
+from src.models.inbound import InboundMessageRaw, InboundChannel
+from src.api.schemas import WebhookEvent, InboundMessageCanonical
 from src.tasks.inbound_tasks import process_inbound_message
 from datetime import datetime
 import json
+import hmac
+import hashlib
+from twilio.request_validator import RequestValidator
+from src.config.settings import settings
 from src.agents.async_learner import get_async_learner
 from src.core.ws_manager import manager
 
@@ -91,6 +95,83 @@ async def _save_mailgun_attachments(form_data):
             )
     return saved
 
+
+@router.api_route("/mailgun/delivery", methods=["POST"])
+async def mailgun_delivery_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Handle Mailgun delivery status webhooks (delivered, failed, rejected).
+    """
+    body = await request.json()
+    
+    # Mailgun encapsulates event data inside 'event-data'
+    event_data = body.get("event-data", {})
+    if not event_data:
+        return {"status": "ignored", "reason": "missing event-data"}
+        
+    signature_data = body.get("signature", {})
+    timestamp = signature_data.get("timestamp")
+    token = signature_data.get("token")
+    signature = signature_data.get("signature")
+    
+    # Verify Mailgun signature
+    signing_key = settings.mailgun_signing_key or settings.mailgun_api_key
+    if signing_key and signature and timestamp and token:
+        hmac_digest = hmac.new(
+            key=signing_key.encode(),
+            msg=('{}{}'.format(timestamp, token)).encode(),
+            digestmod=hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(str(signature), str(hmac_digest)):
+            raise HTTPException(status_code=401, detail="Invalid Mailgun signature")
+    elif signing_key:
+        raise HTTPException(status_code=401, detail="Missing Mailgun signature fields")
+
+    # Get the message ID to look up the channel
+    # Mailgun message IDs in webhooks often have < > around them, sometimes not.
+    message_id = event_data.get("message", {}).get("headers", {}).get("message-id", "")
+    if not message_id:
+        return {"status": "ignored", "reason": "missing message-id"}
+        
+    # Find notification channel
+    # Message ID in DB might have <> around it or might not
+    stripped_id = message_id.strip("<>")
+    bracketed_id = f"<{stripped_id}>"
+    
+    query = select(NotificationChannel).where(
+        or_(
+            NotificationChannel.message_id == message_id,
+            NotificationChannel.message_id == stripped_id,
+            NotificationChannel.message_id == bracketed_id
+        )
+    )
+    result = await db.execute(query)
+    channel = result.scalar_one_or_none()
+    
+    if not channel:
+        logger.warning(f"Mailgun delivery webhook: NotificationChannel not found for message_id {message_id} or {stripped_id} or {bracketed_id}")
+        return {"status": "not_found", "message_id": message_id}
+        
+    event_type = event_data.get("event")
+    
+    if event_type == "delivered":
+        channel.status = ChannelStatus.DELIVERED
+        channel.delivered_at = datetime.utcnow()
+    elif event_type == "opened":
+        channel.status = ChannelStatus.DELIVERED  # Could also add an 'opened_at' timestamp if model supports it
+        channel.opened_at = datetime.utcnow()
+    elif event_type == "clicked":
+        channel.status = ChannelStatus.DELIVERED
+        channel.clicked_at = datetime.utcnow()
+    elif event_type in ["failed", "rejected", "bounced", "complained", "temporary_fail", "permanent_fail"]:
+        channel.status = ChannelStatus.FAILED
+        channel.error_code = event_data.get("severity") or event_type
+        channel.error_message = event_data.get("delivery-status", {}).get("description") or event_data.get("delivery-status", {}).get("message") or event_type
+        
+    await db.commit()
+    return {"status": "processed"}
 
 @router.post("/ses")
 async def ses_webhook(
@@ -217,7 +298,44 @@ async def mailgun_inbound_webhook(
     if not sender or not form_data:
         return {"status": "ignored", "reason": "missing sender"}
 
-    # TODO: Verify Mailgun signature here using form_data.get("signature") etc.
+    # Verify Mailgun signature
+    signature = form_data.get("signature")
+    timestamp = form_data.get("timestamp")
+    token = form_data.get("token")
+    signing_key = settings.mailgun_signing_key or settings.mailgun_api_key
+    if signing_key and signature and timestamp and token:
+        hmac_digest = hmac.new(
+            key=signing_key.encode(),
+            msg=('{}{}'.format(timestamp, token)).encode(),
+            digestmod=hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(str(signature), str(hmac_digest)):
+            # Log security event
+            from src.models.audit_log import AuditLog
+            audit_entry = AuditLog(
+                event_type="security_alert",
+                user_id="system",
+                resource_type="webhook",
+                resource_id=message_id,
+                action="verify_signature",
+                details={"reason": "Invalid Mailgun signature", "provider": "mailgun", "sender": sender}
+            )
+            db.add(audit_entry)
+            await db.commit()
+            raise HTTPException(status_code=401, detail="Invalid Mailgun signature")
+    elif signing_key:
+        from src.models.audit_log import AuditLog
+        audit_entry = AuditLog(
+            event_type="security_alert",
+            user_id="system",
+            resource_type="webhook",
+            resource_id=message_id,
+            action="verify_signature",
+            details={"reason": "Missing Mailgun signature fields", "provider": "mailgun", "sender": sender}
+        )
+        db.add(audit_entry)
+        await db.commit()
+        raise HTTPException(status_code=401, detail="Missing Mailgun signature fields")
     
     # Identify tenant
     tenant_id = "demo_corp"  # Default fallback
@@ -236,12 +354,11 @@ async def mailgun_inbound_webhook(
 
     # Identify message owner (marketing member)
     owner_id = None
+    candidate_id = None
     # If the email is a reply, the Message-Id might be in In-Reply-To
     in_reply_to = form_data.get("In-Reply-To") or form_data.get("References", "")
     if in_reply_to:
         # Try to find the original notification by message_id
-        # Mailgun usually puts the original message ID in these headers
-        # We need to look up NotificationChannel where message_id matches
         original_msg_id = in_reply_to.strip("<>")
         query = select(Notification).join(NotificationChannel).where(
             NotificationChannel.message_id == original_msg_id
@@ -250,10 +367,10 @@ async def mailgun_inbound_webhook(
         original_notif = result.scalar_one_or_none()
         if original_notif:
             owner_id = original_notif.owner_id
+            candidate_id = original_notif.user_id
     
     # Fallback owner_id discovery if In-Reply-To didn't work
     if not owner_id:
-        # Search for the last outbound message to this sender in this tenant
         query = select(Notification).where(
             Notification.tenant_id == tenant_id,
             or_(
@@ -265,25 +382,36 @@ async def mailgun_inbound_webhook(
         last_notif = result.scalar_one_or_none()
         if last_notif:
             owner_id = last_notif.owner_id
+            candidate_id = last_notif.user_id
 
     attachment_files = await _save_mailgun_attachments(form_data)
     raw_payload = _form_to_json_safe_dict(form_data)
     if attachment_files:
         raw_payload["saved_attachments"] = attachment_files
     
-    inbound_msg = InboundMessage(
+    canonical = InboundMessageCanonical(
         tenant_id=tenant_id,
-        sender_address=sender,
         channel=InboundChannel.EMAIL,
+        sender_address=sender,
+        provider_message_id=message_id,
         raw_payload=raw_payload,
-        status=InboundStatus.RECEIVED,
-        owner_id=owner_id,
-        metadata_json={
-            "message_id": message_id,
+        candidate_id=candidate_id,
+        owner_id=str(owner_id) if owner_id else None,
+        metadata={
             "recipient": recipient,
             "attachments_count": len(attachment_files),
             "in_reply_to": in_reply_to
         }
+    )
+
+    inbound_msg = InboundMessageRaw(
+        tenant_id=canonical.tenant_id,
+        candidate_id=canonical.candidate_id,
+        sender_address=canonical.sender_address,
+        channel=canonical.channel,
+        provider_message_id=canonical.provider_message_id,
+        raw_payload=canonical.raw_payload,
+        owner_id=canonical.owner_id
     )
     db.add(inbound_msg)
     await db.commit()
@@ -296,7 +424,7 @@ async def mailgun_inbound_webhook(
     await manager.broadcast_to_tenant(tenant_id, {
         "event": "inbound_message",
         "tenant_id": tenant_id,
-        "owner_id": owner_id,
+        "owner_id": str(owner_id) if owner_id else None,
         "message_id": str(inbound_msg.id)
     })
 
@@ -322,15 +450,35 @@ async def twilio_inbound_webhook(
         
     channel = InboundChannel.WHATSAPP if sender.startswith("whatsapp:") else InboundChannel.SMS
 
-    # TODO: Verify Twilio signature here
-    
+    # Verify Twilio signature
+    if settings.twilio_auth_token:
+        validator = RequestValidator(settings.twilio_auth_token)
+        signature = request.headers.get("X-Twilio-Signature", "")
+        # Starlette's request.url might differ from what Twilio sees if behind proxy, 
+        # but standard validation:
+        url = str(request.url)
+        post_vars = dict(form_data)
+        if not validator.validate(url, post_vars, signature):
+            from src.models.audit_log import AuditLog
+            audit_entry = AuditLog(
+                event_type="security_alert",
+                user_id="system",
+                resource_type="webhook",
+                resource_id=message_sid,
+                action="verify_signature",
+                details={"reason": "Invalid Twilio signature", "provider": "twilio", "sender": sender}
+            )
+            db.add(audit_entry)
+            await db.commit()
+            raise HTTPException(status_code=401, detail="Invalid Twilio signature")
+
     # TODO: Resolve tenant from destination phone mapping table.
     # Using demo tenant for local/testing to satisfy FK constraint.
     tenant_id = "demo_corp"
     
     # Identify message owner (marketing member) for SMS/WhatsApp
-    # This is harder for SMS as we don't have reply headers, but we can look for the last outbound message to this phone number
     owner_id = None
+    candidate_id = None
     phone_clean = sender.replace("whatsapp:", "").strip()
     
     # Search in notification data for this phone number
@@ -346,17 +494,29 @@ async def twilio_inbound_webhook(
     last_notif = result.scalar_one_or_none()
     if last_notif:
         owner_id = last_notif.owner_id
+        candidate_id = last_notif.user_id
 
     raw_payload = _form_to_json_safe_dict(form_data)
     
-    inbound_msg = InboundMessage(
+    canonical = InboundMessageCanonical(
         tenant_id=tenant_id,
-        sender_address=sender,
         channel=channel,
+        sender_address=sender,
+        provider_message_id=message_sid,
         raw_payload=raw_payload,
-        status=InboundStatus.RECEIVED,
-        owner_id=owner_id,
-        metadata_json={"message_sid": message_sid, "to": recipient}
+        candidate_id=candidate_id,
+        owner_id=str(owner_id) if owner_id else None,
+        metadata={"to": recipient}
+    )
+
+    inbound_msg = InboundMessageRaw(
+        tenant_id=canonical.tenant_id,
+        candidate_id=canonical.candidate_id,
+        sender_address=canonical.sender_address,
+        channel=canonical.channel,
+        provider_message_id=canonical.provider_message_id,
+        raw_payload=canonical.raw_payload,
+        owner_id=canonical.owner_id
     )
     db.add(inbound_msg)
     await db.commit()
@@ -369,7 +529,7 @@ async def twilio_inbound_webhook(
     await manager.broadcast_to_tenant(tenant_id, {
         "event": "inbound_message",
         "tenant_id": tenant_id,
-        "owner_id": owner_id,
+        "owner_id": str(owner_id) if owner_id else None,
         "message_id": str(inbound_msg.id)
     })
 

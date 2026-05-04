@@ -116,19 +116,23 @@
             top: 0;
             width: 100%;
             height: 100%;
+            overflow-y: auto; /* Added to let the whole modal scroll if content is long */
             background: rgba(0, 0, 0, 0.5);
             backdrop-filter: blur(4px);
         }
 
         .modal-content {
             background: white;
-            margin: 10% auto;
+            margin: 5% auto; /* Reduced from 10% to give more vertical space */
             padding: 30px;
             border-radius: 16px;
             max-width: 600px;
             width: 90%;
             position: relative;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: min-content;
         }
 
         .close-modal {
@@ -142,14 +146,14 @@
 
         .message-view-content {
             margin-top: 20px;
-            max-height: 400px;
-            overflow-y: auto;
+            /* Allow it to expand instead of forcing scroll */
             padding: 15px;
             background: #f8fafc;
             border-radius: 8px;
             white-space: pre-wrap;
             font-size: 14px;
             line-height: 1.6;
+            flex-grow: 1;
         }
 
         .reply-section {
@@ -412,6 +416,7 @@
             body.innerHTML = threads.map((thread, index) => {
                 const outTime = formatIST(thread.outbound.timestamp, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                 const statusColor = getStatusColor(thread.outbound.status);
+                const outStatus = String(thread.outbound.status).toLowerCase().replace('channelstatus.', '');
                 
                 let replyCell = '';
                 if (thread.inbound) {
@@ -441,8 +446,8 @@
                         <td><span class="channel-badge">${thread.channel}</span></td>
                         <td style="font-family: monospace; font-size: 13px;">${thread.recipient}</td>
                         <td>
-                            <span class="status-badge" style="background: ${statusColor}15; color: ${statusColor};">
-                                ${thread.outbound.status}
+                            <span class="status-badge" style="background: ${statusColor}15; color: ${statusColor}; text-transform: uppercase;">
+                                ${outStatus}
                             </span>
                         </td>
                         <td>${replyCell}</td>
@@ -471,7 +476,7 @@
             
             if (isEmail && thread.outbound.content && (thread.outbound.content.includes('<html') || thread.outbound.content.includes('<div') || thread.outbound.content.includes('<p>'))) {
                 // If it's email and looks like HTML, render it in an iframe for security and style isolation
-                modalBody.innerHTML = `<iframe id="emailPreviewFrame" style="width: 100%; border: none; min-height: 300px; background: white; border-radius: 8px;"></iframe>`;
+                modalBody.innerHTML = `<iframe id="emailPreviewFrame" style="width: 100%; border: none; min-height: 400px; background: white; border-radius: 8px;"></iframe>`;
                 modalBody.style.padding = '0';
                 modalBody.style.overflow = 'hidden';
                 
@@ -482,8 +487,12 @@
                         doc.open();
                         doc.write(thread.outbound.content);
                         doc.close();
-                        // Auto-adjust height
-                        frame.style.height = (doc.body.scrollHeight + 20) + 'px';
+                        // Auto-adjust height but ensure it's large enough for standard emails
+                        setTimeout(() => {
+                            try {
+                                frame.style.height = Math.max(400, doc.body.scrollHeight + 50) + 'px';
+                            } catch(e) {}
+                        }, 200);
                     }
                 }, 50);
             } else {
@@ -554,7 +563,9 @@
         }
 
         function getStatusColor(status) {
-            status = status.toLowerCase();
+            status = String(status).toLowerCase().replace('channelstatus.', '');
+            if (status.includes('clicked')) return '#8b5cf6'; // Purple
+            if (status.includes('opened')) return '#14b8a6'; // Teal
             if (status.includes('delivered')) return '#16a34a';
             if (status.includes('sent')) return '#2563eb';
             if (status.includes('failed')) return '#dc2626';

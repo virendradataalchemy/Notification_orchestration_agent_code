@@ -34,6 +34,12 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             overflow: hidden;
         }
+        .team-table-container h3 {
+            padding: 20px 20px 0;
+            margin: 0;
+            color: #1e293b;
+            font-size: 16px;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -167,8 +173,9 @@
             <button class="btn-ghost" style="margin-top: 10px;" onclick="this.parentElement.style.display='none'">Dismiss</button>
         </div>
 
-        <div class="team-table-container">
-            <table>
+        <div class="team-table-container" style="margin-bottom: 30px;">
+            <h3>Active Team Members</h3>
+            <table style="margin-top: 10px;">
                 <thead>
                     <tr>
                         <th>Name / Email</th>
@@ -180,6 +187,24 @@
                     </tr>
                 </thead>
                 <tbody id="teamList">
+                    <!-- Loaded via JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="team-table-container">
+            <h3>Pending Invitations</h3>
+            <table style="margin-top: 10px;">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Invited By</th>
+                        <th>Expires</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="inviteList">
                     <!-- Loaded via JS -->
                 </tbody>
             </table>
@@ -295,8 +320,25 @@
             }
         }
 
+        async function loadInvites() {
+            try {
+                const res = await fetch('/api/v1/tenant/team/invites', {
+                    headers: { 'Authorization': 'Bearer ' + accessToken }
+                });
+                if (!res.ok) throw new Error('Failed to load invites');
+                const invites = await res.json();
+                renderInvites(invites);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
         function renderTeam(members) {
             const list = document.getElementById('teamList');
+            if (members.length === 0) {
+                list.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #666; padding: 20px;">No team members found.</td></tr>';
+                return;
+            }
             list.innerHTML = members.map(m => `
                 <tr>
                     <td>
@@ -320,6 +362,61 @@
                     </td>
                 </tr>
             `).join('');
+        }
+
+        function renderInvites(invites) {
+            const list = document.getElementById('inviteList');
+            if (invites.length === 0) {
+                list.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666; padding: 20px;">No pending invitations.</td></tr>';
+                return;
+            }
+            list.innerHTML = invites.map(inv => {
+                const isExpired = new Date(inv.expires_at) < new Date();
+                return `
+                <tr style="opacity: ${isExpired ? '0.6' : '1'}">
+                    <td>
+                        <div style="font-weight: 600;">${inv.email}</div>
+                    </td>
+                    <td><span class="role-badge role-${inv.role}">${inv.role}</span></td>
+                    <td style="color: #666; font-size: 13px;">${inv.invited_by || 'Admin'}</td>
+                    <td style="color: ${isExpired ? '#ef4444' : '#666'}; font-size: 13px;">
+                        ${isExpired ? 'Expired' : formatIST(inv.expires_at)}
+                    </td>
+                    <td>
+                        <button onclick="cancelInvite('${inv.id}')" style="color: #ef4444; background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 600;">Cancel</button>
+                        ${!isExpired ? `<button onclick="copyInviteLink('${inv.token}')" style="color: #667eea; background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 600; margin-left: 10px;">Copy Link</button>` : ''}
+                    </td>
+                </tr>
+            `}).join('');
+        }
+
+        async function cancelInvite(inviteId) {
+            if (!confirm('Are you sure you want to cancel this invitation?')) return;
+            
+            try {
+                const res = await fetch(`/api/v1/tenant/team/invites/${inviteId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + accessToken }
+                });
+                
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.detail || 'Failed to cancel invitation');
+                    return;
+                }
+                
+                loadInvites();
+            } catch (err) {
+                console.error(err);
+                alert('An error occurred');
+            }
+        }
+
+        function copyInviteLink(token) {
+            const inviteUrl = window.location.origin + '/portal/accept-invite?token=' + token;
+            navigator.clipboard.writeText(inviteUrl).then(() => {
+                alert('Invite link copied to clipboard!');
+            });
         }
 
         async function deleteMember(userId) {
@@ -410,7 +507,7 @@
                     // Construct the acceptance link
                     const inviteUrl = window.location.origin + '/portal/accept-invite?token=' + data.token;
                     document.getElementById('inviteLink').textContent = inviteUrl;
-                    loadTeam();
+                    loadInvites();
                 } else {
                     alert(data.detail || 'Failed to invite member');
                 }
@@ -431,6 +528,7 @@
 
         // setTenantIdentity();
         loadTeam();
+        loadInvites();
     </script>
 </body>
 </html>

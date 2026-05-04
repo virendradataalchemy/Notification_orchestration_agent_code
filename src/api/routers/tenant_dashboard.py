@@ -986,11 +986,12 @@ async def get_marketing_combined_activity(
             'inbound' as direction,
             'reply' as type,
             m.channel as channel,
-            m.status as status,
+            p.status as status,
             m.sender_address as recipient,
-            m.parsed_content as content,
+            p.parsed_content as content,
             m.created_at as timestamp
-        FROM inbound_messages m
+        FROM inbound_messages_raw m
+        LEFT JOIN inbound_messages_parsed p ON m.id = p.raw_message_id
         WHERE m.tenant_id = :tenant_id AND m.owner_id = :owner_id
         ORDER BY m.created_at DESC
         LIMIT :limit
@@ -1059,6 +1060,8 @@ async def get_marketing_threaded_activity(
                     n.data->>'body' as content,
                     nc.channel as channel,
                     nc.status as status,
+                    nc.opened_at as opened_at,
+                    nc.clicked_at as clicked_at,
                     n.owner_id
                 FROM notifications n
                 JOIN notification_channels nc ON nc.notification_id = n.id
@@ -1069,16 +1072,17 @@ async def get_marketing_threaded_activity(
                     m.id as id,
                     m.created_at as timestamp,
                     m.sender_address as sender,
-                    COALESCE(m.parsed_content, m.raw_payload->>'body', m.raw_payload->>'text', m.raw_payload->>'stripped-text') as content,
+                    COALESCE(p.parsed_content, m.raw_payload->>'body', m.raw_payload->>'text', m.raw_payload->>'stripped-text') as content,
                     m.channel as channel,
-                    m.status as status,
+                    p.status as status,
                     m.owner_id,
                     m.tenant_id,
                     ii.intent as ai_intent,
                     ii.confidence as ai_confidence,
                     ii.rationale as ai_rationale
-                FROM inbound_messages m
-                LEFT JOIN inbound_intents ii ON m.id = ii.message_id
+                FROM inbound_messages_raw m
+                LEFT JOIN inbound_messages_parsed p ON m.id = p.raw_message_id
+                LEFT JOIN inbound_intents ii ON p.id = ii.parsed_message_id
                 WHERE m.tenant_id = :tenant_id
             )
             SELECT 
@@ -1087,7 +1091,11 @@ async def get_marketing_threaded_activity(
                 COALESCE(o.recipient_email, o.recipient_phone, o.recipient_id) as recipient,
                 o.content as out_content,
                 o.channel as channel,
-                o.status as out_status,
+                CASE 
+                    WHEN o.clicked_at IS NOT NULL THEN 'CLICKED'
+                    WHEN o.opened_at IS NOT NULL THEN 'OPENED'
+                    ELSE CAST(o.status AS TEXT)
+                END as out_status,
                 i.id as in_id,
                 i.timestamp as in_time,
                 i.content as in_content,

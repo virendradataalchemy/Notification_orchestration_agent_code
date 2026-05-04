@@ -291,6 +291,7 @@ Respond ONLY with valid JSON in this exact format (no markdown tags):
 
         except Exception as e:
             logger.error(f"LLM Intent Classification failed: {e}")
+            # Fallback to rule logic, but wait, this is layer 2. We return unknown.
             return {
                 "intent": "unknown",
                 "confidence": 0.0,

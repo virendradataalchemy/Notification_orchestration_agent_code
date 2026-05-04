@@ -28,9 +28,9 @@ async def run_inbound_pipeline(inbound_message_id: str):
     """
     from src.core.database import AsyncSessionLocal
     from sqlalchemy import select, update
-    from src.models.inbound import InboundMessage, InboundStatus
+    from src.models.inbound import InboundMessageRaw, InboundMessageParsed, InboundStatus
     from src.models.audit_log import AuditLog
-    from src.services.inbound_parser import InboundParserService
+    from src.services.inbound_parser import InboundParserService, PARSER_VERSION
     from src.services.intent_engine import IntentEngineService
     from datetime import datetime
 
@@ -38,7 +38,7 @@ async def run_inbound_pipeline(inbound_message_id: str):
 
     async with AsyncSessionLocal() as db:
         try:
-            query = select(InboundMessage).where(InboundMessage.id == inbound_message_id)
+            query = select(InboundMessageRaw).where(InboundMessageRaw.id == inbound_message_id)
             result = await db.execute(query)
             inbound_msg = result.scalar_one_or_none()
 
@@ -46,22 +46,36 @@ async def run_inbound_pipeline(inbound_message_id: str):
                 logger.error(f"Inbound message {inbound_message_id} not found.")
                 return
 
-            if inbound_msg.status != InboundStatus.RECEIVED:
-                logger.info(f"Message {inbound_message_id} already processed (status: {inbound_msg.status})")
+            # Check if already parsed
+            query_parsed = select(InboundMessageParsed).where(InboundMessageParsed.raw_message_id == inbound_message_id)
+            result_parsed = await db.execute(query_parsed)
+            parsed_msg = result_parsed.scalar_one_or_none()
+            
+            if parsed_msg and parsed_msg.status != InboundStatus.FAILED:
+                logger.info(f"Message {inbound_message_id} already processed (status: {parsed_msg.status})")
                 return
+
+            if not parsed_msg:
+                parsed_msg = InboundMessageParsed(
+                    raw_message_id=inbound_msg.id,
+                    status=InboundStatus.RECEIVED,
+                    parser_version=PARSER_VERSION,
+                    reference_id=inbound_msg.raw_payload.get("metadata", {}).get("in_reply_to")
+                )
+                db.add(parsed_msg)
 
             # 1. Parsing
             parser = InboundParserService()
             parsed_text = parser.parse(inbound_msg)
-            inbound_msg.parsed_content = parsed_text
-            inbound_msg.status = InboundStatus.PARSED
+            parsed_msg.parsed_content = parsed_text
+            parsed_msg.status = InboundStatus.PARSED
             await db.flush()
 
             # 2. Intent Detection
             intent_engine = IntentEngineService(db)
-            intent_record = await intent_engine.detect_intent(inbound_msg)
+            intent_record = await intent_engine.detect_intent(parsed_msg, inbound_msg)
             
-            inbound_msg.status = InboundStatus.INTENT_DETECTED
+            parsed_msg.status = InboundStatus.INTENT_DETECTED
             await db.flush()
 
             # 3. Audit Logging
@@ -88,9 +102,17 @@ async def run_inbound_pipeline(inbound_message_id: str):
             await db.rollback()
             # Mark as failed
             async with AsyncSessionLocal() as db_fail:
-                await db_fail.execute(
-                    update(InboundMessage)
-                    .where(InboundMessage.id == inbound_message_id)
-                    .values(status=InboundStatus.FAILED)
-                )
+                # Upsert parsed_msg failure
+                query = select(InboundMessageParsed).where(InboundMessageParsed.raw_message_id == inbound_message_id)
+                result = await db_fail.execute(query)
+                parsed_msg = result.scalar_one_or_none()
+                if not parsed_msg:
+                    parsed_msg = InboundMessageParsed(
+                        raw_message_id=inbound_message_id,
+                        parser_version=PARSER_VERSION
+                    )
+                    db_fail.add(parsed_msg)
+                
+                parsed_msg.status = InboundStatus.FAILED
+                parsed_msg.failure_reason = str(e)
                 await db_fail.commit()

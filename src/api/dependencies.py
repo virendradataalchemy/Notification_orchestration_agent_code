@@ -136,6 +136,15 @@ async def get_authenticated_tenant(
         detail="Missing authentication. Provide X-API-Key or Authorization Bearer token"
     )
 
+async def get_current_tenant(
+    x_api_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db)
+) -> str:
+    """Gets current tenant_id for compliance endpoints."""
+    tenant = await get_authenticated_tenant(x_api_key=x_api_key, authorization=authorization, db=db)
+    return tenant.id
+
 
 async def require_admin_access(
     request: Request,

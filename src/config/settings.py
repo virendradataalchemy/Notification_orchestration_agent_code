@@ -85,6 +85,7 @@ class Settings(BaseSettings):
 
     # Mailgun
     mailgun_api_key: Optional[str] = None
+    mailgun_signing_key: Optional[str] = None
     mailgun_domain: Optional[str] = None
     mailgun_from_email: Optional[str] = None
     mailgun_base_url: str = "https://api.mailgun.net/v3"
