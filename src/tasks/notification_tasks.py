@@ -637,14 +637,17 @@ def _build_message(notification: Notification, channel: str) -> Message:
 
     recipient = recipient_map.get(channel, data.get('email', ''))
 
-    # Handle push tokens (list)
-    # if isinstance(recipient, list):
-    #     recipient = recipient[0] if recipient else ''
+    # Extract channel-specific content if available
+    channel_content_map = data.get('channel_content_map', {})
+    channel_specific = channel_content_map.get(channel, {})
+    
+    subject = channel_specific.get('subject') or data.get('subject')
+    body = channel_specific.get('body') or data.get('body', '')
 
     message = Message(
         recipient=recipient,
-        subject=data.get('subject'),
-        body=data.get('body', ''),
+        subject=subject,
+        body=body,
         data=data,
         metadata={
             'notification_id': str(notification.id),

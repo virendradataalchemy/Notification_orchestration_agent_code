@@ -76,6 +76,9 @@ class NotificationData(BaseModel):
     subject: Optional[str] = None
     body: Optional[str] = None
     template_id: Optional[str] = None
+    channel_template_map: Optional[Dict[str, str]] = None
+    channel_subject_map: Optional[Dict[str, str]] = None
+    channel_body_map: Optional[Dict[str, str]] = None
     data: Dict[str, Any] = Field(default_factory=dict, description="Template variables")
     idempotency_key: Optional[str] = Field(None, description="Unique key to prevent duplicate notifications")
     delivery_mode: Optional[DeliveryMode] = None
@@ -117,6 +120,9 @@ class BatchMultiChannelNotificationRequest(BaseModel):
     template_id: Optional[str] = None
     subject: Optional[str] = None
     body: Optional[str] = None
+    channel_template_map: Optional[Dict[str, str]] = None
+    channel_subject_map: Optional[Dict[str, str]] = None
+    channel_body_map: Optional[Dict[str, str]] = None
     data: Dict[str, Any] = Field(default_factory=dict)
     recipients: List[BatchRecipient]
     channels: List[Channel] = Field(default_factory=list)

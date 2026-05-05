@@ -161,6 +161,54 @@
             font-weight: 700;
             text-transform: uppercase;
         }
+
+        /* Modal styling */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 16px;
+            max-width: 600px;
+            width: 90%;
+            position: relative;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: min-content;
+        }
+
+        .close-modal {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        .message-view-content {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.6;
+            flex-grow: 1;
+        }
     </style>
 </head>
 <body>
@@ -263,25 +311,23 @@
                     <div style="display: flex; flex-direction: column; gap: 16px;">
                         <div>
                             <label>Delivery Channels</label>
-                            <div id="bulkChannelOptions" class="channel-grid"></div>
+                            <div id="bulkChannelOptions" style="display: flex; flex-direction: column; gap: 8px;"></div>
                         </div>
                         
-                        <div class="row">
-                            <div>
-                                <label>Template ID (optional)</label>
-                                <input id="bulkTemplateId" oninput="fetchTemplatePreview(this.value)">
-                                <div style="margin-top: 5px;">
-                                    <a id="bulkTemplatePreviewBtn" href="javascript:void(0)" style="font-size: 12px; color: #2563eb; text-decoration: none; display: none;" onclick="openTemplatePreview()">View Template ↗</a>
-                                </div>
-                            </div>
-                            <div>
-                                <label>Campaign Subject</label>
-                                <input id="bulkSubject" placeholder="Marketing Update">
-                            </div>
+                        <div>
+                            <button id="btnGenerateAll" type="button" class="btn-primary-action" onclick="generateTemplatesForAllEmpty()" style="background: #8b5cf6; margin-bottom: 10px; width: 100%;">
+                                ✨ Generate AI Templates for Empty Channels
+                            </button>
+                            <div id="aiGenerationStatus" style="font-size: 12px; color: #64748b; display: none; margin-bottom: 10px;">Generating...</div>
                         </div>
 
                         <div>
-                            <label>Manual Body (used if no template)</label>
+                            <label>Campaign Subject (Fallback / AI Context)</label>
+                            <input id="bulkSubject" placeholder="Marketing Update">
+                        </div>
+
+                        <div>
+                            <label>Manual Body (Fallback / AI Context)</label>
                             <textarea id="bulkBody" style="min-height: 80px;" placeholder="Message content..."></textarea>
                         </div>
 
@@ -380,6 +426,21 @@
         </div>
     </div>
 
+    <div id="messageModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Message Details</h2>
+            <div style="margin-top: 15px; font-size: 13px; color: #64748b;">
+                <strong>To:</strong> <span id="modalRecipient"></span><br>
+                <strong>Channel:</strong> <span id="modalChannel"></span><br>
+                <strong>Sent:</strong> <span id="modalTime"></span>
+            </div>
+            <div class="message-view-content" id="modalBody"></div>
+            
+            <div id="modalReplySection" style="display: none;"></div>
+        </div>
+    </div>
+
     <script>
         const pathParts = window.location.pathname.split('/');
         const tenantId = pathParts[2];
@@ -432,7 +493,7 @@
                     .map(c => c.channel);
                 
                 renderCheckboxes('sendChannelOptions', availableChannels);
-                renderCheckboxes('bulkChannelOptions', availableChannels);
+                renderBulkCheckboxes('bulkChannelOptions', availableChannels);
             } catch (e) { console.error(e); }
         }
 
@@ -686,6 +747,43 @@
             `).join('');
         }
 
+        function renderBulkCheckboxes(containerId, channels) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = channels.map(ch => `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label class="channel-item" style="min-width: 130px; margin: 0;">
+                        <input type="checkbox" value="${ch}" id="bulk_ch_${ch}" onchange="toggleBulkChannel('${ch}')" ${ch==='email'?'checked':''}>
+                        <span>${ch.toUpperCase()}</span>
+                    </label>
+                    <div id="bulk_tpl_container_${ch}" style="display: ${ch==='email'?'flex':'none'}; align-items: center; gap: 8px; flex-grow: 1;">
+                        <input type="text" id="bulk_tpl_${ch}" placeholder="Template ID for ${ch}" style="padding: 6px; font-size: 13px;" oninput="togglePreviewButton('${ch}')" onchange="saveFormSession()">
+                        <a id="bulk_preview_btn_${ch}" href="javascript:void(0)" onclick="openChannelTemplatePreview('${ch}')" style="font-size: 12px; color: #2563eb; text-decoration: none; white-space: nowrap; display: none;">👁️ Preview</a>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Initial toggle check
+            channels.forEach(ch => togglePreviewButton(ch));
+        }
+
+        function togglePreviewButton(ch) {
+            const input = document.getElementById(`bulk_tpl_${ch}`);
+            const previewBtn = document.getElementById(`bulk_preview_btn_${ch}`);
+            if (input && previewBtn) {
+                if (input.value.trim().length > 0) {
+                    previewBtn.style.display = 'inline-block';
+                } else {
+                    previewBtn.style.display = 'none';
+                }
+            }
+        }
+
+        function toggleBulkChannel(ch) {
+            const isChecked = document.getElementById(`bulk_ch_${ch}`).checked;
+            document.getElementById(`bulk_tpl_container_${ch}`).style.display = isChecked ? 'flex' : 'none';
+            saveFormSession();
+        }
+
         function getSelected(containerId) {
             return Array.from(document.querySelectorAll('#' + containerId + ' input:checked')).map(i => i.value);
         }
@@ -733,25 +831,250 @@
             }
         }
 
-        async function fetchTemplatePreview(id) {
-            const btn = document.getElementById('bulkTemplatePreviewBtn');
-            if (!id) { btn.style.display = 'none'; return; }
+        async function openChannelTemplatePreview(ch) {
+            const tplId = document.getElementById(`bulk_tpl_${ch}`).value;
+            if (!tplId) {
+                alert("Please enter a Template ID first.");
+                return;
+            }
             try {
-                const res = await fetch('/api/v1/tenant/templates/' + id, {
+                const res = await fetch('/api/v1/tenant/templates/' + tplId, {
                     headers: { 'Authorization': 'Bearer ' + accessToken }
                 });
                 if (res.ok) {
-                    lastFetchedTemplate = await res.json();
-                    btn.style.display = 'inline-block';
-                } else { btn.style.display = 'none'; }
-            } catch (e) { btn.style.display = 'none'; }
+                    const data = await res.json();
+                    
+                    // Show inside the existing Modal
+                    document.getElementById('modalTitle').textContent = `Template Preview: ${data.name} (${ch})`;
+                    document.getElementById('modalRecipient').textContent = '(Preview)';
+                    document.getElementById('modalChannel').textContent = ch.toUpperCase();
+                    document.getElementById('modalTime').textContent = formatIST(data.created_at);
+                    
+                    const modalBody = document.getElementById('modalBody');
+                    modalBody.style.padding = '15px';
+                    modalBody.style.overflowY = 'auto';
+                    const replySection = document.getElementById('modalReplySection');
+                    if (replySection) replySection.style.display = 'none';
+
+                    if (ch === 'email' && data.body.includes('<')) {
+                        modalBody.innerHTML = `<iframe id="previewIframe" style="width: 100%; border: none; min-height: 400px; background: white; border-radius: 8px;"></iframe>`;
+                        modalBody.style.padding = '0';
+                        setTimeout(() => {
+                            const frame = document.getElementById('previewIframe');
+                            if (frame && frame.contentWindow) {
+                                const doc = frame.contentWindow.document;
+                                doc.open(); doc.write(data.body); doc.close();
+                            }
+                        }, 50);
+                    } else {
+                        modalBody.textContent = data.body;
+                    }
+                    
+                    // Add Regenerate button if it's an AI template
+                    const replySectionRef = document.getElementById('modalReplySection');
+                    if (replySectionRef) {
+                        replySectionRef.style.display = 'block';
+                        replySectionRef.innerHTML = `
+                            <div style="display: flex; gap: 10px; margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                                <button class="btn-primary-action" onclick="regenerateSpecificChannel('${ch}', '${tplId}')" style="background: #8b5cf6;">✨ Regenerate Template</button>
+                                <span id="regenStatus" style="font-size: 12px; color: #64748b; align-self: center; display: none;">Regenerating...</span>
+                            </div>
+                        `;
+                    }
+
+                    document.getElementById('messageModal').style.display = 'block';
+
+                } else {
+                    alert("Template not found or not active.");
+                }
+            } catch (e) { alert("Error fetching template preview."); }
         }
 
-        function openTemplatePreview() {
-            if (!lastFetchedTemplate) return;
-            const win = window.open('', '_blank');
-            win.document.write(lastFetchedTemplate.body);
-            win.document.close();
+        async function getContextForAI() {
+            const subject = document.getElementById('bulkSubject').value;
+            const body = document.getElementById('bulkBody').value;
+            let contextContent = (subject ? subject + "\n\n" : "") + body;
+
+            if (contextContent.trim()) {
+                return contextContent;
+            }
+
+            // If empty, look for the first filled template to use as context
+            const selectedChannels = getSelected('bulkChannelOptions');
+            const channelsWithTemplates = selectedChannels.filter(ch => {
+                const el = document.getElementById(`bulk_tpl_${ch}`);
+                return el && el.value.trim() !== '';
+            });
+
+            if (channelsWithTemplates.length > 0) {
+                const sourceCh = channelsWithTemplates[0];
+                const sourceTplId = document.getElementById(`bulk_tpl_${sourceCh}`).value.trim();
+                try {
+                    const statusEl = document.getElementById('aiGenerationStatus');
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.textContent = `Fetching context from ${sourceCh} template...`;
+                    }
+                    const res = await fetch('/api/v1/tenant/templates/' + sourceTplId, {
+                        headers: { 'Authorization': 'Bearer ' + accessToken }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        contextContent = (data.subject ? data.subject + "\n\n" : "") + data.body;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch source template for context", e);
+                }
+            }
+
+            return contextContent;
+        }
+
+        async function regenerateSpecificChannel(ch, oldTplId) {
+            const statusEl = document.getElementById('regenStatus');
+            statusEl.style.display = 'inline-block';
+            statusEl.textContent = 'Regenerating...';
+
+            let contextContent = await getContextForAI();
+            if (!contextContent.trim()) {
+                contextContent = "Please generate a default promotional message.";
+            }
+
+            try {
+                const res = await fetch('/api/v1/tenant/templates/ai-generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+                    body: JSON.stringify({
+                        content: contextContent,
+                        channel: ch
+                    })
+                });
+                
+                if (res.ok) {
+                    const tplData = await res.json();
+                    
+                    // Save over the existing ID if it was an ai_gen template, else make a new one
+                    const saveName = oldTplId.startsWith('ai_gen_') ? oldTplId : `ai_gen_${ch}_${Date.now().toString().slice(-6)}`;
+                    
+                    const saveRes = await fetch('/api/v1/tenant/templates/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+                        body: JSON.stringify({
+                            name: saveName,
+                            channel: ch,
+                            subject: tplData.subject,
+                            body: tplData.body
+                        })
+                    });
+
+                    if (saveRes.ok) {
+                        const savedTpl = await saveRes.json();
+                        document.getElementById(`bulk_tpl_${ch}`).value = savedTpl.id;
+                        togglePreviewButton(ch);
+                        saveFormSession();
+                        statusEl.textContent = '✅ Regenerated!';
+                        statusEl.style.color = '#16a34a';
+                        
+                        // Refresh preview
+                        setTimeout(() => {
+                            openChannelTemplatePreview(ch);
+                        }, 500);
+                    }
+                } else {
+                    statusEl.textContent = '❌ Failed to regenerate';
+                    statusEl.style.color = '#dc2626';
+                }
+            } catch (e) {
+                statusEl.textContent = '❌ Error';
+                statusEl.style.color = '#dc2626';
+            }
+        }
+
+        async function generateTemplatesForAllEmpty() {
+            const btn = document.getElementById('btnGenerateAll');
+            const statusEl = document.getElementById('aiGenerationStatus');
+            const selectedChannels = getSelected('bulkChannelOptions');
+            
+            if (selectedChannels.length === 0) {
+                alert("Please select at least one channel first.");
+                return;
+            }
+
+            const channelsToGenerate = selectedChannels.filter(ch => {
+                return !document.getElementById(`bulk_tpl_${ch}`).value.trim();
+            });
+
+            if (channelsToGenerate.length === 0) {
+                alert("All selected channels already have a Template ID filled in.");
+                return;
+            }
+
+            btn.disabled = true;
+            statusEl.style.display = 'block';
+            statusEl.textContent = 'Gathering context...';
+
+            const contextContent = await getContextForAI();
+
+            if (!contextContent.trim()) {
+                alert("Please provide some context in the Campaign Subject, Manual Body, or fill at least one Template ID first.");
+                statusEl.style.display = 'none';
+                btn.disabled = false;
+                return;
+            }
+
+            statusEl.textContent = `Generating templates for ${channelsToGenerate.join(', ')}...`;
+
+            try {
+                const res = await fetch('/api/v1/tenant/templates/ai-generate-multi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+                    body: JSON.stringify({
+                        content: contextContent,
+                        channels: channelsToGenerate
+                    })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    
+                    // We must save these dynamically generated templates to the database immediately 
+                    // so we can use their template IDs.
+                    for (const ch of channelsToGenerate) {
+                        const tplData = data.templates[ch];
+                        if (tplData) {
+                            const tplName = `ai_gen_${ch}_${Date.now().toString().slice(-6)}`;
+                            const saveRes = await fetch('/api/v1/tenant/templates/', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+                                body: JSON.stringify({
+                                    name: tplName,
+                                    channel: ch,
+                                    subject: tplData.subject,
+                                    body: tplData.body
+                                })
+                            });
+                            if (saveRes.ok) {
+                                const savedTpl = await saveRes.json();
+                                document.getElementById(`bulk_tpl_${ch}`).value = savedTpl.id; // Put the actual ID in
+                                togglePreviewButton(ch); // Make sure the preview button shows up!
+                            }
+                        }
+                    }
+                    
+                    saveFormSession();
+                    statusEl.textContent = "✅ Templates generated and saved!";
+                    statusEl.style.color = '#16a34a';
+                } else {
+                    const err = await res.json();
+                    statusEl.textContent = "❌ Error: " + (err.detail || 'Generation failed');
+                    statusEl.style.color = '#dc2626';
+                }
+            } catch (e) {
+                statusEl.textContent = "❌ Network error";
+                statusEl.style.color = '#dc2626';
+            } finally {
+                btn.disabled = false;
+            }
         }
 
         async function sendBulk() {
@@ -780,11 +1103,18 @@
                 return;
             }
 
+            const selectedChannels = getSelected('bulkChannelOptions');
+            const channelTemplateMap = {};
+            selectedChannels.forEach(ch => {
+                const val = document.getElementById(`bulk_tpl_${ch}`)?.value.trim();
+                if (val) channelTemplateMap[ch] = val;
+            });
+
             const payload = {
-                template_id: document.getElementById('bulkTemplateId').value || null,
                 subject: document.getElementById('bulkSubject').value || null,
                 body: document.getElementById('bulkBody').value || null,
-                channels: getSelected('bulkChannelOptions'),
+                channels: selectedChannels,
+                channel_template_map: channelTemplateMap,
                 recipients: recipients,
                 data: { campaign: 'marketing_broadcast', source: 'marketing_hub' }
             };
@@ -871,9 +1201,117 @@
             }).join('');
         }
 
-        loadChannels();
-        loadCandidates();
-        loadMarketingActivity();
+        // --- Form Auto-Save Session ---
+        const FORM_SESSION_KEY = 'marketing_form_session';
+
+        function saveFormSession() {
+            const state = {
+                userId: document.getElementById('userId')?.value,
+                email: document.getElementById('email')?.value,
+                phone: document.getElementById('phone')?.value,
+                type: document.getElementById('type')?.value,
+                priority: document.getElementById('priority')?.value,
+                templateId: document.getElementById('templateId')?.value,
+                subject: document.getElementById('subject')?.value,
+                body: document.getElementById('body')?.value,
+                
+                bulkSubject: document.getElementById('bulkSubject')?.value,
+                bulkBody: document.getElementById('bulkBody')?.value,
+                bulkRecipients: document.getElementById('bulkRecipients')?.value,
+                
+                sendChannels: getSelected('sendChannelOptions'),
+                bulkChannels: getSelected('bulkChannelOptions')
+            };
+
+            // Save the individual channel templates
+            if (state.bulkChannels) {
+                state.bulkChannels.forEach(ch => {
+                    const input = document.getElementById(`bulk_tpl_${ch}`);
+                    if (input) {
+                        state[`bulk_tpl_${ch}`] = input.value;
+                    }
+                });
+            }
+
+            sessionStorage.setItem(FORM_SESSION_KEY, JSON.stringify(state));
+        }
+
+        function restoreFormSession() {
+            try {
+                const saved = sessionStorage.getItem(FORM_SESSION_KEY);
+                if (!saved) return;
+                const state = JSON.parse(saved);
+                
+                const setVal = (id, val) => {
+                    if (val !== undefined && document.getElementById(id)) {
+                        document.getElementById(id).value = val;
+                    }
+                };
+                
+                setVal('userId', state.userId);
+                setVal('email', state.email);
+                setVal('phone', state.phone);
+                setVal('type', state.type);
+                setVal('priority', state.priority);
+                setVal('templateId', state.templateId);
+                setVal('subject', state.subject);
+                setVal('body', state.body);
+                
+                setVal('bulkSubject', state.bulkSubject);
+                setVal('bulkBody', state.bulkBody);
+                setVal('bulkRecipients', state.bulkRecipients);
+                
+                // Restore checkboxes
+                const restoreCheckboxes = (containerId, selectedArr) => {
+                    if (!selectedArr) return;
+                    const inputs = document.querySelectorAll(`#${containerId} input[type="checkbox"]`);
+                    inputs.forEach(input => {
+                        input.checked = selectedArr.includes(input.value);
+                    });
+                };
+                
+                if (state.sendChannels && state.sendChannels.length > 0) {
+                    restoreCheckboxes('sendChannelOptions', state.sendChannels);
+                }
+                if (state.bulkChannels && state.bulkChannels.length > 0) {
+                    restoreCheckboxes('bulkChannelOptions', state.bulkChannels);
+                    
+                    // Also restore any channel-specific template inputs that were typed in
+                    state.bulkChannels.forEach(ch => {
+                        toggleBulkChannel(ch); // Make the input visible if checked
+                        const savedTpl = state[`bulk_tpl_${ch}`];
+                        if (savedTpl) {
+                            setVal(`bulk_tpl_${ch}`, savedTpl);
+                        }
+                        togglePreviewButton(ch); // Show/hide preview button based on restored value
+                    });
+                }
+            } catch (e) {
+                console.error("Error restoring session", e);
+            }
+        }
+        
+        // Listen to all inputs to auto-save
+        document.addEventListener('input', (e) => {
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && e.target.type !== 'file') {
+                saveFormSession();
+            }
+        });
+        document.addEventListener('change', (e) => {
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && e.target.type !== 'file') {
+                saveFormSession();
+            }
+        });
+
+        // Initialize Data
+        async function initMarketingPage() {
+            await loadChannels();
+            restoreFormSession(); // Restore values after channels are rendered
+            loadCandidates();
+            loadMarketingActivity();
+        }
+
+        initMarketingPage();
 
         function setupWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -892,6 +1330,10 @@
                 setTimeout(setupWebSocket, 5000);
             };
         }
+        function closeModal() {
+            document.getElementById('messageModal').style.display = 'none';
+        }
+        
         setupWebSocket();
     </script>
 </body>

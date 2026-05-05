@@ -914,39 +914,67 @@ class NotificationService:
             per_recipient_template_vars.update(recipient.data or {})
             subject = request.subject
             body = request.body
-            if request.template_id:
-                template_channel = (
-                    selected_channels[0] if selected_channels else "email"
-                )
-                rendered = await self.tenant_template_engine.render_template(
-                    db=self.db,
-                    tenant_id=tenant_id,
-                    template_name=request.template_id,
-                    channel=template_channel,
-                    data=per_recipient_template_vars,
-                    language="en"
-                )
-                if not rendered:
-                    raise HTTPException(
-                        status_code=http_status.HTTP_400_BAD_REQUEST,
-                        detail=(
-                            f"Template '{request.template_id}' not found/active for tenant '{tenant_id}' "
-                            f"and channel '{template_channel}'."
-                        )
+
+            # Support for channel-specific templates/content
+            channel_template_map = getattr(request, 'channel_template_map', None) or {}
+            channel_subject_map = getattr(request, 'channel_subject_map', None) or {}
+            channel_body_map = getattr(request, 'channel_body_map', None) or {}
+
+            channel_content_map = {}
+            rendered_provider_template_refs = {}
+
+            for ch in selected_channels:
+                ch_template_id = channel_template_map.get(ch) or request.template_id
+                ch_subject = channel_subject_map.get(ch) or subject
+                ch_body = channel_body_map.get(ch) or body
+
+                if ch_template_id:
+                    rendered = await self.tenant_template_engine.render_template(
+                        db=self.db,
+                        tenant_id=tenant_id,
+                        template_name=ch_template_id,
+                        channel=ch,
+                        data=per_recipient_template_vars,
+                        language="en"
                     )
-                subject = rendered.get("subject") or subject
-                body = rendered.get("body") or body
+                    if not rendered:
+                        raise HTTPException(
+                            status_code=http_status.HTTP_400_BAD_REQUEST,
+                            detail=(
+                                f"Template '{ch_template_id}' not found/active for tenant '{tenant_id}' "
+                                f"and channel '{ch}'."
+                            )
+                        )
+                    ch_subject = rendered.get("subject") or ch_subject
+                    ch_body = rendered.get("body") or ch_body
+                    if rendered.get("provider_template_ref"):
+                        rendered_provider_template_refs[ch] = str(rendered.get("provider_template_ref"))
+                
+                channel_content_map[ch] = {
+                    "subject": ch_subject,
+                    "body": ch_body,
+                    "template_id": ch_template_id
+                }
+
+            # If no channel override exists, just use the global fallback one
+            if not channel_content_map.get(selected_channels[0] if selected_channels else "email"):
+                pass
 
             provider_template_refs = self._resolve_provider_template_refs(
                 template_id=request.template_id,
                 selected_channels=selected_channels,
                 provider_config_by_channel=provider_config_by_channel
             )
-            if request.template_id and rendered and rendered.get("provider_template_ref"):
-                provider_template_refs[template_channel] = str(rendered.get("provider_template_ref"))
+            provider_template_refs.update(rendered_provider_template_refs)
 
             notification_data = self._build_batch_recipient_data(recipient)
             notification_data.update({
+                "tenant_provider_config_by_channel": provider_config_by_channel,
+                "subject": subject or "",
+                "body": body or "",
+                "template_id": request.template_id,
+                "channel_content_map": channel_content_map,
+                "template_variables": per_recipient_template_vars,
                 **per_recipient_template_vars,
                 "tenant_provider_config_by_channel": provider_config_by_channel,
                 "subject": subject or "",
