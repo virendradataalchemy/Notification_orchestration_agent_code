@@ -368,11 +368,12 @@ async def mailgun_inbound_webhook(
         if original_notif:
             owner_id = original_notif.owner_id
             candidate_id = original_notif.user_id
+            tenant_id = original_notif.tenant_id
     
     # Fallback owner_id discovery if In-Reply-To didn't work
     if not owner_id:
+        # Search globally for the sender to find their most recent tenant
         query = select(Notification).where(
-            Notification.tenant_id == tenant_id,
             or_(
                 Notification.user_id == sender,
                 Notification.data.op("->>")("email") == sender
@@ -383,6 +384,7 @@ async def mailgun_inbound_webhook(
         if last_notif:
             owner_id = last_notif.owner_id
             candidate_id = last_notif.user_id
+            tenant_id = last_notif.tenant_id
 
     attachment_files = await _save_mailgun_attachments(form_data)
     raw_payload = _form_to_json_safe_dict(form_data)
@@ -481,9 +483,8 @@ async def twilio_inbound_webhook(
     candidate_id = None
     phone_clean = sender.replace("whatsapp:", "").strip()
     
-    # Search in notification data for this phone number
+    # Search globally for the sender to find their most recent tenant
     query = select(Notification).where(
-        Notification.tenant_id == tenant_id,
         or_(
             Notification.data.op("->>")("phone") == phone_clean,
             Notification.user_id == phone_clean
@@ -495,6 +496,7 @@ async def twilio_inbound_webhook(
     if last_notif:
         owner_id = last_notif.owner_id
         candidate_id = last_notif.user_id
+        tenant_id = last_notif.tenant_id
 
     raw_payload = _form_to_json_safe_dict(form_data)
     
@@ -592,7 +594,7 @@ async def notification_outcome_webhook(
     {
         "notification_id": "uuid",
         "user_id": "string",
-        "channel": "email|sms|push|...",
+        "channel": "email|sms|...",
         "notification_type": "string",
         "priority": "critical|high|medium|low",
         "event": "delivered|opened|clicked|failed",

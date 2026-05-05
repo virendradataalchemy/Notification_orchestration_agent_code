@@ -19,9 +19,9 @@ class Channel(str, Enum):
     SMS = "sms"
     WHATSAPP = "whatsapp"
     SLACK = "slack"
-    PUSH = "push"
+    # PUSH = "push"
     VOICE = "voice"
-    INAPP = "inapp"
+    # INAPP = "inapp"
 
 
 class DeliveryMode(str, Enum):

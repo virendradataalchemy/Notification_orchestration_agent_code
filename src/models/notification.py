@@ -84,7 +84,7 @@ class NotificationChannel(Base, TimestampMixin):
         nullable=False,
         index=True
     )
-    channel = Column(String(20), nullable=False)  # email|sms|whatsapp|slack|push|voice|inapp
+    channel = Column(String(20), nullable=False)  # email|sms|whatsapp|slack|voice
     provider = Column(String(30), nullable=False)  # aws_ses|twilio|fcm etc.
     message_id = Column(String(100), nullable=True, index=True)
     status = Column(Enum(ChannelStatus), nullable=False, default=ChannelStatus.QUEUED, index=True)

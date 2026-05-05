@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 # Initialize colorama for Windows/Unix compatibility
 init(autoreset=True)
 
-from src.celery_app import celery_app
+from src.celery_app import celery_app, get_shared_task_loop
 from src.core.database import AsyncSessionLocal
 from src.models import (
     Notification,
@@ -31,8 +31,6 @@ from src.services.channel_policy import get_provider_for_channel
 from src.providers.base import Message, ProviderStatus
 
 logger = logging.getLogger(__name__)
-_TASK_EVENT_LOOP: Optional[asyncio.AbstractEventLoop] = None
-
 
 def _is_retryable_channel_error(error_text: str) -> bool:
     """Return False for permanent/configuration errors that should not be retried."""
@@ -47,18 +45,6 @@ def _is_retryable_channel_error(error_text: str) -> bool:
     if "provider " in msg and " not available for channel " in msg:
         return False
     return not any(pattern in msg for pattern in non_retryable_patterns)
-
-
-def _get_or_create_task_loop() -> asyncio.AbstractEventLoop:
-    """
-    Return a process-local event loop for Celery task execution.
-
-    Reusing one loop avoids cross-loop issues with async DB connection pools.
-    """
-    global _TASK_EVENT_LOOP
-    if _TASK_EVENT_LOOP is None or _TASK_EVENT_LOOP.is_closed():
-        _TASK_EVENT_LOOP = asyncio.new_event_loop()
-    return _TASK_EVENT_LOOP
 
 
 class NotificationTask(Task):
@@ -155,7 +141,7 @@ def _send_notification_sync(
     Synchronous wrapper for async notification sending.
     Handles event loop creation for Celery worker threads.
     """
-    loop = _get_or_create_task_loop()
+    loop = get_shared_task_loop()
     asyncio.set_event_loop(loop)
     return loop.run_until_complete(
         _send_notification_async(notification_id, priority, max_attempts)
@@ -645,15 +631,15 @@ def _build_message(notification: Notification, channel: str) -> Message:
         'sms': data.get('phone'),
         'whatsapp': data.get('phone'),
         'slack': data.get('slack_id'),
-        'push': data.get('device_tokens', []),
+        # 'push': data.get('device_tokens', []),
         'voice': data.get('phone'),
     }
 
     recipient = recipient_map.get(channel, data.get('email', ''))
 
     # Handle push tokens (list)
-    if isinstance(recipient, list):
-        recipient = recipient[0] if recipient else ''
+    # if isinstance(recipient, list):
+    #     recipient = recipient[0] if recipient else ''
 
     message = Message(
         recipient=recipient,

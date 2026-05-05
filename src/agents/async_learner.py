@@ -136,10 +136,10 @@ class AsyncLearnerAgent:
             "email": 0.001,
             "sms": 0.05,
             "whatsapp": 0.03,
-            "push": 0.01,
+            # "push": 0.01,
             "slack": 0.005,
             "voice": 0.10,
-            "inapp": 0.0
+            # "inapp": 0.0
         }
         reward -= channel_costs.get(channel, 0)
 

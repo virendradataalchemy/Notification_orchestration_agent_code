@@ -108,7 +108,7 @@ class TenantProviderConfig(Base, TimestampMixin):
     id = Column(String(50), primary_key=True)
     tenant_id = Column(String(50), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    provider = Column(String(50), nullable=False, index=True)  # slack, email, sms, whatsapp, push
+    provider = Column(String(50), nullable=False, index=True)  # slack, email, sms, whatsapp, voice
 
     # Provider-specific configuration
     config = Column(JSONB, nullable=False)

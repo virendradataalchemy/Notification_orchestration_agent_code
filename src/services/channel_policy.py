@@ -35,13 +35,13 @@ CHANNEL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "requires_body": True,
         "notes": "Recipient can also come from tenant provider config fallback.",
     },
-    "push": {
-        "template_required": False,
-        "required_recipient_fields": ["device_tokens"],
-        "supports_subject": True,
-        "requires_body": True,
-        "notes": "Push title/body supported; recipient must have at least one device token.",
-    },
+    # "push": {
+    #     "template_required": False,
+    #     "required_recipient_fields": ["device_tokens"],
+    #     "supports_subject": True,
+    #     "requires_body": True,
+    #     "notes": "Push title/body supported; recipient must have at least one device token.",
+    # },
     "voice": {
         "template_required": False,
         "required_recipient_fields": ["phone"],
@@ -49,13 +49,13 @@ CHANNEL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "requires_body": True,
         "notes": "Body is used as TTS input.",
     },
-    "inapp": {
-        "template_required": False,
-        "required_recipient_fields": ["user_id"],
-        "supports_subject": True,
-        "requires_body": True,
-        "notes": "In-app messages are addressed by platform user id.",
-    },
+    # "inapp": {
+    #     "template_required": False,
+    #     "required_recipient_fields": ["user_id"],
+    #     "supports_subject": True,
+    #     "requires_body": True,
+    #     "notes": "In-app messages are addressed by platform user id.",
+    # },
 }
 
 
@@ -66,9 +66,9 @@ def get_provider_for_channel(channel: str) -> str:
         "sms": "twilio",
         "whatsapp": "twilio",
         "slack": "slack_api",
-        "push": "fcm",
+        # "push": "fcm",
         "voice": "twilio",
-        "inapp": "websocket",
+        # "inapp": "websocket",
     }
     return provider_map.get(channel, "unknown")
 

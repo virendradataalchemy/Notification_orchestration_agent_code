@@ -1,6 +1,7 @@
 from celery import shared_task
 import asyncio
 import logging
+from src.celery_app import get_shared_task_loop
 
 logger = logging.getLogger(__name__)
 
@@ -10,12 +11,11 @@ def process_inbound_message(inbound_message_id: str):
     Celery task to orchestrate parsing and intent detection for an inbound message.
     """
     # Wrap async execution
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        # Handle if already running in an async context, though Celery workers usually aren't async
-        asyncio.ensure_future(run_inbound_pipeline(inbound_message_id))
-    else:
+    try:
+        loop = get_shared_task_loop()
         loop.run_until_complete(run_inbound_pipeline(inbound_message_id))
+    except Exception as e:
+        logger.error(f"Failed to run inbound pipeline: {e}")
 
 
 async def run_inbound_pipeline(inbound_message_id: str):
@@ -96,6 +96,16 @@ async def run_inbound_pipeline(inbound_message_id: str):
 
             await db.commit()
             logger.info(f"Message {inbound_message_id} processed. Detected intent: {intent_record.intent.value if intent_record else 'N/A'}")
+            
+            # Notify dashboard via WebSocket that intent is ready
+            from src.core.ws_manager import manager
+            await manager.broadcast_to_tenant(inbound_msg.tenant_id, {
+                "event": "inbound_intent_detected",
+                "tenant_id": inbound_msg.tenant_id,
+                "owner_id": str(inbound_msg.owner_id) if inbound_msg.owner_id else None,
+                "message_id": str(inbound_msg.id),
+                "intent": intent_record.intent.value if intent_record else "unknown"
+            })
 
         except Exception as e:
             logger.error(f"Error in run_inbound_pipeline: {e}", exc_info=True)

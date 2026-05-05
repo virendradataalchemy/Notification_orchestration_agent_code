@@ -1,6 +1,6 @@
 # Multi-Channel Notification Orchestration Platform
 
-A multi-tenant notification platform for sending messages across WhatsApp, Email, SMS, Slack, Voice, Push, and In-App from one API.
+A multi-tenant notification platform for sending messages across WhatsApp, Email, SMS, Slack, and Voice from one API.
 
 ## What This Platform Does
 
@@ -20,8 +20,8 @@ A multi-tenant notification platform for sending messages across WhatsApp, Email
 | `sms` | No | Yes |
 | `slack` | No | Yes |
 | `voice` | No | Yes |
-| `push` | No | Yes |
-| `inapp` | No | Yes |
+<!-- | `push` | No | Yes |
+| `inapp` | No | Yes | -->
 
 Rule applies to both single send and bulk send flows.
 
@@ -57,6 +57,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 alembic upgrade head
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+docker compose up --build -d
 ```
 
 ## Tenant Onboarding Flow

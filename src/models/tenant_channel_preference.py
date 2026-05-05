@@ -17,7 +17,7 @@ class TenantChannelPreference(Base, TimestampMixin):
         nullable=False,
         index=True
     )
-    channel = Column(String(20), nullable=False, index=True)  # email|sms|whatsapp|slack|push|voice|inapp
+    channel = Column(String(20), nullable=False, index=True)  # email|sms|whatsapp|slack|voice
     enabled = Column(Boolean, nullable=False, default=True)
 
     tenant = relationship("Tenant", back_populates="channel_preferences")

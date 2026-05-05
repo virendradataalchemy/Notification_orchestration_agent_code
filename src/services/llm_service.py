@@ -43,7 +43,7 @@ class BedrockLLMService:
 
         Returns:
             {
-                'channel': 'email|sms|push|whatsapp|slack',
+                'channel': 'email|sms|whatsapp|slack',
                 'timing': 'immediate|scheduled',
                 'scheduled_time': <timestamp or None>,
                 'retry_strategy': 'aggressive|standard|relaxed',
@@ -97,12 +97,12 @@ User Context:
 Provider Health Status:
 - Email: {health.get('email', 'healthy')}
 - SMS: {health.get('sms', 'healthy')}
-- Push: {health.get('push', 'healthy')}
+# - Push: {health.get('push', 'healthy')}
 - WhatsApp: {health.get('whatsapp', 'healthy')}
 - Slack: {health.get('slack', 'healthy')}
 
 Routing Rules:
-1. CRITICAL priority: Use fastest, most reliable channel (SMS, Voice, Push)
+1. CRITICAL priority: Use fastest, most reliable channel (SMS, Voice)
 2. HIGH priority: Use user's preferred channel if healthy, otherwise fallback
 3. MEDIUM/LOW priority: Optimize for cost and user preferences
 4. Respect quiet hours for non-urgent notifications
@@ -110,7 +110,7 @@ Routing Rules:
 
 Respond ONLY with valid JSON (no markdown, no extra text):
 {{
-    "channel": "email|sms|push|whatsapp|slack",
+    "channel": "email|sms|whatsapp|slack",
     "timing": "immediate|scheduled",
     "scheduled_time": null,
     "retry_strategy": "aggressive|standard|relaxed",
@@ -195,7 +195,7 @@ Respond ONLY with valid JSON (no markdown, no extra text):
         """Fallback to rule-based routing if LLM fails."""
         channel_map = {
             'critical': 'sms',
-            'high': 'push',
+            'high': 'sms', # 'push',
             'medium': 'email',
             'low': 'email'
         }
@@ -359,7 +359,7 @@ Channel Guidelines:
 - email: Provide a compelling subject line and an HTML-formatted body.
 - sms/whatsapp: Keep it concise (under 160 chars for SMS if possible). Use plaintext.
 - slack: Use markdown formatting.
-- push/inapp: Keep it short and actionable.
+- SMS/Voice: Keep it short and actionable.
 
 Use Jinja2 variable placeholders like {{{{user_name}}}}, {{{{order_id}}}}, {{{{company_name}}}} where they make sense.
 

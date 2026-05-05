@@ -14,6 +14,9 @@ from src.core import get_db
 from src.core.security import verify_token
 from src.api.dependencies import get_authenticated_tenant, require_admin_access
 from src.models import Notification, NotificationChannel, Tenant, TenantUser, ChannelStatus
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 router = APIRouter(tags=["tenant-dashboard"])
 
@@ -689,8 +692,7 @@ async def get_tenant_delivery_activity(
                     payload.get("email") if channel == "email" else
                     payload.get("phone") if channel in {"sms", "whatsapp", "voice"} else
                     payload.get("slack_id") if channel == "slack" else
-                    (payload.get("device_tokens") or [None])[0] if channel == "push" else
-                    payload.get("user_id") if channel == "inapp" else
+                    (payload.get("device_tokens") or [None])[0] if channel == "voice" else
                     payload.get("email") or payload.get("phone") or payload.get("slack_id")
                 )
                 body_text = payload.get("body") or ""
@@ -1050,7 +1052,7 @@ async def get_marketing_threaded_activity(
 
         # This query pairs notifications with their most recent subsequent reply
         query = text(f"""
-            WITH outbound AS (
+            WITH outbound_page AS (
                 SELECT 
                     n.id as id,
                     n.created_at as timestamp,
@@ -1061,21 +1063,21 @@ async def get_marketing_threaded_activity(
                     nc.channel as channel,
                     nc.status as status,
                     nc.opened_at as opened_at,
-                    nc.clicked_at as clicked_at,
-                    n.owner_id
+                    nc.clicked_at as clicked_at
                 FROM notifications n
                 JOIN notification_channels nc ON nc.notification_id = n.id
                 WHERE {outbound_where}
+                ORDER BY n.created_at DESC
+                LIMIT :limit
             ),
-            inbound AS (
+            inbound_candidates AS (
                 SELECT 
                     m.id as id,
                     m.created_at as timestamp,
                     m.sender_address as sender,
                     COALESCE(p.parsed_content, m.raw_payload->>'body', m.raw_payload->>'text', m.raw_payload->>'stripped-text') as content,
-                    m.channel as channel,
+                    CAST(m.channel AS TEXT) as channel,
                     p.status as status,
-                    m.owner_id,
                     m.tenant_id,
                     ii.intent as ai_intent,
                     ii.confidence as ai_confidence,
@@ -1084,6 +1086,29 @@ async def get_marketing_threaded_activity(
                 LEFT JOIN inbound_messages_parsed p ON m.id = p.raw_message_id
                 LEFT JOIN inbound_intents ii ON p.id = ii.parsed_message_id
                 WHERE m.tenant_id = :tenant_id
+                -- Only consider inbound messages newer than the oldest outbound message on this page
+                AND m.created_at >= (SELECT MIN(timestamp) FROM outbound_page)
+            ),
+            inbound_mapped AS (
+                SELECT 
+                    i.*,
+                    (
+                        SELECT n2.id
+                        FROM notifications n2
+                        JOIN notification_channels nc2 ON nc2.notification_id = n2.id
+                        WHERE n2.tenant_id = :tenant_id
+                        AND n2.created_at <= i.timestamp
+                        AND n2.created_at >= i.timestamp - INTERVAL '30 days'
+                        AND LOWER(CAST(nc2.channel AS TEXT)) = LOWER(CAST(i.channel AS TEXT))
+                        AND (
+                            (LOWER(CAST(i.channel AS TEXT)) = 'email' AND n2.data->>'email' = i.sender)
+                            OR (LOWER(CAST(i.channel AS TEXT)) IN ('sms', 'whatsapp', 'voice') AND (n2.data->>'phone' = i.sender OR 'whatsapp:' || (n2.data->>'phone') = i.sender OR n2.data->>'phone' = REPLACE(i.sender, 'whatsapp:', '')))
+                            OR n2.user_id = i.sender
+                        )
+                        ORDER BY n2.created_at DESC
+                        LIMIT 1
+                    ) as matched_out_id
+                FROM inbound_candidates i
             )
             SELECT 
                 o.id as out_id,
@@ -1103,25 +1128,9 @@ async def get_marketing_threaded_activity(
                 i.ai_intent,
                 i.ai_confidence,
                 i.ai_rationale
-            FROM outbound o
-            LEFT JOIN LATERAL (
-                SELECT 
-                    m.id, m.timestamp, m.content, m.status,
-                    m.ai_intent, m.ai_confidence, m.ai_rationale
-                FROM inbound m
-                WHERE m.timestamp > o.timestamp
-                AND (
-                    m.sender = o.recipient_id 
-                    OR m.sender = o.recipient_email
-                    OR m.sender = o.recipient_phone
-                    OR (o.recipient_phone IS NOT NULL AND m.sender = 'whatsapp:' || o.recipient_phone)
-                    OR (o.recipient_phone IS NOT NULL AND 'whatsapp:' || m.sender = o.recipient_phone)
-                )
-                ORDER BY m.timestamp ASC
-                LIMIT 1
-            ) i ON TRUE
+            FROM outbound_page o
+            LEFT JOIN inbound_mapped i ON i.matched_out_id = o.id AND LOWER(CAST(i.channel AS TEXT)) = LOWER(CAST(o.channel AS TEXT))
             ORDER BY o.timestamp DESC
-            LIMIT :limit
         """)
 
         params = {"tenant_id": tenant_id, "limit": limit}

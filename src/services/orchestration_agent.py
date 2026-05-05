@@ -275,7 +275,7 @@ class OrchestrationAgent:
         """
         channel_map = {
             'critical': 'sms',
-            'high': 'push',
+            'high': 'sms', # 'push',
             'medium': 'email',
             'low': 'email'
         }

@@ -22,11 +22,11 @@ class ProviderManager:
         self.providers = {
             'email': ['mailgun', 'azure_graph'],  # Mailgun is primary, azure_graph is fallback
             'sms': ['twilio', 'aws_sns'],
-            'push': ['fcm', 'apns'],
+            # 'push': ['fcm', 'apns'],
             'slack': ['slack_api'],
             'whatsapp': ['twilio'],
             'voice': ['twilio'],
-            'inapp': ['websocket'],
+            # 'inapp': ['websocket'],
         }
 
         # Circuit breaker thresholds

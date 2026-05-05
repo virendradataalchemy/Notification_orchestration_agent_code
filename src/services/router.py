@@ -49,7 +49,7 @@ class MessageRouter:
         # Priority-based routing
         if priority == "critical":
             # CRITICAL: Immediate delivery via fastest channels
-            return ["sms", "push", "voice"]
+            return ["sms", "voice"] # "push",
 
         elif priority == "high":
             # HIGH: Within 1 minute via preferred channel with fallback
@@ -60,7 +60,7 @@ class MessageRouter:
                 # Check quiet hours
                 if self._is_quiet_hours(preferences):
                     # Still send high priority, but via less intrusive channels
-                    return ["email", "inapp"]
+                    return ["email"] #, "inapp"]
                 return user_channels
             return requested_channels
 
@@ -126,12 +126,12 @@ class MessageRouter:
             List of failover channels to try
         """
         failover_map = {
-            "email": ["push", "inapp"],
-            "sms": ["whatsapp", "push"],
-            "whatsapp": ["sms", "push"],
-            "push": ["email", "inapp"],
+            "email": [], # "push", "inapp"],
+            "sms": ["whatsapp"], # "push"],
+            "whatsapp": ["sms"], # "push"],
+            # "push": ["email", "inapp"],
             "slack": ["email"],
-            "voice": ["sms", "push"],
+            "voice": ["sms"], # "push"],
         }
 
         return failover_map.get(primary_channel, ["email"])

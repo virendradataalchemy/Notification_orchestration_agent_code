@@ -66,9 +66,9 @@ class Settings(BaseSettings):
     sqs_sms_queue_url: Optional[str] = None
     sqs_whatsapp_queue_url: Optional[str] = None
     sqs_slack_queue_url: Optional[str] = None
-    sqs_push_queue_url: Optional[str] = None
+    # sqs_push_queue_url: Optional[str] = None
     sqs_voice_queue_url: Optional[str] = None
-    sqs_inapp_queue_url: Optional[str] = None
+    # sqs_inapp_queue_url: Optional[str] = None
 
     # AWS S3
     s3_bucket_name: Optional[str] = None
@@ -103,18 +103,18 @@ class Settings(BaseSettings):
 
     slack_channel_id: Optional[str] = None
 
-    # Firebase
-    firebase_credentials_path: Optional[str] = None
-    firebase_project_id: Optional[str] = None
-    firebase_public_key: Optional[str] = None
-    firebase_private_key: Optional[str] = None
+    # Firebase (Used for Push)
+    # firebase_credentials_path: Optional[str] = None
+    # firebase_project_id: Optional[str] = None
+    # firebase_public_key: Optional[str] = None
+    # firebase_private_key: Optional[str] = None
 
     # Apple Push Notifications
-    apns_key_id: Optional[str] = None
-    apns_team_id: Optional[str] = None
-    apns_bundle_id: Optional[str] = None
-    apns_key_path: Optional[str] = None
-    apns_use_sandbox: bool = True
+    # apns_key_id: Optional[str] = None
+    # apns_team_id: Optional[str] = None
+    # apns_bundle_id: Optional[str] = None
+    # apns_key_path: Optional[str] = None
+    # apns_use_sandbox: bool = True
 
     # ElevenLabs
     elevenlabs_api_key: Optional[str] = None

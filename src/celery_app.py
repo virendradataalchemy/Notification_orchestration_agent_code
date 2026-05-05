@@ -1,6 +1,7 @@
 """Celery application configuration for async task processing."""
 
 from celery import Celery
+from celery.signals import worker_process_init
 from src.config import settings
 
 # Create Celery app
@@ -43,3 +44,37 @@ celery_app.conf.update(
 
 # Auto-discover tasks
 celery_app.autodiscover_tasks(['src.tasks'])
+
+import asyncio
+from typing import Optional
+
+_SHARED_TASK_LOOP: Optional[asyncio.AbstractEventLoop] = None
+
+def get_shared_task_loop() -> asyncio.AbstractEventLoop:
+    """
+    Return a process-local shared event loop for Celery task execution.
+    Reusing one loop avoids cross-loop issues with async DB connection pools.
+    """
+    global _SHARED_TASK_LOOP
+    if _SHARED_TASK_LOOP is None or _SHARED_TASK_LOOP.is_closed():
+        _SHARED_TASK_LOOP = asyncio.new_event_loop()
+        asyncio.set_event_loop(_SHARED_TASK_LOOP)
+    return _SHARED_TASK_LOOP
+
+
+@worker_process_init.connect
+def init_celery_worker(**kwargs):
+    """
+    Ensure the async SQLAlchemy engine is properly disposed and recreated
+    after a Celery worker forks.
+    """
+    import asyncio
+    from src.core.database import engine
+    
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+    loop.run_until_complete(engine.dispose())

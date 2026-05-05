@@ -87,7 +87,7 @@
     const pathParts = window.location.pathname.split('/');
     const tenantId = pathParts[2];
     const token = localStorage.getItem('tenant_access_token');
-    const supportedChannels = ["email", "sms", "whatsapp", "slack", "push", "voice", "inapp"];
+    const supportedChannels = ["email", "sms", "whatsapp", "slack", "voice"]; //, "push", "inapp"];
     let activeChannels = [];
 
     // Removed manual setTenantIdentity - handled by portal_auth.js

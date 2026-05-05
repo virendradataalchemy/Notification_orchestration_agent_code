@@ -119,11 +119,16 @@ class MailgunProvider(NotificationProvider):
                             }
                         )
                     else:
-                        error_data = await response.json()
+                        try:
+                            error_data = await response.json()
+                            error_msg = error_data.get('message', 'Unknown error')
+                        except Exception:
+                            error_msg = await response.text()
+                            
                         return ProviderResponse(
                             status=ProviderStatus.FAILED,
                             error_code=f"MAILGUN_{response.status}",
-                            error_message=error_data.get('message', 'Unknown error')
+                            error_message=error_msg
                         )
 
         except asyncio.TimeoutError:

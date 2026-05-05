@@ -193,7 +193,8 @@ async def tenant_signup(
         )
 
     # Validate optional preference seed payload
-    valid_channels = {"email", "sms", "whatsapp", "slack", "push", "voice", "inapp"}
+    valid_channels = {"email", "sms", "whatsapp", "slack", "voice"}
+    # "push", "inapp"
     has_preference_user = bool(payload.preference_user_id)
     has_preferred_channels = bool(payload.preferred_channels)
 

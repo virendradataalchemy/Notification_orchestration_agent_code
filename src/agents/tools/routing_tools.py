@@ -116,7 +116,7 @@ async def predict_best_channel(
 
         # FINAL FALLBACK: Default rules
         priority_map = {
-            "high": "push",
+            "high": "sms", # "push",
             "medium": "email",
             "low": "email"
         }
@@ -211,7 +211,7 @@ async def send_notification_via_channel(
     Args:
         user_id: The user's ID
         tenant_id: The tenant's ID
-        channel: Channel to use (email, sms, push, etc)
+        channel: Channel to use (email, sms, etc)
         content: Notification content
         notification_type: Type of notification
         priority: Priority level
@@ -242,9 +242,9 @@ async def send_notification_via_channel(
                 "sms": "twilio",
                 "whatsapp": "twilio",
                 "slack": "slack_api",
-                "push": "fcm",
+                # "push": "fcm",
                 "voice": "twilio",
-                "inapp": "websocket",
+                # "inapp": "websocket",
             }
 
             # Extract owner_id from metadata if present

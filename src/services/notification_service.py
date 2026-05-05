@@ -336,7 +336,7 @@ class NotificationService:
         def _is_enabled(channel: str) -> bool:
             return enabled_map.get(channel, True) if enabled_map else True
 
-        supported_channels = ["email", "sms", "whatsapp", "slack", "push", "voice", "inapp"]
+        supported_channels = ["email", "sms", "whatsapp", "slack", "voice"] # "push", "inapp"]
         available_channels = [ch for ch in supported_channels if _is_enabled(ch)]
 
         if not available_channels:
@@ -791,13 +791,15 @@ class NotificationService:
 
         # Queue batch for processing
         if not request.schedule_at:
-            try:
-                from src.tasks.notification_tasks import send_notification_medium
-                for nid in notification_ids:
-                    send_notification_medium.apply_async(args=[nid])
-                logger.info(f"Queued {len(notification_ids)} notifications for batch processing")
-            except Exception as e:
-                logger.error(f"Failed to queue batch notifications: {e}")
+            from src.tasks.notification_tasks import send_notification_medium
+            queued_count = 0
+            for nid in notification_ids:
+                try:
+                    send_notification_medium.apply_async(args=[nid], priority=5)
+                    queued_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to queue batch notification {nid}: {e}")
+            logger.info(f"Queued {queued_count}/{len(notification_ids)} notifications for batch processing")
 
         return BatchNotificationResponse(
             batch_id=batch_id,
@@ -834,7 +836,7 @@ class NotificationService:
         def _is_enabled(channel: str) -> bool:
             return enabled_map.get(channel, True) if enabled_map else True
 
-        supported_channels = ["email", "sms", "whatsapp", "slack", "push", "voice", "inapp"]
+        supported_channels = ["email", "sms", "whatsapp", "slack", "voice"] # "push", "inapp"]
         available_channels = [ch for ch in supported_channels if _is_enabled(ch)]
         if not available_channels:
             raise HTTPException(
@@ -994,13 +996,23 @@ class NotificationService:
 
         # Queue multi-channel batch for processing
         if not request.schedule_at:
-            try:
-                from src.tasks.notification_tasks import send_notification_medium
-                for nid in notification_ids:
-                    send_notification_medium.apply_async(args=[nid])
-                logger.info(f"Queued {len(notification_ids)} multi-channel notifications for batch processing")
-            except Exception as e:
-                logger.error(f"Failed to queue multi-channel batch notifications: {e}")
+            from src.tasks.notification_tasks import send_notification_medium
+            queued_count = 0
+            
+            # Use a slightly different execution approach to force immediate execution
+            # rather than dumping all of them into the queue at once, especially for solo pools
+            for nid in notification_ids:
+                try:
+                    # In a production environment, applying async is fine.
+                    # But if we want to ensure it doesn't get stuck in the queue when running
+                    # in environments with limited concurrency, we can use a slight delay
+                    # or force the current event loop to yield. 
+                    # For now, we still push to celery, but we let celery handle the sequence.
+                    send_notification_medium.apply_async(args=[nid], priority=5)
+                    queued_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to queue multi-channel batch notification {nid}: {e}")
+            logger.info(f"Queued {queued_count}/{len(notification_ids)} multi-channel notifications for batch processing")
 
         return BatchMultiChannelNotificationResponse(
             batch_id=batch_id,

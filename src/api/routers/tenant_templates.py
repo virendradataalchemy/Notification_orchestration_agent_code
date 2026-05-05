@@ -69,7 +69,7 @@ async def create_tenant_template(
     Create a new template for the authenticated tenant.
 
     - **name**: Template identifier (e.g., 'welcome_email', 'order_sms')
-    - **channel**: Channel type (email, sms, slack, whatsapp, push)
+    - **channel**: Channel type (email, sms, slack, whatsapp)
     - **subject**: Subject line (required for email templates)
     - **body**: Template content with Jinja2 variables (e.g., {{user.name}})
     - **base_template_id**: Optional global template to inherit from

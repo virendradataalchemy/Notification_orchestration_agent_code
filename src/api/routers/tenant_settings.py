@@ -22,7 +22,7 @@ from src.models import Tenant, TenantChannelPreference, TenantProviderConfig
 
 router = APIRouter(prefix="/tenant/settings", tags=["tenant-settings"])
 
-SUPPORTED_CHANNELS = ["email", "sms", "whatsapp", "slack", "push", "voice", "inapp"]
+SUPPORTED_CHANNELS = ["email", "sms", "whatsapp", "slack", "voice"] #, "push", "inapp"]
 SUPPORTED_DELIVERY_MODES = {"parallel_all", "sequential_failover"}
 
 

@@ -357,9 +357,9 @@
                 <button class="tab" onclick="switchTab('sms')">     SMS</button>
                 <button class="tab" onclick="switchTab('whatsapp')">     WhatsApp</button>
                 <button class="tab" onclick="switchTab('voice')">     Voice</button>
-                <button class="tab" onclick="switchTab('push')">     Push</button>
+                <!-- <button class="tab" onclick="switchTab('push')">     Push</button> -->
                 <button class="tab" onclick="switchTab('slack')">     Slack</button>
-                <button class="tab" onclick="switchTab('inapp')">     In-App</button>
+                <!-- <button class="tab" onclick="switchTab('inapp')">     In-App</button> -->
             </div>
 
             <!-- Overview Tab -->
@@ -723,7 +723,7 @@
         }
 
         function updateChannelStats() {
-            const channels = ['email', 'sms', 'whatsapp', 'voice', 'push', 'slack', 'inapp'];
+            const channels = ['email', 'sms', 'whatsapp', 'voice', 'slack']; //, 'push', 'inapp'];
 
             channels.forEach(channel => {
                 const channelNotifs = filterByChannel(channel);

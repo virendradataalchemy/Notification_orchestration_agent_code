@@ -437,7 +437,11 @@
                         replyCell = `<span style="color: #166534; font-weight: 600;">${replyPreview}</span>`;
                     }
                 } else {
-                    replyCell = `<span class="no-reply-text">Awaiting reply...</span>`;
+                    if (String(thread.outbound.status).toLowerCase().includes('failed') || String(thread.outbound.status).toLowerCase().includes('bounced')) {
+                        replyCell = `<span class="no-reply-text" style="color: #ef4444; opacity: 0.7;">Delivery failed</span>`;
+                    } else {
+                        replyCell = `<span class="no-reply-text">Awaiting reply...</span>`;
+                    }
                 }
 
                 return `
@@ -552,7 +556,11 @@
                 }
             } else {
                 replySection.style.display = 'block';
-                replyContent.innerHTML = `<div class="no-reply-text">Still awaiting customer reply...</div>`;
+                if (String(thread.outbound.status).toLowerCase().includes('failed') || String(thread.outbound.status).toLowerCase().includes('bounced')) {
+                    replyContent.innerHTML = `<div class="no-reply-text" style="color: #ef4444;">Message delivery failed. Customer cannot reply.</div>`;
+                } else {
+                    replyContent.innerHTML = `<div class="no-reply-text">Still awaiting customer reply...</div>`;
+                }
             }
 
             document.getElementById('messageModal').style.display = 'block';
@@ -582,11 +590,11 @@
         loadStats();
         loadThreadedActivity();
         
-        // Auto-refresh every 30 seconds
+        // Auto-refresh every 5 seconds
         setInterval(() => {
             loadStats();
             loadThreadedActivity();
-        }, 30000);
+        }, 5000);
 
         function setupWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -596,11 +604,14 @@
             socket.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 console.log('WS message:', data);
-                if (data.event === 'inbound_message') {
-                    // Show a small notification or just refresh
-                    console.log('New message received! Refreshing...');
+                if (data.event === 'inbound_message' || data.event === 'inbound_intent_detected') {
+                    // Refresh data instantly on new message or new intent detection
+                    console.log(`Event ${data.event} received! Refreshing dashboard...`);
                     loadStats();
                     loadThreadedActivity();
+                    
+                    // If a modal is currently open and it matches the message that got the intent, we could ideally update the modal too.
+                    // But reloading the activity feed is the most robust way to ensure everything is in sync.
                 }
             };
 
