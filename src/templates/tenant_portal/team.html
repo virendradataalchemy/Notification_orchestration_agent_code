@@ -512,6 +512,7 @@
                     alert(data.detail || 'Failed to invite member');
                 }
             } catch (err) {
+                console.error(err);
                 alert('Connection error');
             } finally {
                 btn.disabled = false;

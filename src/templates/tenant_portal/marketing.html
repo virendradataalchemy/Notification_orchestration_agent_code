@@ -870,14 +870,26 @@
                         modalBody.textContent = data.body;
                     }
                     
-                    // Add Regenerate button if it's an AI template
+                    // Add Regenerate and Save buttons
                     const replySectionRef = document.getElementById('modalReplySection');
                     if (replySectionRef) {
                         replySectionRef.style.display = 'block';
+                        
+                        let saveBtnHtml = '';
+                        if (data.name && data.name.startsWith('ai_gen_')) {
+                            saveBtnHtml = `<button class="btn-primary-action" onclick="savePermanentTemplate('${tplId}', '${ch}')" style="background: #10b981; margin-left: auto;">💾 Save as Permanent</button>`;
+                        }
+
                         replySectionRef.innerHTML = `
-                            <div style="display: flex; gap: 10px; margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
-                                <button class="btn-primary-action" onclick="regenerateSpecificChannel('${ch}', '${tplId}')" style="background: #8b5cf6;">✨ Regenerate Template</button>
-                                <span id="regenStatus" style="font-size: 12px; color: #64748b; align-self: center; display: none;">Regenerating...</span>
+                            <div style="margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                                <div style="margin-bottom: 10px;">
+                                    <input type="text" id="regen_instruction_${ch}" placeholder="Optional: Tell AI how to change it (e.g. 'make it shorter', 'add an emoji')" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
+                                </div>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <button class="btn-primary-action" onclick="regenerateSpecificChannel('${ch}', '${tplId}')" style="background: #8b5cf6;">✨ Regenerate Template</button>
+                                    <span id="regenStatus" style="font-size: 12px; color: #64748b; display: none;">Regenerating...</span>
+                                    ${saveBtnHtml}
+                                </div>
                             </div>
                         `;
                     }
@@ -930,12 +942,74 @@
             return contextContent;
         }
 
+        async function savePermanentTemplate(tplId, ch) {
+            // First fetch the template data using the API
+            let tplData;
+            try {
+                const getRes = await fetch('/api/v1/tenant/templates/' + tplId, {
+                    headers: { 'Authorization': 'Bearer ' + accessToken }
+                });
+                if (!getRes.ok) throw new Error("Could not fetch template data to rename.");
+                tplData = await getRes.json();
+            } catch (e) {
+                console.error(e);
+                alert("Network error while loading template data.");
+                return;
+            }
+
+            // Prompt for new name, using current or AI-generated basis as default
+            const defaultName = tplData.name.replace(/^ai_gen_([a-z]+)_(\d+)$/, 'permanent_$1_$2');
+            const newName = prompt("Enter a permanent name for this template (lowercase with underscores):", defaultName);
+            if (!newName || !newName.trim()) return;
+
+            const safeName = newName.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+            if (!safeName) {
+                alert("Invalid name format.");
+                return;
+            }
+
+            try {
+                // To rename, we fetch the template, then PUT it with the new name
+                const saveRes = await fetch('/api/v1/tenant/templates/' + tplId, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+                    body: JSON.stringify({
+                        name: safeName,
+                        channel: tplData.channel,
+                        subject: tplData.subject,
+                        body: tplData.body,
+                        description: 'Saved from bulk campaign'
+                    })
+                });
+
+                if (saveRes.ok) {
+                    alert("Template saved successfully as '" + safeName + "'!");
+                    // Refresh the modal preview so the Save button disappears and new name shows
+                    openChannelTemplatePreview(ch);
+                } else {
+                    const err = await saveRes.json();
+                    alert("Failed to save template: " + (err.detail || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Network error while saving.");
+            }
+        }
+
         async function regenerateSpecificChannel(ch, oldTplId) {
             const statusEl = document.getElementById('regenStatus');
             statusEl.style.display = 'inline-block';
             statusEl.textContent = 'Regenerating...';
 
             let contextContent = await getContextForAI();
+            
+            // Append explicit instruction if provided
+            const instructionInput = document.getElementById(`regen_instruction_${ch}`);
+            const explicitInstruction = instructionInput ? instructionInput.value.trim() : '';
+            if (explicitInstruction) {
+                contextContent = `Instruction: ${explicitInstruction}\n\nContext/Original:\n${contextContent}`;
+            }
+
             if (!contextContent.trim()) {
                 contextContent = "Please generate a default promotional message.";
             }
@@ -953,8 +1027,8 @@
                 if (res.ok) {
                     const tplData = await res.json();
                     
-                    // Save over the existing ID if it was an ai_gen template, else make a new one
-                    const saveName = oldTplId.startsWith('ai_gen_') ? oldTplId : `ai_gen_${ch}_${Date.now().toString().slice(-6)}`;
+                    // Generate a new temporary ID for the new generation
+                    const saveName = `ai_gen_${ch}_${Date.now().toString().slice(-6)}`;
                     
                     const saveRes = await fetch('/api/v1/tenant/templates/', {
                         method: 'POST',
@@ -962,8 +1036,9 @@
                         body: JSON.stringify({
                             name: saveName,
                             channel: ch,
-                            subject: tplData.subject,
-                            body: tplData.body
+                            subject: tplData.subject || "Generated Subject",
+                            body: tplData.body || "Generated Body",
+                            description: "Regenerated template"
                         })
                     });
 
@@ -974,6 +1049,11 @@
                         saveFormSession();
                         statusEl.textContent = '✅ Regenerated!';
                         statusEl.style.color = '#16a34a';
+                        
+                        // Clear the instruction box so it isn't applied twice
+                        if (instructionInput) {
+                            instructionInput.value = '';
+                        }
                         
                         // Refresh preview
                         setTimeout(() => {
@@ -1049,8 +1129,9 @@
                                 body: JSON.stringify({
                                     name: tplName,
                                     channel: ch,
-                                    subject: tplData.subject,
-                                    body: tplData.body
+                                    subject: tplData.subject || "Generated Subject",
+                                    body: tplData.body || "Generated Body",
+                                    description: "AI Bulk Generated"
                                 })
                             });
                             if (saveRes.ok) {
@@ -1105,10 +1186,22 @@
 
             const selectedChannels = getSelected('bulkChannelOptions');
             const channelTemplateMap = {};
+            let missingTemplates = [];
+
             selectedChannels.forEach(ch => {
                 const val = document.getElementById(`bulk_tpl_${ch}`)?.value.trim();
-                if (val) channelTemplateMap[ch] = val;
+                if (val) {
+                    channelTemplateMap[ch] = val;
+                } else {
+                    missingTemplates.push(ch);
+                }
             });
+
+            if (missingTemplates.length > 0) {
+                status.textContent = `Error: Please fill the Template ID for selected channel(s): ${missingTemplates.join(', ')}. Use AI Generate or fill manually.`;
+                status.className = 'status error';
+                return;
+            }
 
             const payload = {
                 subject: document.getElementById('bulkSubject').value || null,

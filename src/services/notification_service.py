@@ -860,12 +860,15 @@ class NotificationService:
         used_channels: set[str] = set()
         provider_config_by_channel = await self._get_tenant_provider_config_map(tenant_id)
 
-        # Channels requiring templates should not appear without template_id
+        # Channels requiring templates should not appear without template_id or channel_template_map
         required_template_channels = set(channels_requiring_templates())
-        if not request.template_id and not request.body:
+        has_any_template = bool(request.template_id or (getattr(request, 'channel_template_map', None)))
+        has_any_body = bool(request.body or (getattr(request, 'channel_body_map', None)))
+
+        if not has_any_template and not has_any_body:
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail="Either template_id or body is required for batch-multichannel requests."
+                detail="Either template_id, body, channel_template_map, or channel_body_map is required for batch-multichannel requests."
             )
 
         notification_ids = []
@@ -896,9 +899,13 @@ class NotificationService:
                 fallback_plan = [ch for ch in available_channels if ch not in primary_plan]
 
             # Protect template-required channels if template_id missing (defensive)
-            if not request.template_id:
-                primary_plan = [ch for ch in primary_plan if ch not in required_template_channels]
-                fallback_plan = [ch for ch in fallback_plan if ch not in required_template_channels]
+            channel_template_map_val = getattr(request, 'channel_template_map', None) or {}
+            
+            def has_template_for_ch(c):
+                return bool(request.template_id or channel_template_map_val.get(c))
+
+            primary_plan = [ch for ch in primary_plan if ch not in required_template_channels or has_template_for_ch(ch)]
+            fallback_plan = [ch for ch in fallback_plan if ch not in required_template_channels or has_template_for_ch(ch)]
 
             channel_plan = primary_plan + fallback_plan if delivery_mode == "sequential_failover" else primary_plan
             selected_channels = list(dict.fromkeys(channel_plan))
@@ -976,11 +983,6 @@ class NotificationService:
                 "channel_content_map": channel_content_map,
                 "template_variables": per_recipient_template_vars,
                 **per_recipient_template_vars,
-                "tenant_provider_config_by_channel": provider_config_by_channel,
-                "subject": subject or "",
-                "body": body or "",
-                "template_id": request.template_id,
-                "template_variables": per_recipient_template_vars,
                 "provider_template_refs": provider_template_refs,
                 "delivery_mode": delivery_mode,
                 "channel_plan": selected_channels,

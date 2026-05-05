@@ -144,7 +144,10 @@ async def invite_team_member(
 ):
     """Invite a new team member."""
     # Check if user already exists
-    user_query = select(TenantUser).where(TenantUser.email == str(request.email))
+    user_query = select(TenantUser).where(
+        TenantUser.email == str(request.email),
+        TenantUser.tenant_id == tenant.id
+    )
     user_result = await db.execute(user_query)
     if user_result.scalar_one_or_none():
         raise HTTPException(

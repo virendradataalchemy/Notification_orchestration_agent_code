@@ -283,7 +283,10 @@ async def get_tenant_template(
     - Global templates (read-only)
     """
     query = select(Template).where(
-        Template.id == template_id,
+        or_(
+            Template.id == template_id,
+            Template.name == template_id
+        ),
         or_(
             Template.tenant_id == tenant.id,
             Template.tenant_id.is_(None)  # Global templates
