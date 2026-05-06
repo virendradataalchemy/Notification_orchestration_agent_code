@@ -1,6 +1,9 @@
 import hashlib
+import logging
 from redis.asyncio import Redis
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class DeduplicationService:
@@ -34,19 +37,31 @@ class DeduplicationService:
         Returns:
             True if duplicate, False otherwise
         """
+        if not content:
+            # Cannot hash empty content reliably
+            return False
+
         # Generate content hash
         content_hash = self._generate_hash(content)
 
-        # Create dedup key
+        # Safety check: log parameters to make sure hashing is deterministic
+        logger.info(f"Deduplication hash check for user_id={user_id}, type={notification_type}, hash={content_hash}")
+        
+        # Create dedup key - this checks if we've seen this exact content for this user+type recently
         dedup_key = f"dedup:{user_id}:{notification_type}:{content_hash}"
+        
+        logger.info(f"Checking dedup key: {dedup_key}")
 
         # Check if key exists
         exists = await self.redis.exists(dedup_key)
+        
+        logger.info(f"Dedup key {dedup_key} exists: {exists}")
 
         if exists:
             return True
 
-        # Store key with TTL
+        # Store key with TTL ONLY if it doesn't exist
+        # Setting it inside this function makes it act as a lock-and-set
         await self.redis.setex(dedup_key, self.ttl, "1")
 
         return False
@@ -65,8 +80,13 @@ class DeduplicationService:
             notification_type: Type of notification
             content: Notification content
         """
+        if not content:
+            return
+            
         content_hash = self._generate_hash(content)
         dedup_key = f"dedup:{user_id}:{notification_type}:{content_hash}"
+        
+        logger.info(f"Marking as sent, storing dedup key: {dedup_key} with ttl {self.ttl}")
 
         await self.redis.setex(dedup_key, self.ttl, "1")
 
@@ -115,4 +135,6 @@ class DeduplicationService:
         Returns:
             Hexadecimal hash string
         """
-        return hashlib.sha256(content.encode()).hexdigest()
+        # In python, dictionaries serialized to strings could have different key orderings
+        # so we ensure it's a normalized string before hashing
+        return hashlib.sha256(str(content).encode('utf-8')).hexdigest()

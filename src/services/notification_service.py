@@ -98,6 +98,44 @@ class NotificationService:
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
+    def _build_batch_request_fingerprint(
+        self,
+        tenant_id: str,
+        request: BatchNotificationRequest | BatchMultiChannelNotificationRequest,
+    ) -> str:
+        """Build deterministic fingerprint for batch duplicate-submit protection."""
+        # Create a stable representation of the recipients
+        recipients_data = []
+        for r in request.recipients:
+            recipients_data.append({
+                "user_id": r.user_id,
+                "email": r.email,
+                "phone": r.phone,
+            })
+        
+        # Sort to ensure order doesn't change the fingerprint if same recipients
+        recipients_data.sort(key=lambda x: str(x.get("user_id", "")))
+        
+        payload = {
+            "tenant_id": tenant_id,
+            "recipients_hash": hashlib.sha256(json.dumps(recipients_data, sort_keys=True).encode()).hexdigest(),
+            "subject": request.subject,
+            "body": request.body,
+            "template_id": request.template_id,
+            "data": request.data if hasattr(request, "data") else None,
+        }
+        
+        if hasattr(request, "channel"):
+            payload["channels"] = [request.channel.value]
+        elif hasattr(request, "channels"):
+            payload["channels"] = [c.value for c in request.channels]
+            
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        fp = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        import logging
+        logging.getLogger(__name__).info(f"Generated batch fingerprint for {tenant_id}: {fp} with payload: {canonical}")
+        return fp
+
     async def _find_recent_duplicate_by_fingerprint(
         self,
         tenant_id: str,
@@ -105,6 +143,18 @@ class NotificationService:
         window_minutes: int = 10,
     ) -> str | None:
         """Find recent notification already created with same fingerprint."""
+        # Check in Redis cache first for faster batch dedup
+        try:
+            from src.core import get_redis_client
+            redis = await get_redis_client()
+            key = f"fingerprint:{tenant_id}:{fingerprint}"
+            existing = await redis.get(key)
+            if existing:
+                return existing.decode() if hasattr(existing, 'decode') else str(existing)
+        except Exception as e:
+            logger.warning(f"Error checking request fingerprint in Redis: {e}")
+
+        # Fallback to DB check
         window_start = datetime.utcnow() - timedelta(minutes=window_minutes)
         result = await self.db.execute(
             select(Notification).where(
@@ -115,6 +165,14 @@ class NotificationService:
         for candidate in result.scalars().all():
             candidate_fingerprint = (candidate.data or {}).get("request_fingerprint")
             if candidate_fingerprint == fingerprint:
+                # If we found it in DB but not Redis, store it in Redis for next time
+                try:
+                    from src.core import get_redis_client
+                    redis = await get_redis_client()
+                    key = f"fingerprint:{tenant_id}:{fingerprint}"
+                    await redis.setex(key, window_minutes * 60, str(candidate.id))
+                except Exception:
+                    pass
                 return str(candidate.id)
         return None
 
@@ -691,6 +749,78 @@ class NotificationService:
             BatchNotificationResponse with batch ID and status
         """
         batch_id = str(uuid.uuid4())
+        
+        # Check tenant quota before anything else
+        from fastapi import HTTPException, status as http_status
+        from sqlalchemy import select
+        
+        allowed, usage_info = await usage_tracker.check_quota(self.db, tenant_id)
+        if not allowed:
+            raise HTTPException(
+                status_code=http_status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Monthly quota exceeded. Used: {usage_info['used']}/{usage_info['quota']}. "
+                       f"Resets on: {usage_info['reset_date']}"
+            )
+            
+        # Also limit the number of recipients in a single batch request
+        if len(request.recipients) > 100:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail="Batch request too large. Maximum 100 recipients allowed per request."
+            )
+            
+        # === Idempotency Check ===
+        idempotency_key = getattr(request, 'idempotency_key', None)
+        if idempotency_key:
+            try:
+                from src.core import get_redis_client
+                from src.utils.deduplication import DeduplicationService
+
+                redis = await get_redis_client()
+                dedup = DeduplicationService(redis)
+                existing_id = await dedup.check_idempotency_key(idempotency_key)
+
+                if existing_id:
+                    logger.info(f"Duplicate batch detected in Redis cache: {idempotency_key}")
+                    # Return the existing batch ID
+                    return BatchNotificationResponse(
+                        batch_id=existing_id,
+                        status="queued",
+                        recipients_count=len(request.recipients),
+                        estimated_completion=datetime.utcnow()
+                    )
+                else:
+                    await dedup.store_idempotency_key(idempotency_key, batch_id)
+            except Exception as e:
+                logger.warning(f"Redis idempotency check failed: {e}")
+
+        # Fallback deduplication: Check request fingerprint if no idempotency key provided
+        if not idempotency_key:
+            request_fingerprint = self._build_batch_request_fingerprint(tenant_id, request)
+            existing_recent_id = await self._find_recent_duplicate_by_fingerprint(
+                tenant_id=tenant_id,
+                fingerprint=request_fingerprint,
+                window_minutes=10,
+            )
+            if existing_recent_id:
+                logger.info(f"Duplicate batch detected via request fingerprint for tenant={tenant_id}")
+                return BatchNotificationResponse(
+                    batch_id=existing_recent_id,
+                    status="queued",
+                    recipients_count=len(request.recipients),
+                    estimated_completion=datetime.utcnow()
+                )
+            # If not a duplicate, we will still assign a new batch_id below
+            try:
+                from src.core import get_redis_client
+                redis = await get_redis_client()
+                key = f"fingerprint:{tenant_id}:{request_fingerprint}"
+                await redis.setex(key, 600, batch_id) # 10 minutes TTL
+            except Exception as e:
+                logger.warning(f"Failed to store request fingerprint in Redis: {e}")
+
+        batch_id = str(uuid.uuid4())
+
         selected_channel = request.channel.value
         template_required_channels = channels_requiring_templates()
         provider_config_by_channel = await self._get_tenant_provider_config_map(tenant_id)
@@ -760,6 +890,7 @@ class NotificationService:
                 "primary_channel_plan": [selected_channel],
                 "fallback_channel_plan": [],
                 "delivery_mode": "parallel_all",
+                "request_fingerprint": request_fingerprint if not idempotency_key else None,
             })
 
             notification = Notification(
@@ -815,6 +946,79 @@ class NotificationService:
         Send notifications to multiple recipients across multiple channels.
         """
         batch_id = str(uuid.uuid4())
+        
+        # Check tenant quota before anything else
+        from fastapi import HTTPException, status as http_status
+        from sqlalchemy import select
+        
+        allowed, usage_info = await usage_tracker.check_quota(self.db, tenant_id)
+        if not allowed:
+            raise HTTPException(
+                status_code=http_status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Monthly quota exceeded. Used: {usage_info['used']}/{usage_info['quota']}. "
+                       f"Resets on: {usage_info['reset_date']}"
+            )
+            
+        # Also limit the number of recipients in a single batch request
+        if len(request.recipients) > 100:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail="Batch request too large. Maximum 100 recipients allowed per request."
+            )
+            
+        # === Idempotency Check ===
+        idempotency_key = getattr(request, 'idempotency_key', None)
+        if idempotency_key:
+            try:
+                from src.core import get_redis_client
+                from src.utils.deduplication import DeduplicationService
+
+                redis = await get_redis_client()
+                dedup = DeduplicationService(redis)
+                existing_id = await dedup.check_idempotency_key(idempotency_key)
+
+                if existing_id:
+                    logger.info(f"Duplicate multichannel batch detected in Redis cache: {idempotency_key}")
+                    # Return the existing batch ID
+                    return BatchMultiChannelNotificationResponse(
+                        batch_id=existing_id,
+                        status="queued",
+                        recipients_count=len(request.recipients),
+                        estimated_completion=datetime.utcnow()
+                    )
+                else:
+                    await dedup.store_idempotency_key(idempotency_key, batch_id)
+            except Exception as e:
+                logger.warning(f"Redis idempotency check failed: {e}")
+
+        # Fallback deduplication: Check request fingerprint if no idempotency key provided
+        if not idempotency_key:
+            request_fingerprint = self._build_batch_request_fingerprint(tenant_id, request)
+            import logging
+            logging.getLogger(__name__).info(f"Using request fingerprint for dedup: {request_fingerprint}")
+            existing_recent_id = await self._find_recent_duplicate_by_fingerprint(
+                tenant_id=tenant_id,
+                fingerprint=request_fingerprint,
+                window_minutes=10,
+            )
+            if existing_recent_id:
+                logger.info(f"Duplicate multichannel batch detected via request fingerprint for tenant={tenant_id}")
+                return BatchMultiChannelNotificationResponse(
+                    batch_id=existing_recent_id,
+                    status="queued",
+                    recipients_count=len(request.recipients),
+                    estimated_completion=datetime.utcnow()
+                )
+                
+            # Store the current batch id as reference for fingerprint if not dup
+            try:
+                from src.core import get_redis_client
+                redis = await get_redis_client()
+                key = f"fingerprint:{tenant_id}:{request_fingerprint}"
+                await redis.setex(key, 600, batch_id) # 10 minutes TTL
+            except Exception as e:
+                logger.warning(f"Failed to store request fingerprint in Redis: {e}")
+
         requested_channels = list(dict.fromkeys([c.value for c in request.channels]))
         tenant_row = await self.db.get(Tenant, tenant_id)
         tenant_config = (tenant_row.config or {}) if tenant_row else {}

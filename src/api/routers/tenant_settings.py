@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core import get_db
 from src.api.dependencies import get_authenticated_tenant
-from src.models import Tenant, TenantChannelPreference, TenantProviderConfig
+from src.models import Tenant, TenantChannelPreference, TenantProviderConfig, TenantUser
 
 router = APIRouter(prefix="/tenant/settings", tags=["tenant-settings"])
 
@@ -155,15 +155,50 @@ async def update_profile(
     if not current:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
+    print(f"Updating profile for tenant {tenant.id} with payload: {payload.dict(exclude_unset=True)}")
+    if hasattr(tenant, "current_user_id"):
+        print(f"Current user ID: {tenant.current_user_id}")
+    else:
+        print("No current_user_id found on tenant")
+
     if payload.name is not None:
         current.name = payload.name
     if payload.admin_name is not None:
         current.admin_name = payload.admin_name
     if payload.admin_email is not None:
         current.admin_email = str(payload.admin_email)
+
     if payload.config is not None:
         current.config = {**(current.config or {}), **payload.config}
 
+    # Update the root user to keep the profile synced with team management
+    if payload.admin_name is not None or payload.admin_email is not None:
+        from sqlalchemy import update
+        values = {}
+        if payload.admin_name is not None:
+            values['full_name'] = payload.admin_name
+        if payload.admin_email is not None:
+            values['email'] = str(payload.admin_email)
+            
+        print(f"Updating TenantUser table with values: {values} for tenant {current.id}")
+            
+        res1 = await db.execute(
+            update(TenantUser)
+            .where(TenantUser.tenant_id == current.id)
+            .where(TenantUser.role == "root")
+            .values(**values)
+        )
+        print(f"Updated {res1.rowcount} root users")
+        
+        # Also update the current user if they exist
+        if hasattr(tenant, "current_user_id") and tenant.current_user_id:
+            res2 = await db.execute(
+                update(TenantUser)
+                .where(TenantUser.id == tenant.current_user_id)
+                .values(**values)
+            )
+            print(f"Updated {res2.rowcount} current user")
+            
     current.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(current)

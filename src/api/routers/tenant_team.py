@@ -61,8 +61,10 @@ async def list_team_members(
     db: AsyncSession = Depends(get_db)
 ):
     """List all team members for the tenant."""
+    # Ensure any pending transactions are committed to avoid stale reads
+    await db.commit()
     query = select(TenantUser).where(TenantUser.tenant_id == tenant.id).order_by(TenantUser.created_at)
-    result = await db.execute(query)
+    result = await db.execute(query.execution_options(populate_existing=True))
     return result.scalars().all()
 
 @router.get("/invites")
