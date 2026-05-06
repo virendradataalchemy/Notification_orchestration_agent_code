@@ -161,7 +161,7 @@ class BatchNotificationResponse(BaseModel):
     """Batch notification response."""
     batch_id: str
     status: str
-    total_recipients: int
+    total_recipients: int = 0
     estimated_completion: Optional[datetime] = None
 
 
@@ -169,10 +169,10 @@ class BatchMultiChannelNotificationResponse(BaseModel):
     """Batch multi-channel notification response."""
     batch_id: str
     status: str
-    total_recipients: int
-    total_notifications: int
-    total_channel_records: int
-    channels: List[str]
+    total_recipients: int = 0
+    total_notifications: int = 0
+    total_channel_records: int = 0
+    channels: List[str] = Field(default_factory=list)
     estimated_completion: Optional[datetime] = None
 
 

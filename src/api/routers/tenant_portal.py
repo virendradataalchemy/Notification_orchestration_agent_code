@@ -67,7 +67,7 @@ async def _get_portal_tenant_from_cookie(
 @router.get("/", include_in_schema=False)
 async def portal_root():
     """Redirect portal root to login page."""
-    return RedirectResponse(url="/portal/login")
+    return RedirectResponse(url="/portal/login", status_code=303)
 
 
 @router.get("/assets/{asset_name}", include_in_schema=False)
@@ -88,7 +88,7 @@ async def tenant_login_page(request: Request, db: AsyncSession = Depends(get_db)
     """Tenant portal login page."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if tenant:
-        return RedirectResponse(url=f"/portal/{tenant.id}/dashboard")
+        return RedirectResponse(url=f"/portal/{tenant.id}/dashboard", status_code=303)
     return templates.TemplateResponse("login.html", {
         "request": request
     })
@@ -128,9 +128,9 @@ async def tenant_dashboard_page(
     """Main tenant dashboard."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/dashboard")
+        return RedirectResponse(url=f"/portal/{tenant.id}/dashboard", status_code=303)
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -147,9 +147,9 @@ async def templates_list_page(
     """List all templates (tenant + global)."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/templates")
+        return RedirectResponse(url=f"/portal/{tenant.id}/templates", status_code=303)
 
     return templates.TemplateResponse("templates.html", {
         "request": request,
@@ -166,9 +166,9 @@ async def template_create_page(
     """Create new template form."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/templates/create")
+        return RedirectResponse(url=f"/portal/{tenant.id}/templates/create", status_code=303)
 
     return templates.TemplateResponse("template_create.html", {
         "request": request,
@@ -186,9 +186,9 @@ async def template_edit_page(
     """Edit existing template."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/templates/edit/{template_id}")
+        return RedirectResponse(url=f"/portal/{tenant.id}/templates/edit/{template_id}", status_code=303)
 
     return templates.TemplateResponse("template_create.html", {
         "request": request,
@@ -208,9 +208,9 @@ async def template_view_page(
     """View template details (read-only)."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/templates/view/{template_id}")
+        return RedirectResponse(url=f"/portal/{tenant.id}/templates/view/{template_id}", status_code=303)
 
     return templates.TemplateResponse("template_create.html", {
         "request": request,
@@ -229,9 +229,9 @@ async def profile_page(
     """Tenant profile page."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/profile")
+        return RedirectResponse(url=f"/portal/{tenant.id}/profile", status_code=303)
 
     return templates.TemplateResponse("profile.html", {"request": request, "tenant_id": tenant_id})
 
@@ -245,9 +245,9 @@ async def developer_page(
     """Tenant developer settings page."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/developer")
+        return RedirectResponse(url=f"/portal/{tenant.id}/developer", status_code=303)
 
     return templates.TemplateResponse("developer.html", {"request": request, "tenant_id": tenant_id})
 
@@ -261,9 +261,9 @@ async def channel_settings_page(
     """Tenant channel settings page."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/channels")
+        return RedirectResponse(url=f"/portal/{tenant.id}/channels", status_code=303)
 
     return templates.TemplateResponse("channel_settings.html", {"request": request, "tenant_id": tenant_id})
 
@@ -277,9 +277,9 @@ async def analytics_page(
     """Tenant analytics dashboard page."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/analytics")
+        return RedirectResponse(url=f"/portal/{tenant.id}/analytics", status_code=303)
 
     return templates.TemplateResponse("analytics.html", {"request": request, "tenant_id": tenant_id})
 
@@ -293,9 +293,9 @@ async def marketing_dashboard_page(
     """Marketing team dashboard."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/marketing")
+        return RedirectResponse(url=f"/portal/{tenant.id}/marketing", status_code=303)
 
     return templates.TemplateResponse("marketing.html", {
         "request": request,
@@ -313,9 +313,9 @@ async def marketing_detailed_dashboard_page(
     """Detailed activity dashboard for marketing."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/marketing-dashboard")
+        return RedirectResponse(url=f"/portal/{tenant.id}/marketing-dashboard", status_code=303)
 
     return templates.TemplateResponse("marketing_dashboard.html", {
         "request": request,
@@ -333,14 +333,14 @@ async def team_management_page(
     """Team management page (Admin only)."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return RedirectResponse(url="/portal/login?error=unauthorized", status_code=303)
     if tenant.id != tenant_id:
-        return RedirectResponse(url=f"/portal/{tenant.id}/team")
+        return RedirectResponse(url=f"/portal/{tenant.id}/team", status_code=303)
     
     # Check permissions
     if tenant.current_user_role not in ["root", "admin"]:
         # Redirect to dashboard if not admin
-        return RedirectResponse(url=f"/portal/{tenant.id}/dashboard")
+        return RedirectResponse(url=f"/portal/{tenant.id}/dashboard", status_code=303)
 
     return templates.TemplateResponse("team.html", {
         "request": request,

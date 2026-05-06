@@ -273,6 +273,16 @@
             const savedTenantId = localStorage.getItem('tenant_id');
             const expiresAtRaw = localStorage.getItem('token_expires_at');
 
+            // Check if backend redirected with an error (e.g. cookie expired)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('error') === 'unauthorized') {
+                clearPortalAuth();
+                showAlert('Session expired or unauthorized. Please log in again.');
+                // Remove error from URL so it doesn't persist on refresh
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return null;
+            }
+
             if (!savedToken || !savedTenantId || !expiresAtRaw) {
                 return null;
             }

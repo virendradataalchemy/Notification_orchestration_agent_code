@@ -983,7 +983,10 @@ class NotificationService:
                     return BatchMultiChannelNotificationResponse(
                         batch_id=existing_id,
                         status="queued",
-                        recipients_count=len(request.recipients),
+                        total_recipients=len(request.recipients),
+                        total_notifications=0,
+                        total_channel_records=0,
+                        channels=list(dict.fromkeys([c.value for c in request.channels])),
                         estimated_completion=datetime.utcnow()
                     )
                 else:
@@ -1006,7 +1009,10 @@ class NotificationService:
                 return BatchMultiChannelNotificationResponse(
                     batch_id=existing_recent_id,
                     status="queued",
-                    recipients_count=len(request.recipients),
+                    total_recipients=len(request.recipients),
+                    total_notifications=0,
+                    total_channel_records=0,
+                    channels=list(dict.fromkeys([c.value for c in request.channels])),
                     estimated_completion=datetime.utcnow()
                 )
                 

@@ -346,7 +346,7 @@ async def tenant_detail_enhanced_page(
     _: bool = Depends(require_admin_access)
 ):
     """Legacy route redirected to unified tenant detail page."""
-    return RedirectResponse(url=f"/tenant-detail/{tenant_id}", status_code=307)
+    return RedirectResponse(url=f"/tenant-detail/{tenant_id}", status_code=303)
 
 
 @router.get("/api/tenant-dashboard/tenant/{tenant_id}/overview")
