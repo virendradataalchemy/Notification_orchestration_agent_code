@@ -326,6 +326,7 @@ recipient_102,recipient102@example.com,+14155550102,U22222222</textarea>
         let availableChannels = [];
         let currentTenantId = '';
         let lastFetchedTemplate = null;
+        let lastFetchedSingleTemplate = null;
 
         let tenantApiKey = localStorage.getItem('demo_tenant_api_key') || '';
         if (tenantApiKey) document.getElementById('apiKey').value = tenantApiKey;
@@ -383,6 +384,52 @@ recipient_102,recipient102@example.com,+14155550102,U22222222</textarea>
                 throw new Error(label + ' must be a JSON object');
             } catch (e) {
                 throw new Error(label + ' is invalid JSON: ' + e.message);
+            }
+        }
+
+        function resetSingleTemplateState() {
+            lastFetchedSingleTemplate = null;
+        }
+
+        function resetBulkTemplateState() {
+            const previewBtn = document.getElementById('bulkTemplatePreviewBtn');
+            previewBtn.style.color = '';
+            previewBtn.style.pointerEvents = 'none';
+            previewBtn.style.opacity = '0.5';
+            previewBtn.className = 'muted';
+            lastFetchedTemplate = null;
+        }
+
+        function validateTemplateChannelMatch(template, channels, statusElement) {
+            if (!template || !template.channel) return true;
+            const selected = Array.isArray(channels) ? channels : [];
+            if (!selected.length) return true;
+            const mismatched = selected.filter((ch) => ch !== template.channel);
+            if (!mismatched.length) return true;
+            setStatus(
+                statusElement,
+                'Template channel mismatch: template "' + (template.name || template.id || 'selected_template') +
+                '" is for "' + template.channel + '" but selected channel(s) are ' + selected.join(', ') + '.',
+                true
+            );
+            return false;
+        }
+
+        async function fetchTemplateDetails(templateId, statusElement) {
+            if (!templateId || !tenantApiKey) return null;
+            try {
+                const res = await fetch(base() + '/api/v1/tenant/templates/' + encodeURIComponent(templateId), {
+                    headers: { 'X-API-Key': tenantApiKey }
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    setStatus(statusElement, data, true);
+                    return null;
+                }
+                return await res.json();
+            } catch (e) {
+                setStatus(statusElement, e.message, true);
+                return null;
             }
         }
 
@@ -715,6 +762,14 @@ recipient_102,recipient102@example.com,+14155550102,U22222222</textarea>
             if (channels.includes('whatsapp') && !templateId) {
                 return setStatus('sendStatus', 'template_id is required when whatsapp channel is requested', true);
             }
+            if (templateId) {
+                const template = await fetchTemplateDetails(templateId, 'sendStatus');
+                if (!template) return;
+                lastFetchedSingleTemplate = template;
+                if (!validateTemplateChannelMatch(template, channels, 'sendStatus')) return;
+            } else {
+                resetSingleTemplateState();
+            }
             let templateVars = {};
             try {
                 templateVars = parseJsonInput('templateVars', 'Template variables');
@@ -768,6 +823,14 @@ recipient_102,recipient102@example.com,+14155550102,U22222222</textarea>
             if (!templateId && !body) {
                 return setStatus('bulkStatus', 'Provide template_id or body for batch send', true);
             }
+            if (templateId) {
+                const template = await fetchTemplateDetails(templateId, 'bulkStatus');
+                if (!template) return;
+                lastFetchedTemplate = template;
+                if (!validateTemplateChannelMatch(template, channels, 'bulkStatus')) return;
+            } else {
+                resetBulkTemplateState();
+            }
 
             let recipients;
             try {
@@ -815,42 +878,26 @@ recipient_102,recipient102@example.com,+14155550102,U22222222</textarea>
         }
 
         async function fetchTemplatePreview(templateId) {
-            const previewBtn = document.getElementById('bulkTemplatePreviewBtn');
-            
             if (!templateId || !tenantApiKey) {
-                previewBtn.style.color = '';
-                previewBtn.style.pointerEvents = 'none';
-                previewBtn.style.opacity = '0.5';
-                previewBtn.className = 'muted';
-                lastFetchedTemplate = null;
+                resetBulkTemplateState();
                 return;
             }
 
+            const previewBtn = document.getElementById('bulkTemplatePreviewBtn');
             try {
-                const res = await fetch(base() + '/api/v1/tenant/templates/' + encodeURIComponent(templateId), {
-                    headers: { 'X-API-Key': tenantApiKey }
-                });
-                if (res.ok) {
-                    const data = await res.json();
+                const data = await fetchTemplateDetails(templateId, 'bulkStatus');
+                if (data) {
                     lastFetchedTemplate = data;
                     previewBtn.style.pointerEvents = 'auto';
                     previewBtn.style.opacity = '1';
                     previewBtn.style.color = 'var(--primary)';
                     previewBtn.className = '';
                 } else {
-                    previewBtn.style.color = '';
-                    previewBtn.style.pointerEvents = 'none';
-                    previewBtn.style.opacity = '0.5';
-                    previewBtn.className = 'muted';
-                    lastFetchedTemplate = null;
+                    resetBulkTemplateState();
                 }
             } catch (e) {
                 console.error('Template fetch error:', e);
-                previewBtn.style.color = '';
-                previewBtn.style.pointerEvents = 'none';
-                previewBtn.style.opacity = '0.5';
-                previewBtn.className = 'muted';
-                lastFetchedTemplate = null;
+                resetBulkTemplateState();
             }
         }
 
@@ -876,6 +923,9 @@ recipient_102,recipient102@example.com,+14155550102,U22222222</textarea>
         document.getElementById('bulkTemplateId').addEventListener('input', (e) => {
             fetchTemplatePreview(e.target.value.trim());
             updateBulkPreview();
+        });
+        document.getElementById('templateId').addEventListener('input', () => {
+            resetSingleTemplateState();
         });
 
         if (tenantApiKey) loadChannelAvailability(false).then(updateBulkPreview);

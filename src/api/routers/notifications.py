@@ -1,10 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from typing import List
-import uuid
-from datetime import datetime
 
 from src.core import get_db
 from src.api.schemas import (
@@ -15,13 +11,18 @@ from src.api.schemas import (
     BatchNotificationResponse,
     BatchMultiChannelNotificationResponse,
     NotificationStatusResponse,
-    NotificationStatus,
 )
 from src.api.dependencies import user_rate_limiter
 from src.api.dependencies import get_authenticated_tenant
-from src.models import Notification, NotificationChannel, Tenant
-from src.services.notification_service import NotificationService
+from src.models import Tenant
 from src.agents.sync_team import get_notification_team
+from src.sdk import (
+    NotificationPipelineError,
+    get_notification_status_async,
+    send_batch_multichannel_notification_pipeline_async,
+    send_batch_notification_pipeline_async,
+    send_notification_pipeline_async,
+)
 import logging
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -47,11 +48,18 @@ async def send_notification(
 
     NOTE: This is the legacy endpoint. Use /notifications/agentic for self-learning routing.
     """
-    service = NotificationService(db)
-    # Pass current user ID as owner if available
     owner_id = getattr(tenant, "current_user_id", None)
-    notification = await service.send_notification(tenant.id, request, owner_id=owner_id)
-    return notification
+    try:
+        return await send_notification_pipeline_async(
+            tenant.id,
+            request.recipient,
+            request.notification,
+            request.options,
+            owner_id=owner_id,
+            session=db,
+        )
+    except NotificationPipelineError as exc:
+        raise exc.to_http_exception() from exc
 
 
 @router.post(
@@ -148,10 +156,16 @@ async def send_batch_notifications(
     Efficient for sending the same notification template to many users.
     Processing happens asynchronously.
     """
-    service = NotificationService(db)
     owner_id = getattr(tenant, "current_user_id", None)
-    batch = await service.send_batch_notifications(tenant.id, request, owner_id=owner_id)
-    return batch
+    try:
+        return await send_batch_notification_pipeline_async(
+            tenant.id,
+            request,
+            owner_id=owner_id,
+            session=db,
+        )
+    except NotificationPipelineError as exc:
+        raise exc.to_http_exception() from exc
 
 
 @router.post(
@@ -168,10 +182,16 @@ async def send_batch_notifications_multichannel(
     """
     Send notifications to multiple recipients across multiple channels in one request.
     """
-    service = NotificationService(db)
     owner_id = getattr(tenant, "current_user_id", None)
-    batch = await service.send_batch_notifications_multichannel(tenant.id, request, owner_id=owner_id)
-    return batch
+    try:
+        return await send_batch_multichannel_notification_pipeline_async(
+            tenant.id,
+            request,
+            owner_id=owner_id,
+            session=db,
+        )
+    except NotificationPipelineError as exc:
+        raise exc.to_http_exception() from exc
 
 
 @router.get(
@@ -190,51 +210,13 @@ async def get_notification_status(
     for each channel, timestamps, and any errors.
     """
     try:
-        notification_uuid = uuid.UUID(notification_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid notification ID format"
+        return await get_notification_status_async(
+            tenant.id,
+            notification_id,
+            session=db,
         )
-
-    # IMPORTANT: Filter by tenant_id to prevent cross-tenant data access
-    query = select(Notification).where(
-        Notification.id == notification_uuid,
-        Notification.tenant_id == tenant.id
-    ).options(selectinload(Notification.channels))
-    result = await db.execute(query)
-    notification = result.scalar_one_or_none()
-
-    if not notification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found"
-        )
-
-    # Get channel statuses
-    channels = []
-    for channel in notification.channels:
-        channels.append({
-            "channel": channel.channel,
-            "provider": channel.provider,
-            "message_id": channel.message_id,
-            "status": channel.status.value,
-            "delivered_at": channel.delivered_at,
-            "opened_at": channel.opened_at,
-            "clicked_at": channel.clicked_at,
-        })
-
-    return NotificationStatusResponse(
-        notification_id=str(notification.id),
-        user_id=notification.user_id,
-        type=notification.type,
-        priority=notification.priority,
-        status=notification.status,
-        channels=channels,
-        attempts=sum(c.attempts for c in notification.channels),
-        created_at=notification.created_at,
-        updated_at=notification.updated_at,
-    )
+    except NotificationPipelineError as exc:
+        raise exc.to_http_exception() from exc
 
 
 @router.get(

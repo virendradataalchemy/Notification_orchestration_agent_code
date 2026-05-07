@@ -556,6 +556,9 @@
                 }
             } else {
                 replySection.style.display = 'block';
+                intentSection.style.display = 'none';
+                intentBadge.innerHTML = '';
+                intentRationale.textContent = '';
                 if (String(thread.outbound.status).toLowerCase().includes('failed') || String(thread.outbound.status).toLowerCase().includes('bounced')) {
                     replyContent.innerHTML = `<div class="no-reply-text" style="color: #ef4444;">Message delivery failed. Customer cannot reply.</div>`;
                 } else {

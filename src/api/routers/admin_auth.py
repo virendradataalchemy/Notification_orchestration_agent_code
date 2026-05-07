@@ -56,7 +56,7 @@ async def admin_login_page():
 
 @portal_router.get("/admin/logout")
 async def admin_logout_page():
-    response = RedirectResponse(url="/admin/login", status_code=303)
+    response = RedirectResponse(url="/admin/login")
     response.delete_cookie("admin_access_token", path="/", samesite="lax")
     return response
 

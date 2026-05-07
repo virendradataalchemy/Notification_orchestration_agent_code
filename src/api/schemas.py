@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import Enum
 import uuid
 
+from src.models.inbound import InboundChannel
+
 
 class Priority(str, Enum):
     """Notification priority."""
@@ -41,12 +43,12 @@ class NotificationStatus(str, Enum):
 class InboundMessageCanonical(BaseModel):
     """Universal canonical format for incoming messages from any channel."""
     tenant_id: str
-    channel: Channel
+    channel: InboundChannel
     sender_address: str
     provider_message_id: str
     raw_payload: Dict[str, Any]
     candidate_id: Optional[str] = None
-    owner_id: Optional[str] = None
+    owner_id: Optional[uuid.UUID] = None
     retention_date: Optional[datetime] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -161,7 +163,7 @@ class BatchNotificationResponse(BaseModel):
     """Batch notification response."""
     batch_id: str
     status: str
-    total_recipients: int = 0
+    total_recipients: int
     estimated_completion: Optional[datetime] = None
 
 
@@ -169,10 +171,10 @@ class BatchMultiChannelNotificationResponse(BaseModel):
     """Batch multi-channel notification response."""
     batch_id: str
     status: str
-    total_recipients: int = 0
-    total_notifications: int = 0
-    total_channel_records: int = 0
-    channels: List[str] = Field(default_factory=list)
+    total_recipients: int
+    total_notifications: int
+    total_channel_records: int
+    channels: List[str]
     estimated_completion: Optional[datetime] = None
 
 

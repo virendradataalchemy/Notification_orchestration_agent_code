@@ -788,11 +788,86 @@
             return Array.from(document.querySelectorAll('#' + containerId + ' input:checked')).map(i => i.value);
         }
 
+        async function fetchTemplateMeta(templateId) {
+            if (!templateId || !accessToken) return null;
+            const res = await fetch('/api/v1/tenant/templates/' + encodeURIComponent(templateId), {
+                headers: { 'Authorization': 'Bearer ' + accessToken }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data.detail || 'Template not found or not active.');
+            }
+            return data;
+        }
+
+        function setInlineStatus(el, message, isError = false) {
+            if (!el) return;
+            el.style.display = 'block';
+            el.textContent = message;
+            el.className = 'status' + (isError ? ' error' : ' success');
+        }
+
+        async function validateSingleTemplateSelection(showStatus = true) {
+            const status = document.getElementById('sendStatus');
+            const templateId = document.getElementById('templateId').value.trim();
+            const channels = getSelected('sendChannelOptions');
+            if (!templateId || !channels.length) return true;
+            try {
+                const template = await fetchTemplateMeta(templateId);
+                const mismatched = channels.filter(ch => ch !== template.channel);
+                if (mismatched.length) {
+                    if (showStatus) {
+                        setInlineStatus(
+                            status,
+                            `Error: Template "${template.name || template.id}" is for channel "${template.channel}", but you selected ${channels.join(', ')}.`,
+                            true
+                        );
+                    }
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                if (showStatus) setInlineStatus(status, 'Error: ' + e.message, true);
+                return false;
+            }
+        }
+
+        async function validateBulkTemplateSelections(showStatus = true) {
+            const status = document.getElementById('bulkStatus');
+            const selectedChannels = getSelected('bulkChannelOptions');
+            for (const ch of selectedChannels) {
+                const input = document.getElementById(`bulk_tpl_${ch}`);
+                const templateId = input?.value.trim();
+                if (!templateId) continue;
+                try {
+                    const template = await fetchTemplateMeta(templateId);
+                    if (template.channel !== ch) {
+                        if (showStatus) {
+                            setInlineStatus(
+                                status,
+                                `Error: Template "${template.name || template.id}" is for channel "${template.channel}", but it is filled in the ${ch} template box.`,
+                                true
+                            );
+                        }
+                        return false;
+                    }
+                } catch (e) {
+                    if (showStatus) setInlineStatus(status, `Error in ${ch} template box: ` + e.message, true);
+                    return false;
+                }
+            }
+            return true;
+        }
+
         async function sendNotification() {
             const status = document.getElementById('sendStatus');
             status.style.display = 'block';
             status.textContent = 'Sending...';
             status.className = 'status';
+
+            if (!(await validateSingleTemplateSelection(true))) {
+                return;
+            }
 
             const payload = {
                 recipient: {
@@ -1203,6 +1278,10 @@
                 return;
             }
 
+            if (!(await validateBulkTemplateSelections(true))) {
+                return;
+            }
+
             const payload = {
                 subject: document.getElementById('bulkSubject').value || null,
                 body: document.getElementById('bulkBody').value || null,
@@ -1246,6 +1325,21 @@
                 document.getElementById('body').value = '';
             }
         }
+
+        document.addEventListener('change', (event) => {
+            if (event.target && event.target.id === 'templateId') {
+                validateSingleTemplateSelection(true);
+            }
+            if (event.target && event.target.closest && event.target.closest('#sendChannelOptions')) {
+                validateSingleTemplateSelection(true);
+            }
+            if (event.target && event.target.id && event.target.id.startsWith('bulk_tpl_')) {
+                validateBulkTemplateSelections(true);
+            }
+            if (event.target && event.target.closest && event.target.closest('#bulkChannelOptions')) {
+                validateBulkTemplateSelections(true);
+            }
+        });
 
         async function loadMarketingActivity() {
             const listEl = document.getElementById('marketingActivityList');

@@ -60,6 +60,13 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 docker compose up --build -d
 ```
 
+## Repo Layout
+
+- `src/`: application code, services, SDK, tasks, models, and templates
+- `tests/`: automated `pytest` coverage only
+- `scripts/manual/`: manual smoke tests, DB checks, and diagnostics
+- `tenant_demo_app/`: demo UI for tenant-side flows
+
 ## Tenant Onboarding Flow
 
 1. Go to `/portal/signup`.
@@ -79,6 +86,38 @@ docker compose up --build -d
 - `POST /api/v1/tenant/auth/signup`
 - `POST /api/v1/tenant/auth/login`
 - `POST /api/v1/tenant/templates/`
+
+## Direct Python Module Usage
+
+Teams that do not want to run the FastAPI server can import the pipeline directly and connect to the same Supabase-backed database using the configured `DATABASE_URL`.
+
+```python
+from src.sdk import send_notification_pipeline
+
+result = send_notification_pipeline(
+    tenant_id="tenant_acme",
+    recipient={
+        "user_id": "user_123",
+        "email": "user@example.com",
+    },
+    notification={
+        "type": "order_update",
+        "priority": "high",
+        "channels": ["email"],
+        "subject": "Order Update",
+        "body": "Your order has shipped",
+        "data": {"order_id": "ORD-1001"},
+    },
+)
+
+print(result.notification_id)
+```
+
+This direct-import path does not require `uvicorn` or the HTTP API layer, but it still expects the supporting runtime to exist:
+
+- Supabase Postgres reachable through `DATABASE_URL`
+- Redis for idempotency/rate-limit style features
+- Celery worker for queued delivery execution
 
 ## API Auth
 

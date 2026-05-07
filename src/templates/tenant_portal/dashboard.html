@@ -729,6 +729,9 @@
                 }
             } else {
                 replySection.style.display = 'block';
+                intentSection.style.display = 'none';
+                intentBadge.innerHTML = '';
+                intentRationale.textContent = '';
                 replyContent.innerHTML = `<div class="no-reply-text">Still awaiting customer reply...</div>`;
             }
 
@@ -781,5 +784,4 @@
     </script>
 </body>
 </html>
-
 

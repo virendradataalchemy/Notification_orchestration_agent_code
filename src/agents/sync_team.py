@@ -79,15 +79,16 @@ Analyze this notification request:
 
 **YOUR TASKS:**
 1. Use `check_for_duplicate` tool to check if this is a duplicate
-2. If duplicate is found, immediately return EXACTLY this JSON structure and nothing else:
-   {{"is_duplicate": true, "stop": true, "reason": "content_hash", "existing_id": null}}
+2. If duplicate is found, immediately return:
+   {{"is_duplicate": true, "stop": true, "reason": "...", "existing_id": "..."}}
 3. If NOT duplicate, gather context:
    - Use `get_user_engagement_history` tool
    - Use `get_user_preferences` tool
    - Use `query_similar_past_notifications` tool (this queries ChromaDB memory)
-4. Return analysis with user context in JSON format
+4. Return analysis with user context
 
-**IMPORTANT:** If duplicate found, you MUST return JSON with stop=true. This prevents wasting resources.
+**IMPORTANT:** If duplicate found, stop immediately with stop=true!
+This prevents wasting resources on Router agent.
 """
 
         try:
@@ -102,48 +103,23 @@ Analyze this notification request:
 
             # Try to parse as JSON
             try:
-                # If the string contains markdown JSON blocks, extract them
-                if isinstance(analysis_text, str) and "```json" in analysis_text:
-                    json_str = analysis_text.split("```json")[1].split("```")[0].strip()
-                    analysis_result = json.loads(json_str)
-                else:
-                    analysis_result = json.loads(analysis_text)
+                analysis_result = json.loads(analysis_text)
             except:
                 analysis_result = {"analysis": analysis_text}
 
-            # If duplicate is detected by LLM
+            # Check for early termination (duplicate detected)
             if isinstance(analysis_result, dict):
-                # Only check for "stop" and "is_duplicate" true
-                is_dup = analysis_result.get("is_duplicate", False)
-                if isinstance(is_dup, str):
-                    is_dup = is_dup.lower() == 'true'
-                    
-                stop = analysis_result.get("stop", False)
-                if isinstance(stop, str):
-                    stop = stop.lower() == 'true'
-                    
-                if is_dup or stop:
+                if analysis_result.get("is_duplicate") or analysis_result.get("stop"):
                     logger.info(
                         f"Duplicate detected: {analysis_result.get('reason')} - "
                         f"stopping processing"
                     )
                     return {
                         "status": "duplicate",
-                        "reason": analysis_result.get("reason", "duplicate_detected"),
+                        "reason": analysis_result.get("reason"),
                         "existing_id": analysis_result.get("existing_id"),
                         "processing_stopped": True
                     }
-            
-            # Text fallback if it wasn't valid JSON
-            if "is_duplicate" in analysis_text and "true" in analysis_text.lower() and "stop" in analysis_text.lower():
-                logger.info("Duplicate detected via text fallback - stopping processing")
-                return {
-                    "status": "duplicate",
-                    "reason": "text_fallback",
-                    "processing_stopped": True
-                }
-            
-            logger.info("Analysis text:" + str(analysis_text))
 
         except Exception as e:
             logger.error(f"Analyzer failed: {e}", exc_info=True)

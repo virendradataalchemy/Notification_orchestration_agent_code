@@ -110,8 +110,6 @@ class OrchestrationAgent:
             logger.error(f"Failed to store embedding: {e}")
 
         # Step 6: Mark as processed in Redis deduplication cache
-        # We MUST do this here as well to ensure the notification is marked as processed
-        # even if it wasn't caught in the analyzer
         await self._mark_as_processed(user_id, notification_type, content, metadata)
 
         return {

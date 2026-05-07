@@ -51,18 +51,13 @@ async def check_for_duplicate(
             }
 
     # Check 2: Content hash
-    logger.info(f"Checking for content hash duplicate: user={user_id}, type={notification_type}")
     is_content_dup = await dedup.is_duplicate(user_id, notification_type, content)
     if is_content_dup:
-        logger.info(f"Content hash duplicate detected for user={user_id}")
         return {
             "is_duplicate": True,
             "reason": "content_hash",
             "stop": True
         }
-
-    # If it's not a duplicate, mark it as sent in cache to prevent future duplicates
-    await dedup.mark_as_sent(user_id, notification_type, content)
 
     # Check 3: Semantic similarity using ChromaDB
     try:
@@ -97,8 +92,12 @@ async def check_for_duplicate(
 
     except Exception as e:
         logger.warning(f"ChromaDB semantic check failed: {e}")
-        # Note: We don't stop processing here to allow graceful degradation
-    
+        return {
+            "is_duplicate": False,
+            "reason": "check_failed",
+            "error": str(e)
+        }
+
     return {"is_duplicate": False}
 
 

@@ -346,7 +346,7 @@ async def tenant_detail_enhanced_page(
     _: bool = Depends(require_admin_access)
 ):
     """Legacy route redirected to unified tenant detail page."""
-    return RedirectResponse(url=f"/tenant-detail/{tenant_id}", status_code=303)
+    return RedirectResponse(url=f"/tenant-detail/{tenant_id}", status_code=307)
 
 
 @router.get("/api/tenant-dashboard/tenant/{tenant_id}/overview")
@@ -1059,7 +1059,14 @@ async def get_marketing_threaded_activity(
                     n.user_id as recipient_id,
                     n.data->>'email' as recipient_email,
                     n.data->>'phone' as recipient_phone,
-                    n.data->>'body' as content,
+                    COALESCE(
+                        NULLIF(n.data->>'body', ''),
+                        NULLIF(n.data->'channel_content_map'->CAST(nc.channel AS TEXT)->>'body', ''),
+                        NULLIF(n.data->'channel_content_map'->CAST(nc.channel AS TEXT)->>'subject', ''),
+                        NULLIF(n.data->>'subject', ''),
+                        NULLIF(n.template_id, ''),
+                        '(' || n.type || ')'
+                    ) as content,
                     nc.channel as channel,
                     nc.status as status,
                     nc.opened_at as opened_at,
