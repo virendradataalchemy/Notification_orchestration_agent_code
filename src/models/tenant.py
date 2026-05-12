@@ -51,6 +51,7 @@ class Tenant(Base, TimestampMixin):
         back_populates="tenant",
         cascade="all, delete-orphan"
     )
+    branding = relationship("TenantBranding", back_populates="tenant", uselist=False, cascade="all, delete-orphan")
     def __repr__(self):
         return f"<Tenant(id={self.id}, name={self.name}, status={self.status})>"
 

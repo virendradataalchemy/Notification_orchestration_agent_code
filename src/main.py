@@ -30,6 +30,7 @@ from src.api.routers import (
     tenant_team_router,
     websocket_router,
     compliance_router,
+    branding_router,
 )
 
 # Configure logging
@@ -150,6 +151,7 @@ app.include_router(tenant_auth_router, prefix=settings.api_prefix)  # Tenant por
 app.include_router(notifications_router, prefix=settings.api_prefix)
 app.include_router(templates_router, prefix=settings.api_prefix)
 app.include_router(tenant_templates_router, prefix=settings.api_prefix)  # Tenant self-service templates
+app.include_router(branding_router, prefix=settings.api_prefix)  # Tenant branding management
 app.include_router(preferences_router, prefix=settings.api_prefix)
 # Mount webhooks without api_prefix so external providers can hit them directly at /webhooks
 app.include_router(webhooks_router)

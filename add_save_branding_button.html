@@ -1,0 +1,104 @@
+<!-- 
+  ADD THIS TO template_create.html 
+  Place this button inside the branding section, after the footer_html textarea
+-->
+
+<div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+    <button type="button" class="btn btn-primary" id="saveBrandingGloballyBtn" onclick="saveBrandingGlobally()" style="width: 100%;">
+        💾 Save Branding Globally
+    </button>
+    <div class="form-help" style="margin-top: 8px; text-align: center;">
+        Save this branding configuration to apply automatically to <strong>all future emails</strong> (with or without templates)
+    </div>
+    <div id="brandingSaveStatus" style="margin-top: 10px; padding: 10px; border-radius: 6px; display: none;"></div>
+</div>
+
+<script>
+// Add this JavaScript function to the existing <script> section
+
+async function saveBrandingGlobally() {
+    const btn = document.getElementById('saveBrandingGloballyBtn');
+    const statusDiv = document.getElementById('brandingSaveStatus');
+    
+    // Gather branding data
+    const brandingData = {
+        logo_url: document.getElementById('brandingLogoUrl').value.trim() || null,
+        company_name: document.getElementById('brandingCompanyName').value.trim() || null,
+        theme_color: document.getElementById('brandingThemeColor').value || '#1d4ed8',
+        contact_phone: document.getElementById('brandingContactPhone').value.trim() || null,
+        contact_email: document.getElementById('brandingContactEmail').value.trim() || null,
+        website: document.getElementById('brandingWebsite').value.trim() || null,
+        footer_html: document.getElementById('brandingFooterHtml').value.trim() || null,
+        enabled: true,
+        apply_to_all_channels: false
+    };
+    
+    // Validate at least one field is filled
+    const hasData = brandingData.logo_url || brandingData.company_name || 
+                    brandingData.contact_phone || brandingData.contact_email || 
+                    brandingData.website || brandingData.footer_html;
+    
+    if (!hasData) {
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#fff3cd';
+        statusDiv.style.color = '#856404';
+        statusDiv.style.border = '1px solid #ffeaa7';
+        statusDiv.textContent = '⚠️ Please fill in at least one branding field before saving';
+        return;
+    }
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    btn.textContent = '💾 Saving...';
+    statusDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/v1/branding/from-template', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+                'X-Tenant-Id': tenantId
+            },
+            body: JSON.stringify(brandingData)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = '#d4edda';
+            statusDiv.style.color = '#155724';
+            statusDiv.style.border = '1px solid #c3e6cb';
+            statusDiv.innerHTML = `
+                ✅ <strong>Branding saved globally!</strong><br>
+                <small>This branding will now automatically apply to all emails you send.</small>
+            `;
+            
+            // Hide success message after 5 seconds
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        } else {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to save branding');
+        }
+    } catch (error) {
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.style.color = '#721c24';
+        statusDiv.style.border = '1px solid #f5c6cb';
+        statusDiv.textContent = `❌ Error: ${error.message}`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '💾 Save Branding Globally';
+    }
+}
+</script>
+
+<!-- 
+  INSTRUCTIONS:
+  1. Open src/templates/tenant_portal/template_create.html
+  2. Find the branding section (search for "brandingFooterHtml")
+  3. Add the button HTML after the footer_html textarea
+  4. Add the JavaScript function to the existing <script> section at the bottom
+-->

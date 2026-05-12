@@ -18,6 +18,7 @@ from .admin_auth import portal_router as admin_auth_portal_router
 from .tenant_team import router as tenant_team_router
 from .websocket import router as websocket_router
 from .compliance import router as compliance_router
+from .branding import router as branding_router
 
 __all__ = [
     "notifications_router",
@@ -40,4 +41,5 @@ __all__ = [
     "tenant_team_router",
     "websocket_router",
     "compliance_router",
+    "branding_router",
 ]

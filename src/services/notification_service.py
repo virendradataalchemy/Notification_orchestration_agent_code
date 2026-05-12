@@ -488,7 +488,7 @@ class NotificationService:
         notification_data = dict(request.notification.data or {})
         request_fingerprint = self._build_request_fingerprint(tenant_id, request)
 
-        # Render template if template_id is provided
+        # Render template if template_id is provided, otherwise render raw content with branding
         subject = request.notification.subject
         body = request.notification.body
 
@@ -502,7 +502,7 @@ class NotificationService:
                 else (selected_channels[0] if selected_channels else "email")
             )
 
-            # Render template with tenant-specific logic
+            # Render template with tenant-specific logic and automatic branding
             rendered = await self.tenant_template_engine.render_template(
                 db=self.db,
                 tenant_id=tenant_id,
@@ -535,6 +535,20 @@ class NotificationService:
                     f"Template {request.notification.template_id} not found for tenant {tenant_id}, "
                     "using provided subject/body"
                 )
+        else:
+            # No template_id provided - render raw content with automatic branding footer
+            primary_channel = selected_channels[0] if selected_channels else "email"
+            rendered_raw = await self.tenant_template_engine.render_raw_content(
+                db=self.db,
+                tenant_id=tenant_id,
+                subject=subject,
+                body=body or "",
+                channel=primary_channel,
+                data=notification_data
+            )
+            subject = rendered_raw.get('subject') or subject
+            body = rendered_raw.get('body') or body
+            logger.info(f"Rendered raw content with branding for tenant {tenant_id}")
 
         provider_template_refs = self._resolve_provider_template_refs(
             template_id=request.notification.template_id,
@@ -746,6 +760,19 @@ class NotificationService:
                 body = rendered.get("body") or body
                 if rendered.get("provider_template_ref"):
                     provider_template_refs[selected_channel] = str(rendered.get("provider_template_ref"))
+            else:
+                # No template_id - render raw content with automatic branding footer
+                rendered_raw = await self.tenant_template_engine.render_raw_content(
+                    db=self.db,
+                    tenant_id=tenant_id,
+                    subject=subject,
+                    body=body or "",
+                    channel=selected_channel,
+                    data=base_data
+                )
+                subject = rendered_raw.get('subject') or subject
+                body = rendered_raw.get('body') or body
+                logger.info(f"Rendered raw batch content with branding for tenant {tenant_id}")
 
             notification_data = self._build_batch_recipient_data(recipient)
             notification_data.update({
@@ -956,6 +983,18 @@ class NotificationService:
                     ch_body = rendered.get("body") or ch_body
                     if rendered.get("provider_template_ref"):
                         rendered_provider_template_refs[ch] = str(rendered.get("provider_template_ref"))
+                else:
+                    # No template_id - render raw content with automatic branding footer
+                    rendered_raw = await self.tenant_template_engine.render_raw_content(
+                        db=self.db,
+                        tenant_id=tenant_id,
+                        subject=ch_subject,
+                        body=ch_body or "",
+                        channel=ch,
+                        data=per_recipient_template_vars
+                    )
+                    ch_subject = rendered_raw.get('subject') or ch_subject
+                    ch_body = rendered_raw.get('body') or ch_body
                 
                 channel_content_map[ch] = {
                     "subject": ch_subject,

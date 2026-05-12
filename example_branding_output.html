@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Branding Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .email-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #1d4ed8;
+            margin-top: 0;
+        }
+        .label {
+            background-color: #1d4ed8;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 40px;
+        }
+        .before, .after {
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .before {
+            background-color: #fee;
+            border: 2px solid #fcc;
+        }
+        .after {
+            background-color: #efe;
+            border: 2px solid #cfc;
+        }
+        .before h3 {
+            color: #c00;
+        }
+        .after h3 {
+            color: #0a0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 Tenant Branding System - Example Output</h1>
+    
+    <div class="email-container">
+        <div class="label">EXAMPLE EMAIL WITH BRANDING</div>
+        
+        <!-- Email Content -->
+        <h2 style="color: #1d4ed8;">Thank you for your order!</h2>
+        <p>Hi Alice Johnson,</p>
+        <p>Your order <strong>ORD-12345</strong> has been confirmed.</p>
+        <p>Total: <strong>$129.99</strong></p>
+        <p>We'll send you a shipping notification once your order is on its way.</p>
+        
+        <!-- Branding Footer (Automatically Added) -->
+        <div class="notification-branding-footer" style="margin-top:28px;">
+            <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px 0;" />
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;border-collapse:collapse;">
+                <tr>
+                    <td style="vertical-align:top;padding-right:20px;width:1%;">
+                        <img src="https://via.placeholder.com/120x40/1d4ed8/ffffff?text=YourLogo" alt="" width="120" style="display:block;max-width:120px;height:auto;border:0;outline:none;" />
+                    </td>
+                    <td style="vertical-align:top;">
+                        <p style="margin:0 0 10px 0;font-size:16px;font-weight:700;color:#0f172a;">Demo Corporation</p>
+                        <p style="margin:6px 0;font-size:14px;line-height:1.4;">
+                            <strong style="color:#1d4ed8;">M:</strong> 
+                            <span style="color:#0f172a;">+1-555-0123</span>
+                        </p>
+                        <p style="margin:6px 0;font-size:14px;line-height:1.4;">
+                            <strong style="color:#1d4ed8;">E:</strong> 
+                            <span style="color:#0f172a;">support@democorp.com</span>
+                        </p>
+                        <p style="margin:6px 0;font-size:14px;line-height:1.4;">
+                            <strong style="color:#1d4ed8;">W:</strong> 
+                            <span style="color:#0f172a;">https://democorp.com</span>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+            <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0 0 0;" />
+        </div>
+    </div>
+    
+    <div class="comparison">
+        <div class="before">
+            <h3>❌ Before (Old System)</h3>
+            <ul>
+                <li>Branding in each template</li>
+                <li>Manual configuration</li>
+                <li>No branding for raw emails</li>
+                <li>Hard to update</li>
+                <li>Inconsistent across templates</li>
+            </ul>
+        </div>
+        
+        <div class="after">
+            <h3>✅ After (New System)</h3>
+            <ul>
+                <li>One branding per tenant</li>
+                <li>Automatic application</li>
+                <li>Works with ALL emails</li>
+                <li>Update once, applies everywhere</li>
+                <li>Always consistent</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div style="margin-top: 40px; padding: 20px; background-color: #e0f2fe; border-radius: 8px; border-left: 4px solid #1d4ed8;">
+        <h3 style="margin-top: 0; color: #1d4ed8;">🚀 Quick Start</h3>
+        <ol>
+            <li><strong>Setup:</strong> <code>python setup_branding.py</code></li>
+            <li><strong>Test:</strong> <code>python test_branding.py</code></li>
+            <li><strong>Send:</strong> Branding applies automatically!</li>
+        </ol>
+    </div>
+    
+    <div style="margin-top: 20px; text-align: center; color: #666; font-size: 14px;">
+        <p>See <strong>BRANDING_README.md</strong> for complete documentation</p>
+    </div>
+</body>
+</html>

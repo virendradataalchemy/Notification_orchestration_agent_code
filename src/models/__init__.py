@@ -5,6 +5,7 @@ from .template import Template
 from .user_preference import UserPreference
 from .audit_log import AuditLog
 from .tenant_channel_preference import TenantChannelPreference
+from .tenant_branding import TenantBranding
 from .inbound import InboundMessageRaw, InboundMessageParsed, InboundIntent, InboundWorkflowEvent, InboundChannel, InboundStatus, IntentCategory, DetectionMethod
 from .engagement import UserEngagement
 from .provider import ProviderHealth
@@ -25,6 +26,7 @@ __all__ = [
     "UserPreference",
     "AuditLog",
     "TenantChannelPreference",
+    "TenantBranding",
     "InboundMessageRaw",
     "InboundMessageParsed",
     "InboundWorkflowEvent",

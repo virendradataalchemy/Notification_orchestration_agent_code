@@ -6,7 +6,7 @@ Supports:
 - Tenant-specific templates
 - Template inheritance (tenant templates can override global templates)
 - Variable substitution with Jinja2
-- Email branding footer (default or custom Jinja2 HTML) appended after body
+- Tenant-level branding footer (automatically applied to all emails)
 """
 
 import html as html_module
@@ -16,32 +16,74 @@ from typing import Dict, Any, Optional
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models import Template
+from src.models import Template, TenantBranding
 
 
 class TenantTemplateEngine:
-    """Template engine with tenant-aware template resolution and inheritance."""
+    """Template engine with tenant-aware template resolution and automatic branding."""
 
     def __init__(self):
         self.env = Environment(loader=BaseLoader(), autoescape=True)
 
-    def render_branding_footer_html(self, branding: Dict[str, Any], data: Dict[str, Any]) -> str:
+    async def get_tenant_branding(self, db: AsyncSession, tenant_id: str) -> Optional[TenantBranding]:
+        """
+        Get tenant branding configuration.
+        
+        Args:
+            db: Database session
+            tenant_id: Tenant identifier
+            
+        Returns:
+            TenantBranding object or None
+        """
+        query = select(TenantBranding).where(
+            TenantBranding.tenant_id == tenant_id,
+            TenantBranding.enabled == True
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
+    def render_branding_footer_html(self, branding, data: Dict[str, Any]) -> str:
         """
         Build the email branding block that is appended after the main template body.
 
-        If ``footer_html`` is set, render it as Jinja2 with ``data`` (including ``branding``).
+        If branding.footer_html is set, render it as Jinja2 with data (including branding dict).
         Otherwise render a default signature-style footer (logo + contact lines).
+        
+        Args:
+            branding: TenantBranding object or dict (for backward compatibility)
+            data: Template variables for Jinja2 rendering
+            
+        Returns:
+            HTML string for the footer
         """
-        if not branding or not isinstance(branding, dict):
+        if not branding:
             return ""
-        b = dict(branding)
-        custom = (b.get("footer_html") or "").strip()
-        ctx = {**data, "branding": b}
+        
+        # Handle both TenantBranding object and dict for backward compatibility
+        if isinstance(branding, dict):
+            branding_dict = branding
+            footer_html = branding_dict.get("footer_html") if branding_dict else None
+            custom = footer_html.strip() if footer_html else ""
+        else:
+            # Convert branding object to dict for template context
+            branding_dict = {
+                "logo_url": branding.logo_url,
+                "company_name": branding.company_name,
+                "theme_color": branding.theme_color or "#1d4ed8",
+                "contact_email": branding.contact_email,
+                "contact_phone": branding.contact_phone,
+                "website": branding.website,
+            }
+            custom = (branding.footer_html or "").strip()
+        
+        ctx = {**data, "branding": branding_dict}
+        
         try:
             if custom:
                 tpl = self.env.from_string(custom)
                 return tpl.render(**ctx)
-            return self._default_email_branding_footer(b)
+            return self._default_email_branding_footer(branding_dict)
         except Exception as e:
             return (
                 '<div style="padding:12px;color:#b91c1c;font-size:13px;border:1px solid #fecaca;'
@@ -190,7 +232,7 @@ class TenantTemplateEngine:
         language: str = "en"
     ) -> Optional[Dict[str, str]]:
         """
-        Render template with tenant-specific overrides.
+        Render template with tenant-specific overrides and automatic branding.
 
         Args:
             db: Database session
@@ -211,10 +253,8 @@ class TenantTemplateEngine:
         if not template:
             return None
 
-        # Extract branding into data context if available and not already provided
-        meta = template.provider_template_meta or {}
-        if "branding" in meta and "branding" not in data:
-            data = {**data, "branding": meta["branding"]}
+        # Get tenant branding (separate from template)
+        branding = await self.get_tenant_branding(db, tenant_id) if channel == "email" else None
 
         # Render subject and body
         try:
@@ -226,12 +266,11 @@ class TenantTemplateEngine:
             body_template = self.env.from_string(template.body)
             rendered_body = body_template.render(**data)
 
-            if channel == "email":
-                branding_block = meta.get("branding")
-                if branding_block and isinstance(branding_block, dict):
-                    footer = self.render_branding_footer_html(branding_block, data)
-                    if footer:
-                        rendered_body = rendered_body + footer
+            # Apply branding footer for email channel
+            if channel == "email" and branding:
+                footer = self.render_branding_footer_html(branding, data)
+                if footer:
+                    rendered_body = rendered_body + footer
 
             return {
                 'subject': rendered_subject,
@@ -249,6 +288,60 @@ class TenantTemplateEngine:
                 'template_id': template.id,
                 'provider_template_ref': template.provider_template_ref,
                 'provider_template_meta': template.provider_template_meta or {},
+            }
+    
+    async def render_raw_content(
+        self,
+        db: AsyncSession,
+        tenant_id: str,
+        subject: Optional[str],
+        body: str,
+        channel: str,
+        data: Dict[str, Any]
+    ) -> Dict[str, str]:
+        """
+        Render raw content (no template) with automatic branding footer.
+        
+        This is used when sending emails without a template_id.
+        
+        Args:
+            db: Database session
+            tenant_id: Tenant identifier
+            subject: Email subject (optional)
+            body: Email body content
+            channel: Channel type
+            data: Variables for Jinja2 rendering
+            
+        Returns:
+            Dict with 'subject' and 'body'
+        """
+        try:
+            # Render subject if it contains Jinja2 variables
+            rendered_subject = subject
+            if subject:
+                subject_template = self.env.from_string(subject)
+                rendered_subject = subject_template.render(**data)
+            
+            # Render body if it contains Jinja2 variables
+            body_template = self.env.from_string(body)
+            rendered_body = body_template.render(**data)
+            
+            # Apply branding footer for email channel
+            if channel == "email":
+                branding = await self.get_tenant_branding(db, tenant_id)
+                if branding:
+                    footer = self.render_branding_footer_html(branding, data)
+                    if footer:
+                        rendered_body = rendered_body + footer
+            
+            return {
+                'subject': rendered_subject,
+                'body': rendered_body
+            }
+        except Exception as e:
+            return {
+                'subject': subject or f"[Render Error: {str(e)}]",
+                'body': f"[Render Error: {str(e)}]"
             }
 
     async def render_with_inheritance(
