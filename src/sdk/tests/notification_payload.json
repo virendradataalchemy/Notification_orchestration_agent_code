@@ -1,0 +1,24 @@
+{
+    "tenant_id": "demo_corp",
+    "recipient": {
+        "user_id": "user_123",
+        "email": "gaur.prateek.1609@gmail.com",
+        "phone": "+918290942415",
+        "device_tokens": [
+            "token_1"
+        ]
+    },
+    "notification": {
+        "type": "alert",
+        "priority": "high",
+        "channels": [
+            "email"
+        ],
+        "subject": "Test Alert",
+        "body": "This is a test notification from the file payload."
+    },
+    "options": {
+        "track_opens": true,
+        "track_clicks": true
+    }
+}

@@ -195,12 +195,6 @@
             margin-bottom: 10px;
         }
 
-        .sample-data-input {
-            font-family: 'Courier New', monospace;
-            min-height: 150px;
-            font-size: 12px;
-        }
-
         .alert {
             padding: 12px 16px;
             border-radius: 8px;
@@ -538,22 +532,23 @@
                         <div class="form-help">Use lowercase with underscores (e.g., welcome_email, promo_sms)</div>
                     </div>
 
-                    <!-- Single Channel Selection -->
-                    <div id="singleChannelGroup" class="form-group">
-                        <label for="channel">Channel <span class="required">*</span></label>
+                    <!-- Channel (edit / view existing template only — create uses multi checkboxes below) -->
+                    <div id="editChannelGroup" class="form-group" style="display: none;">
+                        <label for="channel">Channel</label>
                         <select id="channel" onchange="handleChannelChange()">
                             <option value="">Select a channel...</option>
-                            <option value="email">     Email</option>
-                            <option value="sms">     SMS</option>
-                            <option value="slack">     Slack</option>
-                            <option value="whatsapp">     WhatsApp</option>
-                            <option value="voice">     Voice</option>
+                            <option value="email">Email</option>
+                            <option value="sms">SMS</option>
+                            <option value="slack">Slack</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="voice">Voice</option>
                         </select>
                     </div>
 
-                    <!-- Multi Channel Selection -->
+                    <!-- Multi Channel Selection (create only) -->
                     <div id="multiChannelGroup" class="form-group" style="display: none;">
-                        <label>Target Channels <span class="required">*</span></label>
+                        <label>Target channels <span class="required">*</span></label>
+                        <div class="form-help" style="margin-bottom: 10px;">Check one or more channels. Use <strong>AI Generate</strong> to fill all at once, or type <strong>subject</strong> / <strong>body</strong> manually in each block below.</div>
                         <div class="multi-channel-grid">
                             <label class="channel-checkbox"><input type="checkbox" name="multi_channels" value="email"> Email</label>
                             <label class="channel-checkbox"><input type="checkbox" name="multi_channels" value="sms"> SMS</label>
@@ -563,15 +558,22 @@
                         </div>
                     </div>
 
-                    <!-- Generated Multi-channel Content -->
+                    <!-- Generated Multi-channel Content (AI) -->
                     <div id="multiChannelResults" class="multi-channel-bodies" style="display: none;">
                         <div id="generatedBodiesList">
                             <!-- Populated via JS -->
                         </div>
                     </div>
 
-                    <!-- Legacy Body/Subject (Used for single channel or manual edits) -->
-                    <div id="singleChannelEditors">
+                    <!-- Manual per-channel subject/body (create only, when not using AI output) -->
+                    <div id="manualMultiEditors" class="multi-channel-bodies" style="display: none;">
+                        <div class="panel-header" style="font-size: 15px; margin-bottom: 12px; padding-bottom: 10px;">Template content per channel</div>
+                        <div class="form-help" style="margin-bottom: 12px;">Click a channel card to choose which one the <strong>Live Preview</strong> (right) uses. Email includes a subject line.</div>
+                        <div id="manualBodiesList"></div>
+                    </div>
+
+                    <!-- Edit mode: single subject + body -->
+                    <div id="editTemplateEditors" style="display: none;">
                         <div class="form-group" id="subjectGroup" style="display: none;">
                             <label for="subject">Subject <span class="required">*</span></label>
                             {% raw %}<input type="text" id="subject" placeholder="e.g., Order #{{order.id}} Confirmed" oninput="updatePreview()">{% endraw %}
@@ -590,6 +592,44 @@
                         <input type="text" id="description" placeholder="Brief description of this template">
                     </div>
 
+                    <!-- Company Branding Section (email templates only) -->
+                    <div class="form-group">
+                        <div class="label-with-action" style="cursor: pointer;" onclick="toggleBrandingSection()">
+                            <label style="margin-bottom: 0;">Company Branding (Optional) <span style="font-size: 12px; color: #64748b; font-weight: 600;">(EMAIL ONLY)</span> <span id="brandingToggleIcon">▼</span></label>
+                        </div>
+                        <div class="form-help" style="margin-top: 4px;">Stored only on <strong>email</strong> templates. Shown in <strong>Live Preview</strong> together with the body. Ignored for SMS, WhatsApp, Slack, and voice.</div>
+                        <div id="brandingGroup" style="display: none; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 10px;">
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label for="brandingLogoUrl">Company logo</label>
+                                <div class="form-help" style="margin-bottom: 8px;">Paste a URL or upload an image (stored as a data URL in the template).</div>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                    <input type="text" id="brandingLogoUrl" placeholder="https://example.com/logo.png" style="flex: 1; min-width: 200px;">
+                                    <input type="file" id="brandingLogoFile" accept="image/*" style="display: none;">
+                                    <button type="button" class="btn btn-secondary" id="brandingLogoUploadBtn" style="padding: 10px 16px;">Upload image</button>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label for="brandingCompanyName">Company name</label>
+                                <input type="text" id="brandingCompanyName" placeholder="e.g., DataAlchemy">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label for="brandingThemeColor">Accent color (M / E / W labels)</label>
+                                <input type="color" id="brandingThemeColor" value="#1d4ed8" style="height: 40px; padding: 4px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label>Contact lines (signature)</label>
+                                <input type="text" id="brandingContactPhone" placeholder="M: +91 9968549637" style="margin-bottom: 8px;">
+                                <input type="text" id="brandingContactEmail" placeholder="E: name@company.com" style="margin-bottom: 8px;">
+                                <input type="text" id="brandingWebsite" placeholder="W: www.company.com">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label for="brandingFooterHtml">Custom footer HTML (optional)</label>
+                                <div class="form-help" style="margin-bottom: 8px;">Jinja2, same variables as your template. Use <code>{% raw %}{{ branding.logo_url }}{% endraw %}</code>, <code>{% raw %}{{ user.name }}{% endraw %}</code>, etc. When non-empty, this <strong>replaces</strong> the default signature layout. The footer is always appended <strong>after</strong> the main email body on send.</div>
+                                {% raw %}<textarea id="brandingFooterHtml" style="width:100%; min-height:120px; font-family:monospace; font-size:12px;" placeholder='<table>...</table> or simple HTML with {{ branding.company_name }}'></textarea>{% endraw %}
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary" id="submitBtn">Create Template</button>
                         <button type="button" class="btn btn-secondary" onclick="goToTemplates()">Cancel</button>
@@ -601,25 +641,7 @@
             <div class="preview-panel">
                 <div class="panel-header">Live Preview</div>
 
-                <div class="sample-data-section">
-                    <div class="sample-data-title">Sample Data (JSON)</div>
-                    <textarea class="sample-data-input" id="sampleData" oninput="updatePreview()">{
-  "user": {
-    "name": "John Doe",
-    "email": "john@example.com"
-  },
-  "order": {
-    "id": "12345",
-    "total": "299.99"
-  },
-  "company": {
-    "name": "Your Company"
-  }
-}</textarea>
-                    <div class="form-help">Edit this JSON to test your template with different data</div>
-                </div>
-
-                <div style="margin-top: 20px;">
+                <div style="margin-top: 8px;">
                     <div class="label-with-action">
                         <div class="sample-data-title" style="margin-bottom: 0;">Rendered Output</div>
                         <div id="htmlToggleGroup" class="toggle-group" style="display: none;">
@@ -672,23 +694,270 @@
     const tenantId = pathParts[2];
     const accessToken = localStorage.getItem('tenant_access_token');
 
+    /** Fixed demo context for live preview only (sent sends use real payload data). */
+    function getPreviewSampleData() {
+        return {
+            user: { name: 'John Doe', email: 'john@example.com' },
+            order: { id: '12345', total: '299.99' },
+            company: { name: 'Your Company' }
+        };
+    }
+
+    function brandingStorageKey() {
+        return 'portal_template_branding_' + tenantId;
+    }
+
+    let manualDraftByChannel = {};
+
+    function gatherBrandingObjectForApi() {
+        const theme = document.getElementById('brandingThemeColor') ? document.getElementById('brandingThemeColor').value : '#1d4ed8';
+        const footerHtmlEl = document.getElementById('brandingFooterHtml');
+        const o = {
+            logo_url: document.getElementById('brandingLogoUrl').value.trim(),
+            company_name: document.getElementById('brandingCompanyName').value.trim(),
+            theme_color: theme,
+            contact_phone: document.getElementById('brandingContactPhone').value.trim(),
+            contact_email: document.getElementById('brandingContactEmail').value.trim(),
+            website: document.getElementById('brandingWebsite').value.trim(),
+            footer_html: footerHtmlEl ? footerHtmlEl.value.trim() : ''
+        };
+        Object.keys(o).forEach(function (k) {
+            if (o[k] === '' || o[k] == null) delete o[k];
+        });
+        return Object.keys(o).length ? o : null;
+    }
+
+    function shouldAttachBrandingPayload() {
+        const b = gatherBrandingObjectForApi();
+        if (!b) return false;
+        if (b.footer_html) return true;
+        if (b.logo_url || b.company_name || b.contact_phone || b.contact_email || b.website) return true;
+        const t = b.theme_color || '';
+        return !!(t && t !== '#667eea' && t !== '#1d4ed8');
+    }
+
+    function persistBrandingDraft() {
+        const logo = document.getElementById('brandingLogoUrl').value.trim();
+        const company = document.getElementById('brandingCompanyName').value.trim();
+        const theme = document.getElementById('brandingThemeColor').value;
+        const phone = document.getElementById('brandingContactPhone').value.trim();
+        const emailC = document.getElementById('brandingContactEmail').value.trim();
+        const web = document.getElementById('brandingWebsite').value.trim();
+        const footerHtml = document.getElementById('brandingFooterHtml').value.trim();
+        try {
+            const payload = {
+                logo_url: logo,
+                company_name: company,
+                theme_color: theme,
+                contact_phone: phone,
+                contact_email: emailC,
+                website: web,
+                footer_html: footerHtml.length > 8000 ? '' : footerHtml
+            };
+            if (!logo.startsWith('data:')) {
+                localStorage.setItem(brandingStorageKey(), JSON.stringify(payload));
+            } else {
+                payload.logo_url = '';
+                localStorage.setItem(brandingStorageKey(), JSON.stringify(payload));
+            }
+        } catch (err) { /* ignore quota */ }
+        updatePreview();
+    }
+
+    function loadBrandingDraft() {
+        if (targetTemplateId || pageMode !== 'create') return;
+        try {
+            const raw = localStorage.getItem(brandingStorageKey());
+            if (!raw) return;
+            const d = JSON.parse(raw);
+            if (d.logo_url) document.getElementById('brandingLogoUrl').value = d.logo_url;
+            if (d.company_name) document.getElementById('brandingCompanyName').value = d.company_name;
+            if (d.theme_color) document.getElementById('brandingThemeColor').value = d.theme_color;
+            if (d.contact_phone) document.getElementById('brandingContactPhone').value = d.contact_phone;
+            if (d.contact_email) document.getElementById('brandingContactEmail').value = d.contact_email;
+            if (d.website) document.getElementById('brandingWebsite').value = d.website;
+            if (d.footer_html) document.getElementById('brandingFooterHtml').value = d.footer_html;
+            document.getElementById('brandingGroup').style.display = 'block';
+            document.getElementById('brandingToggleIcon').textContent = '▲';
+        } catch (err) { /* ignore */ }
+        updatePreview();
+    }
+
+    function wireBrandingPersistence() {
+        ['brandingLogoUrl', 'brandingCompanyName', 'brandingThemeColor', 'brandingContactPhone', 'brandingContactEmail', 'brandingWebsite', 'brandingFooterHtml'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', function () { persistBrandingDraft(); });
+            el.addEventListener('change', function () { persistBrandingDraft(); });
+        });
+        const uploadBtn = document.getElementById('brandingLogoUploadBtn');
+        const fileInput = document.getElementById('brandingLogoFile');
+        if (uploadBtn && fileInput) {
+            uploadBtn.addEventListener('click', function () { fileInput.click(); });
+            fileInput.addEventListener('change', function () {
+                const f = fileInput.files && fileInput.files[0];
+                if (!f) return;
+                if (f.size > 2 * 1024 * 1024) {
+                    showAlert('Image is too large. Please use a file under 2MB.', 'error');
+                    fileInput.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function () {
+                    document.getElementById('brandingLogoUrl').value = reader.result;
+                    persistBrandingDraft();
+                    fileInput.value = '';
+                };
+                reader.readAsDataURL(f);
+            });
+        }
+    }
+
+    function wireMultiChannelCheckboxes() {
+        document.querySelectorAll('input[name="multi_channels"]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                snapshotManualDraftFromDom();
+                renderManualChannelEditors();
+            });
+        });
+    }
+
+    function snapshotManualDraftFromDom() {
+        document.querySelectorAll('.manual-subject-input').forEach(function (el) {
+            const ch = el.getAttribute('data-channel');
+            if (!ch) return;
+            manualDraftByChannel[ch] = manualDraftByChannel[ch] || {};
+            manualDraftByChannel[ch].subject = el.value;
+        });
+        document.querySelectorAll('.manual-body-input').forEach(function (el) {
+            const ch = el.getAttribute('data-channel');
+            if (!ch) return;
+            manualDraftByChannel[ch] = manualDraftByChannel[ch] || {};
+            manualDraftByChannel[ch].body = el.value;
+        });
+    }
+
+    function renderManualChannelEditors() {
+        if (pageMode !== 'create') return;
+        const wrap = document.getElementById('manualMultiEditors');
+        const list = document.getElementById('manualBodiesList');
+        if (!wrap || !list) return;
+
+        if (multiChannelData && Object.keys(multiChannelData).length > 0) {
+            wrap.style.display = 'none';
+            list.innerHTML = '';
+            return;
+        }
+
+        const checked = Array.from(document.querySelectorAll('input[name="multi_channels"]:checked')).map(function (cb) { return cb.value; });
+        const order = ['email', 'sms', 'whatsapp', 'slack', 'voice'];
+        checked.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+
+        if (checked.length === 0) {
+            wrap.style.display = 'none';
+            list.innerHTML = '';
+            selectedChannelForPreview = null;
+            updatePreview();
+            return;
+        }
+
+        snapshotManualDraftFromDom();
+
+        list.innerHTML = '';
+        wrap.style.display = 'block';
+
+        checked.forEach(function (channel) {
+            const draft = manualDraftByChannel[channel] || {};
+            const item = document.createElement('div');
+            item.className = 'channel-body-item' + (selectedChannelForPreview === channel ? ' selected' : '');
+            item.onclick = function (e) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                selectChannelForPreview(channel);
+            };
+
+            let html = '<div class="channel-body-header"><span class="channel-badge">' + escapeHtml(channel) + '</span>';
+            html += '<span style="font-size: 12px; color: #64748b;">' + (selectedChannelForPreview === channel ? '<b>Currently Previewing</b>' : 'Click to preview') + '</span></div>';
+
+            if (channel === 'email') {
+                const subj = draft.subject != null ? draft.subject : '';
+                html += '<div style="margin-bottom: 10px;"><strong>Subject:</strong> <input type="text" class="manual-subject-input" data-channel="' + channel + '" value="' + escapeHtml(subj) + '" style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; margin-top: 5px;"></div>';
+            }
+            const bodyVal = draft.body != null ? draft.body : '';
+            html += '<div><strong>Body:</strong><textarea class="manual-body-input" data-channel="' + channel + '" style="width: 100%; min-height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; margin-top: 5px; font-family: monospace; font-size: 13px;">' + escapeHtml(bodyVal) + '</textarea></div>';
+
+            item.innerHTML = html;
+            list.appendChild(item);
+
+            const subIn = item.querySelector('.manual-subject-input');
+            const bodyIn = item.querySelector('.manual-body-input');
+            if (subIn) {
+                subIn.addEventListener('input', function () {
+                    manualDraftByChannel[channel] = manualDraftByChannel[channel] || {};
+                    manualDraftByChannel[channel].subject = subIn.value;
+                    if (selectedChannelForPreview === channel) updatePreview();
+                });
+            }
+            if (bodyIn) {
+                bodyIn.addEventListener('input', function () {
+                    manualDraftByChannel[channel] = manualDraftByChannel[channel] || {};
+                    manualDraftByChannel[channel].body = bodyIn.value;
+                    if (selectedChannelForPreview === channel) updatePreview();
+                });
+            }
+        });
+
+        if (!selectedChannelForPreview || checked.indexOf(selectedChannelForPreview) < 0) {
+            selectedChannelForPreview = checked[0];
+        }
+        selectChannelForPreview(selectedChannelForPreview);
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         if (pageMode === 'create') {
             document.getElementById('multiChannelGroup').style.display = 'block';
-            document.getElementById('singleChannelEditors').style.display = 'none';
-            const singleChannelGroup = document.getElementById('singleChannelGroup');
-            if (singleChannelGroup) singleChannelGroup.style.display = 'none';
+            document.getElementById('manualMultiEditors').style.display = 'none';
+            const editCh = document.getElementById('editChannelGroup');
+            const editEd = document.getElementById('editTemplateEditors');
+            if (editCh) editCh.style.display = 'none';
+            if (editEd) editEd.style.display = 'none';
+            loadBrandingDraft();
+            wireBrandingPersistence();
+            wireMultiChannelCheckboxes();
+            renderManualChannelEditors();
+            updatePreview();
+        } else {
+            document.getElementById('multiChannelGroup').style.display = 'none';
+            document.getElementById('manualMultiEditors').style.display = 'none';
+            const editCh = document.getElementById('editChannelGroup');
+            const editEd = document.getElementById('editTemplateEditors');
+            if (editCh) editCh.style.display = 'block';
+            if (editEd) editEd.style.display = 'block';
+            wireBrandingPersistence();
+            updatePreview();
+            handleChannelChange();
         }
     });
     
-    // Also run immediately since we're at the end of the body
+    function toggleBrandingSection() {
+        const group = document.getElementById('brandingGroup');
+        const icon = document.getElementById('brandingToggleIcon');
+        if (group.style.display === 'none') {
+            group.style.display = 'block';
+            icon.textContent = '▲';
+        } else {
+            group.style.display = 'none';
+            icon.textContent = '▼';
+        }
+        updatePreview();
+    }
+
     if (pageMode === 'create') {
         const mcGroup = document.getElementById('multiChannelGroup');
         if (mcGroup) mcGroup.style.display = 'block';
-        const scEditors = document.getElementById('singleChannelEditors');
-        if (scEditors) scEditors.style.display = 'none';
-        const scGroup = document.getElementById('singleChannelGroup');
-        if (scGroup) scGroup.style.display = 'none';
+        const editCh = document.getElementById('editChannelGroup');
+        const editEd = document.getElementById('editTemplateEditors');
+        if (editCh) editCh.style.display = 'none';
+        if (editEd) editEd.style.display = 'none';
     }
 
     function goToDashboard() {
@@ -767,6 +1036,7 @@
                     multiChannelData = result.templates;
                     renderMultiChannelResults();
                     document.getElementById('multiChannelResults').style.display = 'block';
+                    renderManualChannelEditors();
                     showAlert('AI generated templates for ' + Object.keys(multiChannelData).length + ' channels!', 'success');
                     
                     // Auto-fill template name if empty
@@ -892,16 +1162,15 @@
 
     function selectChannelForPreview(channel) {
         selectedChannelForPreview = channel;
-        // Update UI classes
         const items = document.querySelectorAll('.channel-body-item');
         items.forEach(item => {
             const badge = item.querySelector('.channel-badge');
-            if (badge && badge.textContent === channel) {
+            const headerSpan = item.querySelector('.channel-body-header span:last-child');
+            if (badge && badge.textContent.trim() === channel) {
                 item.classList.add('selected');
-                item.querySelector('.channel-body-header span:last-child').innerHTML = '<b>Currently Previewing</b>';
+                if (headerSpan) headerSpan.innerHTML = '<b>Currently Previewing</b>';
             } else {
                 item.classList.remove('selected');
-                const headerSpan = item.querySelector('.channel-body-header span:last-child');
                 if (headerSpan) headerSpan.textContent = 'Click to preview';
             }
         });
@@ -932,14 +1201,28 @@
                 const htmlToggleGroup = document.getElementById('htmlToggleGroup');
 
                 if (pageMode === 'create') {
-                    if (!selectedChannelForPreview || !multiChannelData || !multiChannelData[selectedChannelForPreview]) {
-                        document.getElementById('previewContent').innerHTML =
-                            '<div class="preview-placeholder">Select a channel block to see preview...</div>';
-                        return;
+                    const useMultiPreview = multiChannelData && Object.keys(multiChannelData).length > 0
+                        && selectedChannelForPreview && multiChannelData[selectedChannelForPreview];
+                    if (useMultiPreview) {
+                        channel = selectedChannelForPreview;
+                        subject = multiChannelData[channel].subject || '';
+                        body = multiChannelData[channel].body || '';
+                    } else {
+                        const checkedCh = Array.from(document.querySelectorAll('input[name="multi_channels"]:checked')).map(function (cb) { return cb.value; });
+                        if (!selectedChannelForPreview || checkedCh.indexOf(selectedChannelForPreview) < 0) {
+                            if (checkedCh.length) selectedChannelForPreview = checkedCh[0];
+                        }
+                        channel = selectedChannelForPreview;
+                        if (!channel) {
+                            document.getElementById('previewContent').innerHTML =
+                                '<div class="preview-placeholder">Select at least one channel, then add template content — or use AI Generate and pick a channel card.</div>';
+                            return;
+                        }
+                        const subEl = document.querySelector('.manual-subject-input[data-channel="' + channel + '"]');
+                        const bodyEl = document.querySelector('.manual-body-input[data-channel="' + channel + '"]');
+                        subject = subEl ? subEl.value : '';
+                        body = bodyEl ? bodyEl.value : '';
                     }
-                    channel = selectedChannelForPreview;
-                    subject = multiChannelData[channel].subject || '';
-                    body = multiChannelData[channel].body || '';
                 } else {
                     channel = document.getElementById('channel').value;
                     subject = document.getElementById('subject').value;
@@ -954,25 +1237,19 @@
                     document.getElementById('showHtmlSource').checked = false;
                 }
 
-                const sampleDataText = document.getElementById('sampleData').value;
                 const showHtmlSource = document.getElementById('showHtmlSource').checked;
 
-                if (!body) {
+                const brandingForEmail = (channel === 'email' && shouldAttachBrandingPayload())
+                    ? gatherBrandingObjectForApi()
+                    : null;
+                const rawBody = body == null ? '' : String(body);
+                if (!rawBody.trim() && !(channel === 'email' && brandingForEmail)) {
                     document.getElementById('previewContent').innerHTML =
-                        '<div class="preview-placeholder">Enter template content to see preview...</div>';
+                        '<div class="preview-placeholder">Enter template content to see preview…</div>';
                     return;
                 }
 
-                let sampleData;
-                try {
-                    sampleData = JSON.parse(sampleDataText);
-                } catch (e) {
-                    document.getElementById('previewContent').innerHTML =
-                        '<div class="preview-placeholder" style="color: #c33;">' +
-                            'Invalid JSON in sample data' +
-                        '</div>';
-                    return;
-                }
+                const sampleData = getPreviewSampleData();
 
                 // Show loading
                 document.getElementById('previewContent').innerHTML =
@@ -990,9 +1267,11 @@
                         },
                         body: JSON.stringify({
                             subject: subject || null,
-                            body: body,
+                            body: rawBody,
                             sample_data: sampleData,
-                            wrap_variables: (channel === 'email' && !showHtmlSource)
+                            wrap_variables: (channel === 'email' && !showHtmlSource && !!rawBody.trim()),
+                            branding: brandingForEmail,
+                            append_email_branding_footer: !!(channel === 'email' && brandingForEmail)
                         })
                     });
 
@@ -1013,7 +1292,7 @@
                                             '<span style="background: #6366f1; color: white; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 10px;">LIVE EDIT</span>' +
                                             '<span>Edit the content below directly</span>' +
                                         '</div>' +
-                                        '<span style="font-style: italic; font-size: 11px;">Changes sync to template body</span>' +
+                                        '<span style="font-style: italic; font-size: 11px;">Body edits sync to the template · Branding updates from Company Branding</span>' +
                                     '</div>' +
                                     '<iframe id="' + iframeId + '" style="width: 100%; flex-grow: 1; border: none; background: white;"></iframe>' +
                                     '</div>';
@@ -1068,7 +1347,7 @@
                 // Clone the body to avoid modifying the visual editor
                 const clone = editorBody.cloneNode(true);
                 
-                // Find all jinja-var spans and replace them with their raw {{ var }} values
+                // Find all jinja-var spans and replace them with their raw Jinja placeholders (data-raw)
                 const vars = clone.querySelectorAll('.jinja-var');
                 vars.forEach(v => {
                     const rawVar = v.getAttribute('data-raw');
@@ -1084,12 +1363,17 @@
                 // Basic cleanup of common contentEditable artifacts
                 cleanHtml = cleanHtml.replace(/<br\s*\/?>$/i, ''); // Remove trailing BR
                 
-                // Update the multi-channel data
                 if (pageMode === 'create' && selectedChannelForPreview) {
-                    multiChannelData[selectedChannelForPreview].body = cleanHtml;
-                    // Also update the visible textarea in the list
-                    const multiBodyInput = document.querySelector(`.multi-body-input[data-channel="${selectedChannelForPreview}"]`);
-                    if (multiBodyInput) multiBodyInput.value = cleanHtml;
+                    if (multiChannelData && multiChannelData[selectedChannelForPreview]) {
+                        multiChannelData[selectedChannelForPreview].body = cleanHtml;
+                        const multiBodyInput = document.querySelector('.multi-body-input[data-channel="' + selectedChannelForPreview + '"]');
+                        if (multiBodyInput) multiBodyInput.value = cleanHtml;
+                    } else {
+                        const manualBody = document.querySelector('.manual-body-input[data-channel="' + selectedChannelForPreview + '"]');
+                        if (manualBody) manualBody.value = cleanHtml;
+                        manualDraftByChannel[selectedChannelForPreview] = manualDraftByChannel[selectedChannelForPreview] || {};
+                        manualDraftByChannel[selectedChannelForPreview].body = cleanHtml;
+                    }
                 } else {
                     document.getElementById('body').value = cleanHtml;
                 }
@@ -1128,64 +1412,140 @@
             const submitBtn = document.getElementById('submitBtn');
             const templateName = document.getElementById('templateName').value.trim();
             const description = document.getElementById('description').value.trim();
+            
+            const brandingForSubmit = shouldAttachBrandingPayload() ? gatherBrandingObjectForApi() : null;
 
             if (pageMode === 'create') {
-                if (!multiChannelData) {
-                    showAlert('Please generate templates with AI first.', 'error');
-                    return;
-                }
+                const checkedChannels = Array.from(document.querySelectorAll('input[name="multi_channels"]:checked')).map(function (cb) { return cb.value; });
+                const hasMulti = multiChannelData && Object.keys(multiChannelData).length > 0;
 
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Creating Multiple...';
+                if (hasMulti) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Creating...';
 
-                // We need to create templates sequentially or in parallel
-                const creationResults = [];
-                const errors = [];
+                    const creationResults = [];
+                    const errors = [];
 
-                for (const channel of Object.keys(multiChannelData)) {
-                    // Get potentially edited values from the inputs
-                    const subjectInput = document.querySelector(`.multi-subject-input[data-channel="${channel}"]`);
-                    const bodyInput = document.querySelector(`.multi-body-input[data-channel="${channel}"]`);
-                    
-                    const templateData = {
-                        name: templateName,
-                        channel: channel,
-                        subject: subjectInput ? subjectInput.value.trim() : null,
-                        body: bodyInput ? bodyInput.value.trim() : "",
-                        description: description || null,
-                        language: 'en'
-                    };
+                    for (const channel of Object.keys(multiChannelData)) {
+                        const subjectInput = document.querySelector(`.multi-subject-input[data-channel="${channel}"]`);
+                        const bodyInput = document.querySelector(`.multi-body-input[data-channel="${channel}"]`);
+                        const templateData = {
+                            name: templateName,
+                            channel: channel,
+                            subject: subjectInput ? subjectInput.value.trim() : null,
+                            body: bodyInput ? bodyInput.value.trim() : "",
+                            description: description || null,
+                            language: 'en',
+                            branding: channel === 'email' ? brandingForSubmit : null
+                        };
 
-                    try {
-                        const response = await fetch('/api/v1/tenant/templates/', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': 'Bearer ' + accessToken,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(templateData)
-                        });
+                        try {
+                            const response = await fetch('/api/v1/tenant/templates/', {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': 'Bearer ' + accessToken,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(templateData)
+                            });
 
-                        if (response.ok) {
-                            creationResults.push(channel);
-                        } else {
-                            const err = await response.json();
-                            errors.push(`${channel}: ${err.detail || 'Failed'}`);
+                            if (response.ok) {
+                                creationResults.push(channel);
+                            } else {
+                                const err = await response.json();
+                                errors.push(`${channel}: ${err.detail || 'Failed'}`);
+                            }
+                        } catch (e) {
+                            errors.push(`${channel}: Network error`);
                         }
-                    } catch (e) {
-                        errors.push(`${channel}: Network error`);
                     }
-                }
 
-                if (creationResults.length > 0) {
-                    showAlert(`Successfully created templates for: ${creationResults.join(', ')}` + (errors.length ? `. Errors: ${errors.join('; ')}` : ''), errors.length ? 'warning' : 'success');
-                    setTimeout(() => {
-                        window.location.href = '/portal/' + tenantId + '/templates';
-                    }, 2000);
+                    if (creationResults.length > 0) {
+                        showAlert(`Successfully created templates for: ${creationResults.join(', ')}` + (errors.length ? `. Errors: ${errors.join('; ')}` : ''), errors.length ? 'warning' : 'success');
+                        setTimeout(() => {
+                            window.location.href = '/portal/' + tenantId + '/templates';
+                        }, 2000);
+                    } else {
+                        showAlert('Failed to create any templates: ' + errors.join('; '), 'error');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Create Template';
+                    }
+                } else if (checkedChannels.length > 0) {
+                    snapshotManualDraftFromDom();
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Creating...';
+
+                    const creationResults = [];
+                    const errors = [];
+
+                    for (let i = 0; i < checkedChannels.length; i++) {
+                        const ch = checkedChannels[i];
+                        const subjectInput = document.querySelector('.manual-subject-input[data-channel="' + ch + '"]');
+                        const bodyInput = document.querySelector('.manual-body-input[data-channel="' + ch + '"]');
+                        let body = bodyInput ? bodyInput.value.trim() : '';
+                        let subject = subjectInput ? subjectInput.value.trim() : '';
+                        if (!body && manualDraftByChannel[ch] && manualDraftByChannel[ch].body) {
+                            body = String(manualDraftByChannel[ch].body).trim();
+                        }
+                        if (!subject && manualDraftByChannel[ch] && manualDraftByChannel[ch].subject) {
+                            subject = String(manualDraftByChannel[ch].subject).trim();
+                        }
+                        if (!body) {
+                            showAlert('Enter a template body for channel: ' + ch, 'error');
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Create Template';
+                            return;
+                        }
+                        if (ch === 'email' && !subject) {
+                            showAlert('Subject is required for email templates.', 'error');
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Create Template';
+                            return;
+                        }
+
+                        const templateData = {
+                            name: templateName,
+                            channel: ch,
+                            subject: ch === 'email' ? subject : null,
+                            body: body,
+                            description: description || null,
+                            language: 'en',
+                            branding: ch === 'email' ? brandingForSubmit : null
+                        };
+
+                        try {
+                            const response = await fetch('/api/v1/tenant/templates/', {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': 'Bearer ' + accessToken,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(templateData)
+                            });
+
+                            if (response.ok) {
+                                creationResults.push(ch);
+                            } else {
+                                const err = await response.json();
+                                errors.push(ch + ': ' + (err.detail || 'Failed'));
+                            }
+                        } catch (e) {
+                            errors.push(ch + ': Network error');
+                        }
+                    }
+
+                    if (creationResults.length > 0) {
+                        showAlert('Created template(s) for: ' + creationResults.join(', ') + (errors.length ? '. Errors: ' + errors.join('; ') : ''), errors.length ? 'warning' : 'success');
+                        setTimeout(function () {
+                            window.location.href = '/portal/' + tenantId + '/templates';
+                        }, errors.length ? 2500 : 1500);
+                    } else {
+                        showAlert('Failed to create templates: ' + errors.join('; '), 'error');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Create Template';
+                    }
                 } else {
-                    showAlert('Failed to create any templates: ' + errors.join('; '), 'error');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Create Templates';
+                    showAlert('Select at least one channel, then use AI Generate or fill in subject/body for each channel.', 'error');
                 }
 
             } else {
@@ -1193,6 +1553,7 @@
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Updating...';
 
+                const editChannel = document.getElementById('channel').value;
                 const templateData = {
                     name: templateName,
                     subject: document.getElementById('subject').value.trim() || null,
@@ -1200,6 +1561,9 @@
                     description: description || null,
                     language: 'en'
                 };
+                if (editChannel === 'email') {
+                    templateData.branding = brandingForSubmit;
+                }
 
                 try {
                     const url = '/api/v1/tenant/templates/' + targetTemplateId;
@@ -1266,9 +1630,9 @@
                         if (data.subject) {
                             document.getElementById('viewSubjectArea').style.display = 'block';
                             // We need to render the subject too for preview
-                            fetchRenderedContent(data.subject, data.body, data.channel);
+                            fetchRenderedContent(data.subject, data.body, data.channel, data.branding);
                         } else {
-                            fetchRenderedContent(null, data.body, data.channel);
+                            fetchRenderedContent(null, data.body, data.channel, data.branding);
                         }
 
                         // Check if global (cannot edit global)
@@ -1287,6 +1651,19 @@
                         document.getElementById('body').value = data.body;
                         document.getElementById('description').value = data.description || '';
                         
+                        // Fill branding fields
+                        if (data.branding) {
+                            if (data.branding.logo_url) document.getElementById('brandingLogoUrl').value = data.branding.logo_url;
+                            if (data.branding.company_name) document.getElementById('brandingCompanyName').value = data.branding.company_name;
+                            if (data.branding.theme_color) document.getElementById('brandingThemeColor').value = data.branding.theme_color;
+                            if (data.branding.contact_phone) document.getElementById('brandingContactPhone').value = data.branding.contact_phone;
+                            if (data.branding.contact_email) document.getElementById('brandingContactEmail').value = data.branding.contact_email;
+                            if (data.branding.website) document.getElementById('brandingWebsite').value = data.branding.website;
+                            if (data.branding.footer_html) document.getElementById('brandingFooterHtml').value = data.branding.footer_html;
+                            document.getElementById('brandingGroup').style.display = 'block';
+                            document.getElementById('brandingToggleIcon').textContent = '▲';
+                        }
+
                         if (pageMode === 'edit') {
                             document.querySelector('h1').textContent = 'Edit Template';
                             document.getElementById('submitBtn').textContent = 'Update Template';
@@ -1308,13 +1685,24 @@
             }
         }
 
-        async function fetchRenderedContent(subject, body, channel) {
+        async function fetchRenderedContent(subject, body, channel, templateBranding) {
             const container = document.getElementById('viewRenderedContent');
             const sampleData = {
                 user: { name: "John Doe", email: "john@example.com" },
                 order: { id: "12345", total: "299.99" },
                 company: { name: "Demo Corp" }
             };
+
+            const previewBody = {
+                subject: subject,
+                body: body,
+                sample_data: sampleData,
+                wrap_variables: false
+            };
+            if (channel === 'email' && templateBranding) {
+                previewBody.branding = templateBranding;
+                previewBody.append_email_branding_footer = true;
+            }
 
             try {
                 const response = await fetch('/api/v1/tenant/templates/preview', {
@@ -1323,12 +1711,7 @@
                         'Authorization': 'Bearer ' + accessToken,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        subject: subject,
-                        body: body,
-                        sample_data: sampleData,
-                        wrap_variables: false
-                    })
+                    body: JSON.stringify(previewBody)
                 });
 
                 const result = await response.json();

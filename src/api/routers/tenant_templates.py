@@ -122,6 +122,13 @@ async def create_tenant_template(
                 detail=f"Global template '{template.base_template_id}' not found"
             )
 
+    # Prepare metadata with branding if provided (copy so we never mutate the request body)
+    meta = {**(template.provider_template_meta or {})}
+    if template.branding:
+        meta["branding"] = template.branding.model_dump(exclude_none=True)
+    if not meta:
+        meta = None
+
     # Create template
     db_template = Template(
         id=_build_template_id(tenant.id, template.name, template.channel.value),
@@ -133,7 +140,7 @@ async def create_tenant_template(
         body=template.body,
         base_template_id=template.base_template_id,
         provider_template_ref=template.provider_template_ref,
-        provider_template_meta=template.provider_template_meta,
+        provider_template_meta=meta,
         is_global=False,
         active=True,
         version=1
@@ -362,8 +369,20 @@ async def update_tenant_template(
         db_template.active = update.active
     if update.provider_template_ref is not None:
         db_template.provider_template_ref = update.provider_template_ref
+        
+    meta = dict(db_template.provider_template_meta or {})
+    meta_updated = False
+    
     if update.provider_template_meta is not None:
-        db_template.provider_template_meta = update.provider_template_meta
+        meta.update(update.provider_template_meta)
+        meta_updated = True
+        
+    if update.branding is not None:
+        meta["branding"] = update.branding.model_dump(exclude_none=True)
+        meta_updated = True
+        
+    if meta_updated:
+        db_template.provider_template_meta = meta
 
     # Increment version
     db_template.version += 1
@@ -437,12 +456,21 @@ async def preview_template(
             error=error
         )
 
+    preview_ctx = dict(preview.sample_data)
+    if preview.branding is not None:
+        preview_ctx["branding"] = preview.branding
+
     # Render body
     rendered_body = template_engine.render_string(
-        preview.body, 
-        preview.sample_data, 
+        preview.body,
+        preview_ctx,
         wrap_variables=preview.wrap_variables
     )
+
+    if preview.append_email_branding_footer and preview.branding:
+        footer = template_engine.render_branding_footer_html(preview.branding, preview_ctx)
+        if footer:
+            rendered_body = rendered_body + footer
 
     # Render subject if provided
     rendered_subject = None
@@ -455,7 +483,7 @@ async def preview_template(
                 valid=False,
                 error=f"Invalid subject: {error}"
             )
-        rendered_subject = template_engine.render_string(preview.subject, preview.sample_data)
+        rendered_subject = template_engine.render_string(preview.subject, preview_ctx)
 
     # Extract variables used in template
     variables_used = extract_template_variables(preview.body)

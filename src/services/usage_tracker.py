@@ -22,9 +22,9 @@ class UsageTracker:
 
         # Default quotas by tier (notifications per month)
         self.default_quotas = {
-            "free": 1000,
-            "basic": 10000,
-            "pro": 50000,
+            "free": None,  # Unlimited since it's for internal use only
+            "basic": None,
+            "pro": None,
             "enterprise": None  # Unlimited
         }
 
@@ -72,10 +72,11 @@ class UsageTracker:
         # Get tenant's tier/quota from config
         config = tenant.config or {}
         tier = config.get("tier", "free")
-        custom_quota = config.get("monthly_quota")
+        # Match get_all_tenant_usage: missing or 0 falls back to tier default (None/unlimited for internal app)
+        quota = config.get("monthly_quota") or self.default_quotas.get(tier)
 
-        # Determine quota
-        quota = custom_quota if custom_quota is not None else self.default_quotas.get(tier)
+        # Force unlimited since this is an internal, single-tenant application
+        quota = None
 
         # Enterprise tier (unlimited)
         if quota is None:

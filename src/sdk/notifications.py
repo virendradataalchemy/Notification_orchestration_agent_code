@@ -22,6 +22,8 @@ from src.api.schemas import (
     NotificationStatusResponse,
     RecipientInfo,
     SendNotificationRequest,
+    TenantTemplateCreate,
+    TemplateResponse
 )
 from src.core.database import AsyncSessionLocal
 from src.models import Notification
@@ -69,6 +71,12 @@ def _normalize_batch_multichannel_request(
     request: BatchMultiChannelNotificationRequest | dict[str, Any],
 ) -> BatchMultiChannelNotificationRequest:
     return _coerce_model(BatchMultiChannelNotificationRequest, request)
+
+
+def _normalize_template_create_request(
+    request: TenantTemplateCreate | dict[str, Any],
+) -> TenantTemplateCreate:
+    return _coerce_model(TenantTemplateCreate, request)
 
 
 def _map_exception(exc: Exception) -> NotificationPipelineError:
@@ -163,9 +171,9 @@ async def _get_notification_status_with_session(
 
 
 async def send_notification_pipeline_async(
-    tenant_id: str,
-    recipient: RecipientInfo | dict[str, Any],
-    notification: NotificationData | dict[str, Any],
+    tenant_id: str = "demo_corp",
+    recipient: RecipientInfo | dict[str, Any] = None,
+    notification: NotificationData | dict[str, Any] = None,
     options: NotificationOptions | dict[str, Any] | None = None,
     *,
     owner_id: str | None = None,
@@ -188,8 +196,8 @@ async def send_notification_pipeline_async(
 
 
 async def send_batch_notification_pipeline_async(
-    tenant_id: str,
-    request: BatchNotificationRequest | dict[str, Any],
+    tenant_id: str = "demo_corp",
+    request: BatchNotificationRequest | dict[str, Any] = None,
     *,
     owner_id: str | None = None,
     session: Any | None = None,
@@ -215,8 +223,8 @@ async def send_batch_notification_pipeline_async(
 
 
 async def send_batch_multichannel_notification_pipeline_async(
-    tenant_id: str,
-    request: BatchMultiChannelNotificationRequest | dict[str, Any],
+    tenant_id: str = "demo_corp",
+    request: BatchMultiChannelNotificationRequest | dict[str, Any] = None,
     *,
     owner_id: str | None = None,
     session: Any | None = None,
@@ -262,6 +270,81 @@ async def get_notification_status_async(
         raise _map_exception(exc) from exc
 
 
+async def create_template_pipeline_async(
+    tenant_id: str = "demo_corp",
+    request: TenantTemplateCreate | dict[str, Any] = None,
+    *,
+    session: Any | None = None,
+    session_factory: SessionFactory | None = None,
+) -> TemplateResponse:
+    if not tenant_id:
+        raise ValidationError("tenant_id is required")
+
+    from src.api.routers.tenant_templates import _build_template_id
+    from src.models import Template
+    from src.services.tenant_template_engine import TenantTemplateEngine
+    
+    try:
+        normalized_request = _normalize_template_create_request(request)
+        
+        async def _create(db: Any) -> TemplateResponse:
+            engine = TenantTemplateEngine()
+            is_valid, error = engine.validate_template(normalized_request.body)
+            if not is_valid:
+                raise ValidationError(f"Invalid template syntax: {error}")
+                
+            if normalized_request.subject:
+                is_valid, error = engine.validate_template(normalized_request.subject)
+                if not is_valid:
+                    raise ValidationError(f"Invalid subject syntax: {error}")
+
+            existing_query = select(Template).where(
+                Template.tenant_id == tenant_id,
+                Template.name == normalized_request.name,
+                Template.channel == normalized_request.channel.value,
+                Template.language == normalized_request.language
+            )
+            result = await db.execute(existing_query)
+            existing = result.scalar_one_or_none()
+            if existing:
+                raise ValidationError(f"Template '{normalized_request.name}' for channel '{normalized_request.channel.value}' already exists")
+
+            meta = {**(normalized_request.provider_template_meta or {})}
+            if normalized_request.branding:
+                meta["branding"] = normalized_request.branding.model_dump(exclude_none=True)
+            if not meta:
+                meta = None
+
+            db_template = Template(
+                id=_build_template_id(tenant_id, normalized_request.name, normalized_request.channel.value),
+                tenant_id=tenant_id,
+                name=normalized_request.name,
+                channel=normalized_request.channel.value,
+                language=normalized_request.language,
+                subject=normalized_request.subject,
+                body=normalized_request.body,
+                base_template_id=normalized_request.base_template_id,
+                provider_template_ref=normalized_request.provider_template_ref,
+                provider_template_meta=meta,
+                is_global=False,
+                active=True,
+                version=1
+            )
+            db.add(db_template)
+            await db.flush()
+            
+            return TemplateResponse.model_validate(db_template)
+
+        if session is not None:
+            return await _create(session)
+            
+        async with _session_scope(session_factory) as managed_session:
+            return await _create(managed_session)
+            
+    except Exception as exc:
+        raise _map_exception(exc) from exc
+
+
 def _run_sync(coro):
     try:
         asyncio.get_running_loop()
@@ -287,9 +370,9 @@ def _run_sync(coro):
 
 
 def send_notification_pipeline(
-    tenant_id: str,
-    recipient: RecipientInfo | dict[str, Any],
-    notification: NotificationData | dict[str, Any],
+    tenant_id: str = "demo_corp",
+    recipient: RecipientInfo | dict[str, Any] = None,
+    notification: NotificationData | dict[str, Any] = None,
     options: NotificationOptions | dict[str, Any] | None = None,
     *,
     owner_id: str | None = None,
@@ -310,8 +393,8 @@ def send_notification_pipeline(
 
 
 def send_batch_notification_pipeline(
-    tenant_id: str,
-    request: BatchNotificationRequest | dict[str, Any],
+    tenant_id: str = "demo_corp",
+    request: BatchNotificationRequest | dict[str, Any] = None,
     *,
     owner_id: str | None = None,
     session: Any | None = None,
@@ -329,8 +412,8 @@ def send_batch_notification_pipeline(
 
 
 def send_batch_multichannel_notification_pipeline(
-    tenant_id: str,
-    request: BatchMultiChannelNotificationRequest | dict[str, Any],
+    tenant_id: str = "demo_corp",
+    request: BatchMultiChannelNotificationRequest | dict[str, Any] = None,
     *,
     owner_id: str | None = None,
     session: Any | None = None,
@@ -358,6 +441,23 @@ def get_notification_status(
         get_notification_status_async(
             tenant_id,
             notification_id,
+            session=session,
+            session_factory=session_factory,
+        )
+    )
+
+
+def create_template_pipeline(
+    tenant_id: str = "demo_corp",
+    request: TenantTemplateCreate | dict[str, Any] = None,
+    *,
+    session: Any | None = None,
+    session_factory: SessionFactory | None = None,
+) -> TemplateResponse:
+    return _run_sync(
+        create_template_pipeline_async(
+            tenant_id,
+            request,
             session=session,
             session_factory=session_factory,
         )

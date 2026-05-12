@@ -6,7 +6,10 @@ Supports:
 - Tenant-specific templates
 - Template inheritance (tenant templates can override global templates)
 - Variable substitution with Jinja2
+- Email branding footer (default or custom Jinja2 HTML) appended after body
 """
+
+import html as html_module
 
 from jinja2 import Environment, BaseLoader
 from typing import Dict, Any, Optional
@@ -21,6 +24,100 @@ class TenantTemplateEngine:
 
     def __init__(self):
         self.env = Environment(loader=BaseLoader(), autoescape=True)
+
+    def render_branding_footer_html(self, branding: Dict[str, Any], data: Dict[str, Any]) -> str:
+        """
+        Build the email branding block that is appended after the main template body.
+
+        If ``footer_html`` is set, render it as Jinja2 with ``data`` (including ``branding``).
+        Otherwise render a default signature-style footer (logo + contact lines).
+        """
+        if not branding or not isinstance(branding, dict):
+            return ""
+        b = dict(branding)
+        custom = (b.get("footer_html") or "").strip()
+        ctx = {**data, "branding": b}
+        try:
+            if custom:
+                tpl = self.env.from_string(custom)
+                return tpl.render(**ctx)
+            return self._default_email_branding_footer(b)
+        except Exception as e:
+            return (
+                '<div style="padding:12px;color:#b91c1c;font-size:13px;border:1px solid #fecaca;'
+                'border-radius:8px;margin-top:16px;">[Branding footer error: '
+                f"{html_module.escape(str(e))}]</div>"
+            )
+
+    def _default_email_branding_footer(self, b: Dict[str, Any]) -> str:
+        """Outlook-style horizontal rules + two-column logo | contacts."""
+        theme = (b.get("theme_color") or "#1d4ed8").strip()
+        logo = (b.get("logo_url") or "").strip()
+        company = (b.get("company_name") or "").strip()
+        phone = (b.get("contact_phone") or "").strip()
+        email_c = (b.get("contact_email") or "").strip()
+        web = (b.get("website") or "").strip()
+        if not any([logo, company, phone, email_c, web]):
+            return ""
+
+        def esc(x: str) -> str:
+            return html_module.escape(x, quote=True)
+
+        contact_rows = []
+        if phone:
+            contact_rows.append(
+                f'<p style="margin:6px 0;font-size:14px;line-height:1.4;">'
+                f'<strong style="color:{esc(theme)};">M:</strong> '
+                f'<span style="color:#0f172a;">{esc(phone)}</span></p>'
+            )
+        if email_c:
+            contact_rows.append(
+                f'<p style="margin:6px 0;font-size:14px;line-height:1.4;">'
+                f'<strong style="color:{esc(theme)};">E:</strong> '
+                f'<span style="color:#0f172a;">{esc(email_c)}</span></p>'
+            )
+        if web:
+            contact_rows.append(
+                f'<p style="margin:6px 0;font-size:14px;line-height:1.4;">'
+                f'<strong style="color:{esc(theme)};">W:</strong> '
+                f'<span style="color:#0f172a;">{esc(web)}</span></p>'
+            )
+
+        logo_cell = ""
+        if logo:
+            logo_cell = (
+                f'<td style="vertical-align:top;padding-right:20px;width:1%;">'
+                f'<img src="{esc(logo)}" alt="" width="120" '
+                'style="display:block;max-width:120px;height:auto;border:0;outline:none;" />'
+                f"</td>"
+            )
+        else:
+            logo_cell = '<td style="width:1%;"></td>'
+
+        title_html = ""
+        if company:
+            title_html = (
+                f'<p style="margin:0 0 10px 0;font-size:16px;font-weight:700;color:#0f172a;'
+                f'white-space:pre-line;">'
+                f"{esc(company)}</p>"
+            )
+
+        contacts_html = "".join(contact_rows)
+        inner = f"{title_html}{contacts_html}" if (title_html or contacts_html) else ""
+
+        return (
+            '<div class="notification-branding-footer" style="margin-top:28px;">'
+            '<hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px 0;" />'
+            '<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
+            'style="width:100%;max-width:560px;border-collapse:collapse;">'
+            "<tr>"
+            f"{logo_cell}"
+            f'<td style="vertical-align:top;">{inner}</td>'
+            "</tr>"
+            "</table>"
+            '<hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0 0 0;" />'
+            "</div>"
+        )
 
     async def get_template(
         self,
@@ -114,6 +211,11 @@ class TenantTemplateEngine:
         if not template:
             return None
 
+        # Extract branding into data context if available and not already provided
+        meta = template.provider_template_meta or {}
+        if "branding" in meta and "branding" not in data:
+            data = {**data, "branding": meta["branding"]}
+
         # Render subject and body
         try:
             rendered_subject = None
@@ -123,6 +225,13 @@ class TenantTemplateEngine:
 
             body_template = self.env.from_string(template.body)
             rendered_body = body_template.render(**data)
+
+            if channel == "email":
+                branding_block = meta.get("branding")
+                if branding_block and isinstance(branding_block, dict):
+                    footer = self.render_branding_footer_html(branding_block, data)
+                    if footer:
+                        rendered_body = rendered_body + footer
 
             return {
                 'subject': rendered_subject,
@@ -197,6 +306,11 @@ class TenantTemplateEngine:
         if not body_text and base_template:
             body_text = base_template.body
 
+        # Extract branding into data context if available and not already provided
+        meta = tenant_template.provider_template_meta or {}
+        if "branding" in meta and "branding" not in data:
+            data = {**data, "branding": meta["branding"]}
+
         # Render
         try:
             rendered_subject = None
@@ -209,6 +323,13 @@ class TenantTemplateEngine:
                 rendered_body = body_template.render(**data)
             else:
                 rendered_body = ""
+
+            if channel == "email":
+                branding_block = meta.get("branding")
+                if branding_block and isinstance(branding_block, dict):
+                    footer = self.render_branding_footer_html(branding_block, data)
+                    if footer:
+                        rendered_body = rendered_body + footer
 
             return {
                 'subject': rendered_subject,

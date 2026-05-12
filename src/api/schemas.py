@@ -206,6 +206,19 @@ class TemplateCreate(BaseModel):
     version: int = 1
 
 
+class BrandingConfig(BaseModel):
+    """Company branding configuration (email footer; appended after template body)."""
+    logo_url: Optional[str] = Field(None, description="Company logo URL or data URL")
+    company_name: Optional[str] = Field(None, description="Company name")
+    theme_color: Optional[str] = Field(None, description="Theme / accent color (hex)")
+    contact_phone: Optional[str] = Field(None, description="Phone for footer (M:)")
+    contact_email: Optional[str] = Field(None, description="Email for footer (E:)")
+    website: Optional[str] = Field(None, description="Website for footer (W:)")
+    footer_html: Optional[str] = Field(
+        None,
+        description="Optional Jinja2 HTML for the entire footer block; overrides default layout when non-empty",
+    )
+
 class TenantTemplateCreate(BaseModel):
     """Create tenant-specific template request."""
     name: str = Field(..., description="Template name (e.g., 'welcome_email')")
@@ -223,6 +236,7 @@ class TenantTemplateCreate(BaseModel):
         description="Optional provider metadata for template dispatch"
     )
     description: Optional[str] = Field(None, description="Template description")
+    branding: Optional[BrandingConfig] = Field(None, description="Company branding details")
 
 
 class TenantTemplateUpdate(BaseModel):
@@ -234,6 +248,7 @@ class TenantTemplateUpdate(BaseModel):
     provider_template_ref: Optional[str] = None
     provider_template_meta: Optional[Dict[str, Any]] = None
     description: Optional[str] = None
+    branding: Optional[BrandingConfig] = None
 
 
 class TemplatePreviewRequest(BaseModel):
@@ -242,6 +257,14 @@ class TemplatePreviewRequest(BaseModel):
     body: str = Field(..., description="Template body with Jinja2 variables")
     sample_data: Dict[str, Any] = Field(..., description="Sample data for rendering")
     wrap_variables: bool = Field(False, description="Wrap variables in spans for visual editing")
+    branding: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Email branding config; used when append_email_branding_footer is true",
+    )
+    append_email_branding_footer: bool = Field(
+        False,
+        description="Append branding footer after rendered body (email channel previews)",
+    )
 
 
 class TemplatePreviewResponse(BaseModel):
@@ -275,10 +298,20 @@ class TemplateResponse(BaseModel):
     base_template_id: Optional[str] = None
     provider_template_ref: Optional[str] = None
     provider_template_meta: Optional[Dict[str, Any]] = None
+    branding: Optional[BrandingConfig] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+    @validator("branding", pre=True, always=True)
+    def extract_branding(cls, v, values):
+        if v is not None:
+            return v
+        meta = values.get("provider_template_meta")
+        if meta and isinstance(meta, dict) and "branding" in meta:
+            return BrandingConfig(**meta["branding"])
+        return None
 
 
 class TenantTemplateListResponse(BaseModel):

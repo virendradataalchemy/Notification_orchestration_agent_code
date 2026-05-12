@@ -1,0 +1,32 @@
+{
+    "tenant_id": "demo_corp",
+    "request": {
+        "subject": "Test multichannel batch",
+        "body": "Payload loaded from JSON for integration-style testing.",
+        "channels": [
+            "email",
+            "sms"
+        ],
+        "data": {
+            "campaign": "file_driven_test"
+        },
+        "recipients": [
+            {
+                "user_id": "user_201",
+                "email": "gaur.prateek.1609@gmail.com",
+                "phone": "+918290942415",
+                "data": {
+                    "name": "User 201"
+                }
+            },
+            {
+                "user_id": "user_202",
+                "email": "gaur.prateek.1609@gmail.com",
+                "phone": "+918290942415",
+                "data": {
+                    "name": "User 202"
+                }
+            }
+        ]
+    }
+}

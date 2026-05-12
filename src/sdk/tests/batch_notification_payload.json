@@ -1,0 +1,29 @@
+{
+    "tenant_id": "demo_corp",
+    "request": {
+        "subject": "Test Batch Alert",
+        "body": "This is a batch notification testing payload from file.",
+        "channel": "email",
+        "data": {
+            "common_key": "common_value"
+        },
+        "recipients": [
+            {
+                "user_id": "user_101",
+                "email": "gaur.prateek.1609@gmail.com",
+                "phone": "+918290942415",
+                "data": {
+                    "name": "User 101"
+                }
+            },
+            {
+                "user_id": "user_102",
+                "email": "gaur.prateek.1609@gmail.com",
+                "phone": "+918290942415",
+                "data": {
+                    "name": "User 102"
+                }
+            }
+        ]
+    }
+}
