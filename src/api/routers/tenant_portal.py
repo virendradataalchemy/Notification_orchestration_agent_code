@@ -19,7 +19,11 @@ router = APIRouter(prefix="/portal", tags=["tenant-portal-ui"])
 
 # Templates directory
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates" / "tenant_portal"
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Initialize Jinja2Templates with bytecode cache disabled
+from jinja2 import FileSystemLoader, Environment
+env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), auto_reload=True, cache_size=0)
+templates = Jinja2Templates(env=env)
 
 
 async def _get_portal_tenant_from_cookie(
@@ -64,10 +68,16 @@ async def _get_portal_tenant_from_cookie(
     return tenant
 
 
+def _redirect_to_login():
+    response = RedirectResponse(url="/portal/login?auth_error=1")
+    response.delete_cookie("tenant_access_token", path="/")
+    return response
+
+
 @router.get("/", include_in_schema=False)
 async def portal_root():
     """Redirect portal root to login page."""
-    return RedirectResponse(url="/portal/login")
+    return _redirect_to_login()
 
 
 @router.get("/assets/{asset_name}", include_in_schema=False)
@@ -89,34 +99,41 @@ async def tenant_login_page(request: Request, db: AsyncSession = Depends(get_db)
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if tenant:
         return RedirectResponse(url=f"/portal/{tenant.id}/dashboard")
-    return templates.TemplateResponse("login.html", {
-        "request": request
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"request": request}
+    )
 
 
 @router.get("/signup", response_class=HTMLResponse)
 async def tenant_signup_page(request: Request):
     """Tenant portal signup page."""
-    return templates.TemplateResponse("signup.html", {
-        "request": request
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="signup.html",
+        context={"request": request}
+    )
 
 
 @router.get("/accept-invite", response_class=HTMLResponse)
 async def accept_invite_page(request: Request, token: str):
     """Page to set up account after receiving invitation."""
-    return templates.TemplateResponse("accept_invite.html", {
-        "request": request,
-        "token": token
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="accept_invite.html",
+        context={"request": request, "token": token}
+    )
 
 
 @router.get("/how-to-use", response_class=HTMLResponse)
 async def how_to_use_page(request: Request):
     """Product usage guide page."""
-    return templates.TemplateResponse("how_to_use.html", {
-        "request": request
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="how_to_use.html",
+        context={"request": request}
+    )
 
 
 @router.get("/{tenant_id}/dashboard", response_class=HTMLResponse)
@@ -128,14 +145,15 @@ async def tenant_dashboard_page(
     """Main tenant dashboard."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/dashboard")
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "tenant_id": tenant_id
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={"request": request, "tenant_id": tenant_id}
+    )
 
 
 @router.get("/{tenant_id}/templates", response_class=HTMLResponse)
@@ -147,14 +165,15 @@ async def templates_list_page(
     """List all templates (tenant + global)."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/templates")
 
-    return templates.TemplateResponse("templates.html", {
-        "request": request,
-        "tenant_id": tenant_id
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="templates.html",
+        context={"request": request, "tenant_id": tenant_id}
+    )
 
 
 @router.get("/{tenant_id}/templates/create", response_class=HTMLResponse)
@@ -166,14 +185,15 @@ async def template_create_page(
     """Create new template form."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/templates/create")
 
-    return templates.TemplateResponse("template_create.html", {
-        "request": request,
-        "tenant_id": tenant_id
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="template_create.html",
+        context={"request": request, "tenant_id": tenant_id}
+    )
 
 
 @router.get("/{tenant_id}/templates/edit/{template_id}", response_class=HTMLResponse)
@@ -186,16 +206,20 @@ async def template_edit_page(
     """Edit existing template."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/templates/edit/{template_id}")
 
-    return templates.TemplateResponse("template_create.html", {
-        "request": request,
-        "tenant_id": tenant_id,
-        "template_id": template_id,
-        "mode": "edit"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="template_create.html",
+        context={
+            "request": request,
+            "tenant_id": tenant_id,
+            "template_id": template_id,
+            "mode": "edit"
+        }
+    )
 
 
 @router.get("/{tenant_id}/templates/view/{template_id}", response_class=HTMLResponse)
@@ -208,16 +232,20 @@ async def template_view_page(
     """View template details (read-only)."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/templates/view/{template_id}")
 
-    return templates.TemplateResponse("template_create.html", {
-        "request": request,
-        "tenant_id": tenant_id,
-        "template_id": template_id,
-        "mode": "view"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="template_create.html",
+        context={
+            "request": request,
+            "tenant_id": tenant_id,
+            "template_id": template_id,
+            "mode": "view"
+        }
+    )
 
 
 @router.get("/{tenant_id}/profile", response_class=HTMLResponse)
@@ -229,11 +257,15 @@ async def profile_page(
     """Tenant profile page."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/profile")
 
-    return templates.TemplateResponse("profile.html", {"request": request, "tenant_id": tenant_id})
+    return templates.TemplateResponse(
+        request=request,
+        name="profile.html",
+        context={"request": request, "tenant_id": tenant_id}
+    )
 
 
 @router.get("/{tenant_id}/developer", response_class=HTMLResponse)
@@ -245,11 +277,15 @@ async def developer_page(
     """Tenant developer settings page."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/developer")
 
-    return templates.TemplateResponse("developer.html", {"request": request, "tenant_id": tenant_id})
+    return templates.TemplateResponse(
+        request=request,
+        name="developer.html",
+        context={"request": request, "tenant_id": tenant_id}
+    )
 
 
 @router.get("/{tenant_id}/channels", response_class=HTMLResponse)
@@ -261,11 +297,15 @@ async def channel_settings_page(
     """Tenant channel settings page."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/channels")
 
-    return templates.TemplateResponse("channel_settings.html", {"request": request, "tenant_id": tenant_id})
+    return templates.TemplateResponse(
+        request=request,
+        name="channel_settings.html",
+        context={"request": request, "tenant_id": tenant_id}
+    )
 
 
 @router.get("/{tenant_id}/analytics", response_class=HTMLResponse)
@@ -277,11 +317,15 @@ async def analytics_page(
     """Tenant analytics dashboard page."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/analytics")
 
-    return templates.TemplateResponse("analytics.html", {"request": request, "tenant_id": tenant_id})
+    return templates.TemplateResponse(
+        request=request,
+        name="analytics.html",
+        context={"request": request, "tenant_id": tenant_id}
+    )
 
 
 @router.get("/{tenant_id}/marketing", response_class=HTMLResponse)
@@ -293,15 +337,19 @@ async def marketing_dashboard_page(
     """Marketing team dashboard."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/marketing")
 
-    return templates.TemplateResponse("marketing.html", {
-        "request": request,
-        "tenant_id": tenant_id,
-        "tenant_name": tenant.name
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="marketing.html",
+        context={
+            "request": request,
+            "tenant_id": tenant_id,
+            "tenant_name": tenant.name
+        }
+    )
 
 
 @router.get("/{tenant_id}/marketing-dashboard", response_class=HTMLResponse)
@@ -313,15 +361,19 @@ async def marketing_detailed_dashboard_page(
     """Detailed activity dashboard for marketing."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/marketing-dashboard")
 
-    return templates.TemplateResponse("marketing_dashboard.html", {
-        "request": request,
-        "tenant_id": tenant_id,
-        "tenant_name": tenant.name
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="marketing_dashboard.html",
+        context={
+            "request": request,
+            "tenant_id": tenant_id,
+            "tenant_name": tenant.name
+        }
+    )
 
 
 @router.get("/{tenant_id}/team", response_class=HTMLResponse)
@@ -333,7 +385,7 @@ async def team_management_page(
     """Team management page (Admin only)."""
     tenant = await _get_portal_tenant_from_cookie(request, db)
     if not tenant:
-        return RedirectResponse(url="/portal/login")
+        return _redirect_to_login()
     if tenant.id != tenant_id:
         return RedirectResponse(url=f"/portal/{tenant.id}/team")
     
@@ -342,9 +394,13 @@ async def team_management_page(
         # Redirect to dashboard if not admin
         return RedirectResponse(url=f"/portal/{tenant.id}/dashboard")
 
-    return templates.TemplateResponse("team.html", {
-        "request": request,
-        "tenant_id": tenant_id,
-        "tenant_name": tenant.name,
-        "user_role": tenant.current_user_role
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="team.html",
+        context={
+            "request": request,
+            "tenant_id": tenant_id,
+            "tenant_name": tenant.name,
+            "user_role": tenant.current_user_role
+        }
+    )

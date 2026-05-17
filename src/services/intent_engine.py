@@ -85,6 +85,7 @@ class IntentEngineService:
         if isinstance(fallback_text, dict):
             fallback_text = str(fallback_text)
 
+        # Await the LLM classification natively, without run_until_complete
         llm_decision = await self.llm_service.classify_inbound_intent(fallback_text)
         
         # Map string to Enum

@@ -62,13 +62,20 @@ class TenantTemplateEngine:
         
         # Handle both TenantBranding object and dict for backward compatibility
         if isinstance(branding, dict):
-            branding_dict = branding
+            branding_dict = branding.copy()
+            logo_val = (branding_dict.get("logo_url") or "").strip()
+            if logo_val and not logo_val.startswith("http") and not logo_val.startswith("data:"):
+                branding_dict["logo_url"] = "https://" + logo_val
             footer_html = branding_dict.get("footer_html") if branding_dict else None
             custom = footer_html.strip() if footer_html else ""
         else:
             # Convert branding object to dict for template context
+            logo_val = (branding.logo_url or "").strip()
+            if logo_val and not logo_val.startswith("http") and not logo_val.startswith("data:"):
+                logo_val = "https://" + logo_val
+
             branding_dict = {
-                "logo_url": branding.logo_url,
+                "logo_url": logo_val,
                 "company_name": branding.company_name,
                 "theme_color": branding.theme_color or "#1d4ed8",
                 "contact_email": branding.contact_email,
@@ -95,6 +102,11 @@ class TenantTemplateEngine:
         """Outlook-style horizontal rules + two-column logo | contacts."""
         theme = (b.get("theme_color") or "#1d4ed8").strip()
         logo = (b.get("logo_url") or "").strip()
+        
+        # Ensure logo has a valid scheme if it's a domain name
+        if logo and not logo.startswith("http") and not logo.startswith("data:"):
+            logo = "https://" + logo
+
         company = (b.get("company_name") or "").strip()
         phone = (b.get("contact_phone") or "").strip()
         email_c = (b.get("contact_email") or "").strip()

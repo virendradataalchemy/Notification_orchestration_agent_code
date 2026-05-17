@@ -105,7 +105,7 @@ class DeduplicationService:
         key = f"idempotency:{idempotency_key}"
         await self.redis.setex(key, ttl, notification_id)
 
-    def _generate_hash(self, content: str) -> str:
+    def _generate_hash(self, content: Optional[str]) -> str:
         """
         Generate SHA-256 hash of content.
 
@@ -115,4 +115,6 @@ class DeduplicationService:
         Returns:
             Hexadecimal hash string
         """
+        if content is None:
+            content = ""
         return hashlib.sha256(content.encode()).hexdigest()

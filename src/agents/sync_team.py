@@ -117,7 +117,7 @@ This prevents wasting resources on Router agent.
                     return {
                         "status": "duplicate",
                         "reason": analysis_result.get("reason"),
-                        "existing_id": analysis_result.get("existing_id"),
+                        "existing_id": "already_sent",
                         "processing_stopped": True
                     }
 

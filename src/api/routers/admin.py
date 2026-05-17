@@ -25,8 +25,9 @@ router = APIRouter(
     dependencies=[Depends(require_admin_access)]
 )
 
-# Setup templates
+# Setup templates - disable cache to fix unhashable dict error
 templates = Jinja2Templates(directory="src/templates")
+templates.env.cache = None
 
 
 @router.get("/dashboard", response_class=HTMLResponse)

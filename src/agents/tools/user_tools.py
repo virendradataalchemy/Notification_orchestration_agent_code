@@ -46,7 +46,7 @@ async def check_for_duplicate(
             return {
                 "is_duplicate": True,
                 "reason": "idempotency_key",
-                "existing_id": existing,
+                "existing_id": "already_sent",
                 "stop": True
             }
 
@@ -60,6 +60,42 @@ async def check_for_duplicate(
         }
 
     # Check 3: Semantic similarity using ChromaDB
+    try:
+        # Use simple embedding for check
+        from src.models.embedding import NotificationEmbedding
+        from sqlalchemy import select
+        
+        # We need the user's embedding history to check
+        # This is a bit of a hack since we don't have db access here directly
+        # but the tools are executed in a context that does have it
+        from src.core.database import AsyncSessionLocal
+        
+        async with AsyncSessionLocal() as db:
+            embed_service = EmbeddingService()
+            # We don't have tenant_id in this tool currently, so we just use user_id
+            semantic_dup = await embed_service.check_semantic_duplicate(
+                db, 
+                tenant_id="",  # We might need to add tenant_id to the tool params
+                user_id=user_id,
+                content=content,
+                threshold=0.95
+            )
+            
+            if semantic_dup:
+                return {
+                    "is_duplicate": True,
+                    "reason": "semantic_similarity",
+                    "existing_id": "already_sent",
+                    "stop": True
+                }
+    except Exception as e:
+        logger.warning(f"Semantic deduplication check failed in tool: {e}")
+        
+    return {
+        "is_duplicate": False,
+        "reason": None,
+        "stop": False
+    }
     try:
         embeddings = EmbeddingService()
         embedding = embeddings.generate_embedding(content)

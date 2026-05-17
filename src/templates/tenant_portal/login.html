@@ -286,6 +286,14 @@
             return savedTenantId;
         }
 
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('auth_error')) {
+            clearPortalAuth();
+            showAlert('Your session has expired. Please sign in again.');
+            // Remove the query parameter without reloading
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
         const autoRedirectTenantId = shouldAutoRedirect();
         if (autoRedirectTenantId) {
             const role = localStorage.getItem('tenant_type') || 'admin';

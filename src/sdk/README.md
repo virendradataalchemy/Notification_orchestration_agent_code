@@ -119,6 +119,7 @@ Example:
 ```python
 from src.sdk import send_notification_pipeline
 
+# Example 1: Simple email notification
 result = send_notification_pipeline(
     tenant_id="tenant_acme",
     recipient={
@@ -140,6 +141,45 @@ result = send_notification_pipeline(
 
 print(result.notification_id)
 print(result.status)
+
+# Example 2: WhatsApp with template (template_id required)
+result = send_notification_pipeline(
+    tenant_id="tenant_acme",
+    recipient={
+        "user_id": "user_456",
+        "phone": "+14155551234",
+    },
+    notification={
+        "type": "order_shipped",
+        "priority": "high",
+        "channels": ["whatsapp"],
+        "template_id": "order_shipped_template",  # Required for WhatsApp
+        "data": {
+            "customer_name": "John Doe",
+            "order_id": "ORD-1001",
+            "tracking_number": "TRK-ABC123"
+        },
+    },
+)
+
+# Example 3: Email with template
+result = send_notification_pipeline(
+    tenant_id="tenant_acme",
+    recipient={
+        "user_id": "user_789",
+        "email": "user@example.com",
+    },
+    notification={
+        "type": "welcome",
+        "priority": "medium",
+        "channels": ["email"],
+        "template_id": "welcome_email_v2",  # Optional for email
+        "data": {
+            "first_name": "Alice",
+            "activation_link": "https://app.acme.com/activate/xyz"
+        },
+    },
+)
 ```
 
 ### `send_batch_notification_pipeline(...)`
@@ -173,6 +213,7 @@ Example:
 ```python
 from src.sdk import send_batch_notification_pipeline
 
+# Example 1: Email batch without template
 result = send_batch_notification_pipeline(
     tenant_id="tenant_acme",
     request={
@@ -189,6 +230,28 @@ result = send_batch_notification_pipeline(
 
 print(result.batch_id)
 print(result.total_recipients)
+
+# Example 2: WhatsApp batch with template (template_id required)
+result = send_batch_notification_pipeline(
+    tenant_id="tenant_acme",
+    request={
+        "channel": "whatsapp",
+        "template_id": "appointment_reminder",  # Required for WhatsApp
+        "data": {"clinic_name": "Acme Health"},
+        "recipients": [
+            {
+                "user_id": "p1",
+                "phone": "+14155551111",
+                "data": {"patient_name": "John", "appointment_date": "May 15"}
+            },
+            {
+                "user_id": "p2",
+                "phone": "+14155552222",
+                "data": {"patient_name": "Jane", "appointment_date": "May 16"}
+            },
+        ],
+    },
+)
 ```
 
 ### `send_batch_multichannel_notification_pipeline(...)`
@@ -222,6 +285,7 @@ Example:
 ```python
 from src.sdk import send_batch_multichannel_notification_pipeline
 
+# Example 1: Simple multichannel without template
 result = send_batch_multichannel_notification_pipeline(
     tenant_id="tenant_acme",
     request={
@@ -247,6 +311,30 @@ result = send_batch_multichannel_notification_pipeline(
 
 print(result.batch_id)
 print(result.channels)
+
+# Example 2: Multichannel with channel-specific templates
+result = send_batch_multichannel_notification_pipeline(
+    tenant_id="tenant_acme",
+    request={
+        "channels": ["email", "whatsapp"],
+        "channel_template_map": {
+            "email": "promo_email_template",
+            "whatsapp": "promo_wa_template"  # WhatsApp requires template
+        },
+        "data": {
+            "promo_code": "SAVE30",
+            "expiry_date": "May 20, 2026"
+        },
+        "recipients": [
+            {
+                "user_id": "c1",
+                "email": "customer1@example.com",
+                "phone": "+14155551234",
+                "data": {"customer_name": "Alice"}
+            },
+        ],
+    },
+)
 ```
 
 ### `get_notification_status(...)`

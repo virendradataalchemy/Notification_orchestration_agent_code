@@ -9,6 +9,7 @@ from src.config import settings
 from src.core import init_db, init_redis, close_redis
 from src.middleware import TenantAuthMiddleware
 from src.services.usage_tracker import initialize_usage_tracker
+from src.utils.logger import configure_logging
 from src.api.routers import (
     notifications_router,
     templates_router,
@@ -34,11 +35,15 @@ from src.api.routers import (
 )
 
 # Configure logging
-logging.basicConfig(
-    level=getattr(logging, settings.log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
+
+QUIET_PATHS = {
+    "/health",
+    f"{settings.api_prefix}/docs",
+    f"{settings.api_prefix}/redoc",
+    f"{settings.api_prefix}/openapi.json",
+}
 
 
 @asynccontextmanager
@@ -101,21 +106,39 @@ app.add_middleware(
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all HTTP requests."""
+    """Log only important HTTP requests."""
     start_time = datetime.utcnow()
 
-    # Process request
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration = (datetime.utcnow() - start_time).total_seconds()
+        logger.error(
+            f"{request.method} {request.url.path} failed after {duration:.3f}s",
+            exc_info=True,
+        )
+        raise
 
-    # Calculate duration
     duration = (datetime.utcnow() - start_time).total_seconds()
-
-    # Log request
-    logger.info(
-        f"{request.method} {request.url.path} - "
-        f"Status: {response.status_code} - "
-        f"Duration: {duration:.3f}s"
+    path = request.url.path
+    should_log = (
+        path not in QUIET_PATHS
+        and not path.startswith("/static/")
+        and (
+            response.status_code >= 400
+            or duration >= 1.0
+            or request.method in {"POST", "PUT", "PATCH", "DELETE"}
+        )
     )
+
+    if should_log:
+        message = f"{request.method} {path} -> {response.status_code} in {duration:.3f}s"
+        if response.status_code >= 500:
+            logger.error(message)
+        elif response.status_code >= 400:
+            logger.warning(message)
+        else:
+            logger.info(message)
 
     # Add rate limit headers if present
     if hasattr(request.state, 'rate_limit_remaining'):
@@ -175,4 +198,6 @@ if __name__ == "__main__":
         port=settings.port,
         reload=settings.debug,
         log_level=settings.log_level.lower(),
+        access_log=False,
+        log_config=None,
     )

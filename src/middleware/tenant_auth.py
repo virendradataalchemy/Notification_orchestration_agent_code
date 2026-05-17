@@ -28,6 +28,7 @@ class TenantAuthMiddleware(BaseHTTPMiddleware):
         "/health",
         "/api/v1/health",
         "/admin",  # Admin dashboard
+        "/webhooks",  # Mailgun/Twilio provider callbacks
     ]
 
     async def dispatch(self, request: Request, call_next):

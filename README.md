@@ -60,6 +60,37 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 docker compose up --build -d
 ```
 
+For teammates pulling fresh code, the safest local restart is:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+The local Celery worker now bind-mounts the repo, so after `git pull` it reads the latest code from the working tree instead of silently running stale baked-in worker code from an older image.
+
+### Local ngrok vs AWS
+
+- Local Docker uses `docker-compose.yml` and can start the `ngrok` container.
+- AWS uses `docker-compose.aws.yml` and does not start any `ngrok` service.
+- For local development, keep these in your local `.env`:
+
+```env
+APP_ENV=development
+APP_BASE_URL=
+NGROK_URL=https://your-subdomain.ngrok-free.app
+NGROK_AUTHTOKEN=your-ngrok-token
+```
+
+- For AWS, set a real public host and do not rely on ngrok:
+
+```env
+APP_ENV=production
+APP_BASE_URL=https://your-aws-domain-or-alb
+```
+
+In production, the app now only falls back to `NGROK_URL` when `APP_ENV` is `development` or `local`.
+
 ## Repo Layout
 
 - `src/`: application code, services, SDK, tasks, models, and templates

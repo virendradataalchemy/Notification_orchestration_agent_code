@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = True
     log_level: str = "INFO"
+    sql_echo: bool = False
     api_version: str = "v1"
     # Public URL for links in emails (webhooks, invites). Prefer APP_BASE_URL; else NGROK_URL.
     app_base_url: Optional[str] = None
@@ -177,9 +178,9 @@ class Settings(BaseSettings):
     @property
     def public_base_url(self) -> str:
         """Base URL for absolute links (invites, callbacks). No trailing slash."""
-        base = self._normalize_public_base(self.app_base_url) or self._normalize_public_base(
-            self.ngrok_url
-        )
+        base = self._normalize_public_base(self.app_base_url)
+        if not base and self.app_env.lower() in {"development", "local"}:
+            base = self._normalize_public_base(self.ngrok_url)
         if base:
             return base
         return f"http://127.0.0.1:{self.port}"

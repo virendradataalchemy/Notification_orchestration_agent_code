@@ -12,6 +12,7 @@ from src.models import Notification, NotificationChannel, NotificationStatus, Ch
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 templates = Jinja2Templates(directory="src/templates")
+templates.env.cache = None
 
 
 @router.get("/", response_class=HTMLResponse)

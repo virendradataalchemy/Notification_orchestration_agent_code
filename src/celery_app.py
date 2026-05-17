@@ -1,8 +1,13 @@
 """Celery application configuration for async task processing."""
 
+import logging
 from celery import Celery
 from celery.signals import worker_process_init
 from src.config import settings
+from src.utils.logger import configure_logging
+
+configure_logging(settings.log_level)
+logger = logging.getLogger(__name__)
 
 # Create Celery app
 celery_app = Celery(
@@ -26,6 +31,7 @@ celery_app.conf.update(
         'tasks.send_notification_medium': {'queue': 'medium', 'priority': 5},
         'tasks.send_notification_low': {'queue': 'low', 'priority': 3},
         'inbound.process_inbound_message': {'queue': 'medium', 'priority': 6},
+        'inbound.retry_stuck_messages': {'queue': 'low', 'priority': 2},
         'retention.clean_expired_inbound_data': {'queue': 'low', 'priority': 1},
     },
 
@@ -33,6 +39,8 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
+    worker_hijack_root_logger=False,
+    broker_connection_retry_on_startup=True,
 
     # Result expiration
     result_expires=3600,
@@ -40,6 +48,14 @@ celery_app.conf.update(
     # Task time limits
     task_time_limit=300,  # 5 minutes hard limit
     task_soft_time_limit=240,  # 4 minutes soft limit
+    
+    # Periodic tasks (beat schedule)
+    beat_schedule={
+        'retry-stuck-inbound-messages': {
+            'task': 'inbound.retry_stuck_messages',
+            'schedule': 300.0,  # Run every 5 minutes
+        },
+    },
 )
 
 # Auto-discover tasks
@@ -78,3 +94,4 @@ def init_celery_worker(**kwargs):
         asyncio.set_event_loop(loop)
         
     loop.run_until_complete(engine.dispose())
+    logger.info("Celery worker process initialized")

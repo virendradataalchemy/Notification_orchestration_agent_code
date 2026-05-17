@@ -176,7 +176,7 @@ class NotificationService:
                 if existing_id:
                     logger.info(f"Duplicate detected in Redis cache: {idempotency_key}")
                     return NotificationResponse(
-                        notification_id=existing_id,
+                        notification_id="already_sent",
                         status=NotificationStatus.QUEUED,
                         channels={},
                         estimated_delivery=datetime.utcnow(),
@@ -199,7 +199,7 @@ class NotificationService:
                     logger.info(f"Duplicate detected in database: {idempotency_key}")
                     # Return the existing notification
                     return NotificationResponse(
-                        notification_id=str(existing.id),
+                        notification_id="already_sent",
                         status=NotificationStatus.QUEUED,  # Return original status
                         channels={},
                         estimated_delivery=datetime.utcnow(),
@@ -223,7 +223,7 @@ class NotificationService:
                     request.recipient.user_id,
                 )
                 return NotificationResponse(
-                    notification_id=existing_recent_id,
+                    notification_id="already_sent",
                     status=NotificationStatus.QUEUED,
                     channels={},
                     estimated_delivery=datetime.utcnow(),
@@ -236,12 +236,16 @@ class NotificationService:
             logger.info(f"Running orchestration agent for user {request.recipient.user_id}")
 
             agent = OrchestrationAgent(self.db)
+            
+            agent_content = request.notification.body
+            if not agent_content and request.notification.template_id:
+                agent_content = f"template:{request.notification.template_id}:{json.dumps(request.notification.data or {}, sort_keys=True)}"
 
             orchestration_result = await agent.process_notification(
                 tenant_id=tenant_id,
                 user_id=request.recipient.user_id,
                 notification_type=request.notification.type,
-                content=request.notification.body,
+                content=agent_content,
                 priority=request.notification.priority.value,
                 requested_channels=[c.value for c in request.notification.channels],
                 metadata={
@@ -255,24 +259,8 @@ class NotificationService:
                 logger.info(
                     f"Duplicate notification detected: {orchestration_result['reason']}"
                 )
-                existing_id = orchestration_result.get('notification_id')
-                if not existing_id:
-                    existing_id = await self._find_recent_duplicate_notification_id(
-                        tenant_id=tenant_id,
-                        user_id=request.recipient.user_id,
-                        notification_type=request.notification.type,
-                        body=request.notification.body,
-                    )
-                if not existing_id:
-                    raise HTTPException(
-                        status_code=http_status.HTTP_409_CONFLICT,
-                        detail=(
-                            "Duplicate notification detected but existing record could not be resolved. "
-                            "Provide idempotency_key to guarantee deterministic deduplication."
-                        ),
-                    )
                 return NotificationResponse(
-                    notification_id=existing_id,
+                    notification_id="already_sent",
                     status=NotificationStatus.QUEUED,
                     channels={},
                     estimated_delivery=datetime.utcnow(),
@@ -726,11 +714,33 @@ class NotificationService:
                 detail="Either template_id or body is required for batch sends."
             )
 
+        from src.core import get_redis_client
+        from src.utils.deduplication import DeduplicationService
+        redis = await get_redis_client()
+        dedup = DeduplicationService(redis)
+
         # Create notifications for each recipient
         notification_ids = []
         for recipient in request.recipients:
             base_data = dict(request.data or {})
             base_data.update(recipient.data or {})
+
+            # Deduplication Check
+            content_for_dedup = request.body
+            if not content_for_dedup and request.template_id:
+                content_for_dedup = f"template:{request.template_id}:{json.dumps(base_data, sort_keys=True)}"
+                
+            is_dup = await dedup.is_duplicate(
+                user_id=recipient.user_id,
+                notification_type="batch_notification",
+                content=content_for_dedup
+            )
+            
+            if is_dup:
+                logger.info(f"Duplicate detected in batch for user {recipient.user_id}")
+                # Don't show send id, just show message is already sent
+                notification_ids.append("already_sent")
+                continue
 
             subject = request.subject
             body = request.body
@@ -821,6 +831,8 @@ class NotificationService:
             from src.tasks.notification_tasks import send_notification_medium
             queued_count = 0
             for nid in notification_ids:
+                if nid == "already_sent":
+                    continue
                 try:
                     send_notification_medium.apply_async(args=[nid], priority=5)
                     queued_count += 1
@@ -830,7 +842,7 @@ class NotificationService:
 
         return BatchNotificationResponse(
             batch_id=batch_id,
-            status="processing",
+            status="processing" if notification_ids and notification_ids[0] != "already_sent" else "already_sent",
             total_recipients=len(request.recipients),
             estimated_completion=request.schedule_at or datetime.utcnow(),
         )
@@ -898,8 +910,36 @@ class NotificationService:
                 detail="Either template_id, body, channel_template_map, or channel_body_map is required for batch-multichannel requests."
             )
 
+        from src.core import get_redis_client
+        from src.utils.deduplication import DeduplicationService
+        redis = await get_redis_client()
+        dedup = DeduplicationService(redis)
+
         notification_ids = []
         for recipient in request.recipients:
+            per_recipient_template_vars = dict(request.data or {})
+            per_recipient_template_vars.update(recipient.data or {})
+
+            # Deduplication Check
+            content_for_dedup = request.body
+            if not content_for_dedup and request.template_id:
+                content_for_dedup = f"template:{request.template_id}:{json.dumps(per_recipient_template_vars, sort_keys=True)}"
+            elif not content_for_dedup:
+                # Fallback for channel maps
+                content_for_dedup = f"batch_multichannel:{json.dumps(per_recipient_template_vars, sort_keys=True)}"
+
+            is_dup = await dedup.is_duplicate(
+                user_id=recipient.user_id,
+                notification_type="batch_notification",
+                content=content_for_dedup
+            )
+            
+            if is_dup:
+                logger.info(f"Duplicate detected in multichannel batch for user {recipient.user_id}")
+                # Don't show send id, just show message is already sent
+                notification_ids.append("already_sent")
+                continue
+
             # Build primary plan per recipient
             if has_client_channel_preference:
                 primary_plan = [ch for ch in requested_channels if ch in available_channels]
@@ -1071,6 +1111,8 @@ class NotificationService:
             # Use a slightly different execution approach to force immediate execution
             # rather than dumping all of them into the queue at once, especially for solo pools
             for nid in notification_ids:
+                if nid == "already_sent":
+                    continue
                 try:
                     # In a production environment, applying async is fine.
                     # But if we want to ensure it doesn't get stuck in the queue when running
@@ -1085,7 +1127,7 @@ class NotificationService:
 
         return BatchMultiChannelNotificationResponse(
             batch_id=batch_id,
-            status="processing",
+            status="processing" if notification_ids and notification_ids[0] != "already_sent" else "already_sent",
             total_recipients=len(request.recipients),
             total_notifications=total_notifications,
             total_channel_records=total_channel_records,

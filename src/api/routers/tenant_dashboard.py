@@ -20,8 +20,9 @@ logger = setup_logger(__name__)
 
 router = APIRouter(tags=["tenant-dashboard"])
 
-# Templates
+# Templates - disable cache to fix unhashable dict error
 templates = Jinja2Templates(directory="src/templates")
+templates.env.cache = None
 
 
 async def require_tenant_path_access(
@@ -1050,7 +1051,29 @@ async def get_marketing_threaded_activity(
         if use_owner_filter and owner_id:
             outbound_where += " AND n.owner_id = :owner_id"
 
-        # This query pairs notifications with their most recent subsequent reply
+        # Normalize sender like "Name <email@x.com>" for matching
+        sender_email_sql = """LOWER(TRIM(
+            CASE WHEN m.sender_address ~ '<[^>]+@[^>]+>'
+            THEN substring(m.sender_address from '<([^>]+)>')
+            ELSE m.sender_address END
+        ))"""
+
+        recipient_match = f"""(
+            (o.recipient_email IS NOT NULL AND {sender_email_sql} = LOWER(TRIM(o.recipient_email)))
+            OR (o.recipient_phone IS NOT NULL AND (
+                m.sender_address = o.recipient_phone
+                OR m.sender_address = 'whatsapp:' || o.recipient_phone
+                OR REPLACE(m.sender_address, 'whatsapp:', '') = o.recipient_phone
+            ))
+            OR (o.recipient_id IS NOT NULL AND m.sender_address = o.recipient_id)
+        )"""
+
+        same_recipient = """(
+            (o.recipient_email IS NOT NULL AND o2.recipient_email IS NOT NULL AND o2.recipient_email = o.recipient_email)
+            OR (o.recipient_phone IS NOT NULL AND o2.recipient_phone IS NOT NULL AND o2.recipient_phone = o.recipient_phone)
+            OR (o.recipient_id IS NOT NULL AND o2.recipient_id IS NOT NULL AND o2.recipient_id = o.recipient_id)
+        )"""
+
         query = text(f"""
             WITH outbound_page AS (
                 SELECT 
@@ -1077,45 +1100,80 @@ async def get_marketing_threaded_activity(
                 ORDER BY n.created_at DESC
                 LIMIT :limit
             ),
-            inbound_candidates AS (
-                SELECT 
-                    m.id as id,
+            inbound_assigned AS (
+                SELECT
+                    m.id,
                     m.created_at as timestamp,
-                    m.sender_address as sender,
-                    COALESCE(p.parsed_content, m.raw_payload->>'body', m.raw_payload->>'text', m.raw_payload->>'stripped-text') as content,
+                    COALESCE(
+                        NULLIF(p.parsed_content, ''),
+                        NULLIF(m.raw_payload->>'stripped-text', ''),
+                        NULLIF(m.raw_payload->>'body-plain', ''),
+                        NULLIF(m.raw_payload->>'Body', ''),
+                        NULLIF(m.raw_payload->>'body', ''),
+                        NULLIF(m.raw_payload->>'text', '')
+                    ) as content,
                     CAST(m.channel AS TEXT) as channel,
                     p.status as status,
-                    m.tenant_id,
                     ii.intent as ai_intent,
                     ii.confidence as ai_confidence,
-                    ii.rationale as ai_rationale
+                    ii.rationale as ai_rationale,
+                    COALESCE(
+                        (
+                            SELECT o.id
+                            FROM outbound_page o
+                            WHERE LOWER(CAST(o.channel AS TEXT)) = LOWER(CAST(m.channel AS TEXT))
+                            AND m.created_at >= o.timestamp
+                            AND m.created_at < COALESCE(
+                                (
+                                    SELECT MIN(o2.timestamp)
+                                    FROM outbound_page o2
+                                    WHERE o2.timestamp > o.timestamp
+                                    AND LOWER(CAST(o2.channel AS TEXT)) = LOWER(CAST(o.channel AS TEXT))
+                                    AND {same_recipient}
+                                ),
+                                o.timestamp + INTERVAL '90 days'
+                            )
+                            AND {recipient_match}
+                            ORDER BY o.timestamp DESC
+                            LIMIT 1
+                        ),
+                        (
+                            SELECT o.id
+                            FROM outbound_page o
+                            WHERE LOWER(CAST(o.channel AS TEXT)) = LOWER(CAST(m.channel AS TEXT))
+                            AND o.timestamp <= m.created_at
+                            AND {recipient_match}
+                            ORDER BY o.timestamp DESC
+                            LIMIT 1
+                        ),
+                        (
+                            SELECT o.id
+                            FROM outbound_page o
+                            WHERE LOWER(CAST(o.channel AS TEXT)) = LOWER(CAST(m.channel AS TEXT))
+                            AND o.timestamp > m.created_at
+                            AND {recipient_match}
+                            ORDER BY o.timestamp ASC
+                            LIMIT 1
+                        )
+                    ) as target_out_id
                 FROM inbound_messages_raw m
                 LEFT JOIN inbound_messages_parsed p ON m.id = p.raw_message_id
                 LEFT JOIN inbound_intents ii ON p.id = ii.parsed_message_id
                 WHERE m.tenant_id = :tenant_id
-                -- Only consider inbound messages newer than the oldest outbound message on this page
-                AND m.created_at >= (SELECT MIN(timestamp) FROM outbound_page)
+                AND m.created_at >= (SELECT COALESCE(MIN(timestamp), NOW() - INTERVAL '90 days') FROM outbound_page) - INTERVAL '90 days'
+                AND EXISTS (
+                    SELECT 1 FROM outbound_page o
+                    WHERE LOWER(CAST(o.channel AS TEXT)) = LOWER(CAST(m.channel AS TEXT))
+                    AND {recipient_match}
+                )
             ),
-            inbound_mapped AS (
-                SELECT 
-                    i.*,
-                    (
-                        SELECT n2.id
-                        FROM notifications n2
-                        JOIN notification_channels nc2 ON nc2.notification_id = n2.id
-                        WHERE n2.tenant_id = :tenant_id
-                        AND n2.created_at <= i.timestamp
-                        AND n2.created_at >= i.timestamp - INTERVAL '30 days'
-                        AND LOWER(CAST(nc2.channel AS TEXT)) = LOWER(CAST(i.channel AS TEXT))
-                        AND (
-                            (LOWER(CAST(i.channel AS TEXT)) = 'email' AND n2.data->>'email' = i.sender)
-                            OR (LOWER(CAST(i.channel AS TEXT)) IN ('sms', 'whatsapp', 'voice') AND (n2.data->>'phone' = i.sender OR 'whatsapp:' || (n2.data->>'phone') = i.sender OR n2.data->>'phone' = REPLACE(i.sender, 'whatsapp:', '')))
-                            OR n2.user_id = i.sender
-                        )
-                        ORDER BY n2.created_at DESC
-                        LIMIT 1
-                    ) as matched_out_id
-                FROM inbound_candidates i
+            inbound_deduped AS (
+                SELECT DISTINCT ON (target_out_id, LOWER(CAST(channel AS TEXT)))
+                    id, timestamp, content, channel, status,
+                    ai_intent, ai_confidence, ai_rationale, target_out_id
+                FROM inbound_assigned
+                WHERE target_out_id IS NOT NULL
+                ORDER BY target_out_id, LOWER(CAST(channel AS TEXT)), timestamp DESC
             )
             SELECT 
                 o.id as out_id,
@@ -1128,15 +1186,17 @@ async def get_marketing_threaded_activity(
                     WHEN o.opened_at IS NOT NULL THEN 'OPENED'
                     ELSE CAST(o.status AS TEXT)
                 END as out_status,
-                i.id as in_id,
-                i.timestamp as in_time,
-                i.content as in_content,
-                i.status as in_status,
-                i.ai_intent,
-                i.ai_confidence,
-                i.ai_rationale
+                inb.id as in_id,
+                inb.timestamp as in_time,
+                inb.content as in_content,
+                inb.status as in_status,
+                inb.ai_intent,
+                inb.ai_confidence,
+                inb.ai_rationale
             FROM outbound_page o
-            LEFT JOIN inbound_mapped i ON i.matched_out_id = o.id AND LOWER(CAST(i.channel AS TEXT)) = LOWER(CAST(o.channel AS TEXT))
+            LEFT JOIN inbound_deduped inb
+                ON inb.target_out_id = o.id
+                AND LOWER(CAST(inb.channel AS TEXT)) = LOWER(CAST(o.channel AS TEXT))
             ORDER BY o.timestamp DESC
         """)
 
@@ -1144,8 +1204,12 @@ async def get_marketing_threaded_activity(
         if use_owner_filter and owner_id:
             params["owner_id"] = owner_id
 
+        # logger.info(f"Query params: {params}")
+
         result = await db.execute(query, params)
         rows = result.fetchall()
+
+        # logger.info(f"Threaded activity returned {len(rows)} rows")
 
         activity = []
         for row in rows:

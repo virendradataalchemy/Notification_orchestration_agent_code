@@ -313,6 +313,13 @@
         const accessToken = localStorage.getItem('tenant_access_token');
         let currentThreads = [];
 
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         function formatIST(dateString, options = {}) {
             if (!dateString) return '';
             
@@ -420,6 +427,11 @@
                 
                 let replyCell = '';
                 if (thread.inbound) {
+                    const rawContent = thread.inbound.content || '';
+                    const plainContent = rawContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                    const replyPreview = plainContent
+                        ? (plainContent.substring(0, 40) + (plainContent.length > 40 ? '...' : ''))
+                        : '(Media/Empty)';
                     const intent = thread.inbound.ai_intent;
                     if (intent) {
                         const intentColors = {
@@ -429,12 +441,14 @@
                             'query': '#ca8a04'
                         };
                         const color = intentColors[intent.toLowerCase()] || '#64748b';
-                        replyCell = `<span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: ${color}15; color: ${color}; font-weight: 700; font-size: 11px; text-transform: uppercase; border: 1px solid ${color}30;">
-                            AI: ${intent}
-                        </span>`;
+                        replyCell = `<div style="display:flex; flex-direction:column; gap:4px;">
+                            <span style="color: #166534; font-weight: 600;">${escapeHtml(replyPreview)}</span>
+                            <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: ${color}15; color: ${color}; font-weight: 700; font-size: 11px; text-transform: uppercase; border: 1px solid ${color}30; width: fit-content;">
+                                AI: ${escapeHtml(intent)}
+                            </span>
+                        </div>`;
                     } else {
-                        const replyPreview = thread.inbound.content ? (thread.inbound.content.substring(0, 30) + (thread.inbound.content.length > 30 ? '...' : '')) : '(Media/Empty)';
-                        replyCell = `<span style="color: #166534; font-weight: 600;">${replyPreview}</span>`;
+                        replyCell = `<span style="color: #166534; font-weight: 600;">${escapeHtml(replyPreview)}</span>`;
                     }
                 } else {
                     if (String(thread.outbound.status).toLowerCase().includes('failed') || String(thread.outbound.status).toLowerCase().includes('bounced')) {
@@ -466,6 +480,7 @@
         function viewMessage(index) {
             const thread = currentThreads[index];
             if (!thread) return;
+            console.log("VIEW MESSAGE DATA", thread);
 
             document.getElementById('modalTitle').textContent = 'Conversation Details';
             document.getElementById('modalRecipient').textContent = thread.recipient;

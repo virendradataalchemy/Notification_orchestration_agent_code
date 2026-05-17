@@ -7,6 +7,11 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   celery_worker:
     build:
@@ -14,14 +19,19 @@ services:
       dockerfile: Dockerfile.celery
     container_name: notification_celery_worker
     restart: unless-stopped
+    working_dir: /app
     env_file:
       - .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+    # Bind-mount the repo so a git pull is reflected immediately in the worker
+    # without relying on a fresh image rebuild on every machine.
     volumes:
       - .:/app
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   ngrok:
     image: ngrok/ngrok:latest
@@ -33,7 +43,7 @@ services:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     command:
       - "http"
-      - "--url=rely-fossilisable-lukas.ngrok-free.dev"
+      - "--url=${NGROK_URL}"
       - "host.docker.internal:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"

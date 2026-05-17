@@ -147,7 +147,7 @@ class OrchestrationAgent:
                 return {
                     'is_duplicate': True,
                     'reason': 'idempotency_key',
-                    'existing_id': existing
+                    'existing_id': "already_sent"
                 }
 
         # Check 2: Content hash (Redis)
@@ -156,7 +156,8 @@ class OrchestrationAgent:
         if is_content_dup:
             return {
                 'is_duplicate': True,
-                'reason': 'content_hash'
+                'reason': 'content_hash',
+                'existing_id': "already_sent"
             }
 
         # Check 3: Semantic similarity (when pgvector available)
@@ -173,7 +174,7 @@ class OrchestrationAgent:
                 return {
                     'is_duplicate': True,
                     'reason': 'semantic_similarity',
-                    'existing_id': semantic_dup
+                    'existing_id': "already_sent"
                 }
 
         except Exception as e:

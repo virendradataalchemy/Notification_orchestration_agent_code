@@ -21,7 +21,7 @@ class ProviderManager:
         self.db = db
         self.providers = {
             'email': ['mailgun', 'azure_graph'],  # Mailgun is primary, azure_graph is fallback
-            'sms': ['twilio', 'aws_sns'],
+            'sms': ['twilio'],
             # 'push': ['fcm', 'apns'],
             'slack': ['slack_api'],
             'whatsapp': ['twilio'],

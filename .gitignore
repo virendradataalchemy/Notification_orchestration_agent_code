@@ -74,6 +74,9 @@ tmp/
 chroma_data/
 inbound_uploads/
 password.txt
+notify-app.zip
+test_db_output.json
+test_query_output.json
 
 # OS
 Thumbs.db
