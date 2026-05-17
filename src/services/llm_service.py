@@ -238,6 +238,11 @@ Classify the intent of this message into EXACTLY ONE of the following categories
 - request: The candidate is asking for an action (e.g., reschedule, send info, update details).
 - query: The candidate is asking a question or seeking clarification.
 
+Important disambiguation rules:
+- If the message contains dissatisfaction plus a follow-up question seeking options, alternatives, or clarification, classify it as query.
+- Example: "I don't like your burger. Do you have any other flavours?" => query
+- Use reject only when the sender is primarily declining, opting out, or trying to stop the conversation.
+
 Respond ONLY with valid JSON in this exact format (no markdown tags):
 {{
     "intent": "accept|reject|request|query|unknown",

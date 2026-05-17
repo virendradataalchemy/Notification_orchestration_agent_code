@@ -332,6 +332,7 @@
     </div>
 
     <script>
+        window.APP_TIMEZONE = {{ display_timezone|tojson }};
         // Get tenant ID from URL path (/portal/{tenant_id}/dashboard)
         const pathParts = window.location.pathname.split('/');
         const tenantId = pathParts[2]; // /portal/acme_corp/dashboard
@@ -362,7 +363,7 @@
             }
 
             const defaultOptions = {
-                timeZone: 'Asia/Kolkata',
+                timeZone: window.APP_TIMEZONE || 'Asia/Kolkata',
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',

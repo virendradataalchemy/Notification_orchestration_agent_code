@@ -74,6 +74,17 @@ def _redirect_to_login():
     return response
 
 
+def _portal_context(request: Request, tenant: Tenant, **extra):
+    context = {
+        "request": request,
+        "tenant_id": tenant.id,
+        "tenant_name": tenant.name,
+        "display_timezone": ((tenant.config or {}).get("display_timezone") or "Asia/Kolkata"),
+    }
+    context.update(extra)
+    return context
+
+
 @router.get("/", include_in_schema=False)
 async def portal_root():
     """Redirect portal root to login page."""
@@ -152,7 +163,7 @@ async def tenant_dashboard_page(
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
-        context={"request": request, "tenant_id": tenant_id}
+        context=_portal_context(request, tenant)
     )
 
 
@@ -172,7 +183,7 @@ async def templates_list_page(
     return templates.TemplateResponse(
         request=request,
         name="templates.html",
-        context={"request": request, "tenant_id": tenant_id}
+        context=_portal_context(request, tenant)
     )
 
 
@@ -192,7 +203,7 @@ async def template_create_page(
     return templates.TemplateResponse(
         request=request,
         name="template_create.html",
-        context={"request": request, "tenant_id": tenant_id}
+        context=_portal_context(request, tenant)
     )
 
 
@@ -213,12 +224,7 @@ async def template_edit_page(
     return templates.TemplateResponse(
         request=request,
         name="template_create.html",
-        context={
-            "request": request,
-            "tenant_id": tenant_id,
-            "template_id": template_id,
-            "mode": "edit"
-        }
+        context=_portal_context(request, tenant, template_id=template_id, mode="edit")
     )
 
 
@@ -239,12 +245,7 @@ async def template_view_page(
     return templates.TemplateResponse(
         request=request,
         name="template_create.html",
-        context={
-            "request": request,
-            "tenant_id": tenant_id,
-            "template_id": template_id,
-            "mode": "view"
-        }
+        context=_portal_context(request, tenant, template_id=template_id, mode="view")
     )
 
 
@@ -264,7 +265,7 @@ async def profile_page(
     return templates.TemplateResponse(
         request=request,
         name="profile.html",
-        context={"request": request, "tenant_id": tenant_id}
+        context=_portal_context(request, tenant)
     )
 
 
@@ -284,7 +285,7 @@ async def developer_page(
     return templates.TemplateResponse(
         request=request,
         name="developer.html",
-        context={"request": request, "tenant_id": tenant_id}
+        context=_portal_context(request, tenant)
     )
 
 
@@ -304,7 +305,7 @@ async def channel_settings_page(
     return templates.TemplateResponse(
         request=request,
         name="channel_settings.html",
-        context={"request": request, "tenant_id": tenant_id}
+        context=_portal_context(request, tenant)
     )
 
 
@@ -324,7 +325,7 @@ async def analytics_page(
     return templates.TemplateResponse(
         request=request,
         name="analytics.html",
-        context={"request": request, "tenant_id": tenant_id}
+        context=_portal_context(request, tenant)
     )
 
 
@@ -344,11 +345,7 @@ async def marketing_dashboard_page(
     return templates.TemplateResponse(
         request=request,
         name="marketing.html",
-        context={
-            "request": request,
-            "tenant_id": tenant_id,
-            "tenant_name": tenant.name
-        }
+        context=_portal_context(request, tenant)
     )
 
 
@@ -368,11 +365,7 @@ async def marketing_detailed_dashboard_page(
     return templates.TemplateResponse(
         request=request,
         name="marketing_dashboard.html",
-        context={
-            "request": request,
-            "tenant_id": tenant_id,
-            "tenant_name": tenant.name
-        }
+        context=_portal_context(request, tenant)
     )
 
 
@@ -397,10 +390,5 @@ async def team_management_page(
     return templates.TemplateResponse(
         request=request,
         name="team.html",
-        context={
-            "request": request,
-            "tenant_id": tenant_id,
-            "tenant_name": tenant.name,
-            "user_role": tenant.current_user_role
-        }
+        context=_portal_context(request, tenant, user_role=tenant.current_user_role)
     )

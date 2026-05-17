@@ -63,32 +63,21 @@ flake8
 mypy
 pre-commit
 
-# LangGraph & AI (Keep for compatibility)
-langgraph
-langchain
-langchain-core
-langchain-aws
-
-# Strands Agents (Agentic Framework)
-strands-agents>=0.5.0
-strands-agents-tools>=0.3.0
-
-# Observability
-langfuse>=2.0.0
+# Optional AI / agentic routing layer (disabled for current internal-module deployment)
+# Uncomment only when re-enabling self-learning routing / ChromaDB memory.
+# langgraph
+# langchain
+# langchain-core
+# langchain-aws
+# strands-agents>=0.5.0
+# strands-agents-tools>=0.3.0
+# langfuse>=2.0.0
+# scikit-learn==1.6.0
+# pandas==2.2.3
+# chromadb>=0.5.23
 
 # Celery & Queue (Phase 1)
 celery[redis]==5.4.0
 flower==2.0.1
-
-# ML & Embeddings (Phase 2)
-scikit-learn==1.6.0
-pandas==2.2.3
-
-# Vector Database (compatible with NumPy 2.0)
-chromadb>=0.5.23
-
-strands-agents
-strands-agents-tools
-langchain-aws
 # Demo script dependencies
 colorama>=0.4.6

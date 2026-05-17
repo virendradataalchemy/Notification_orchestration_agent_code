@@ -7,6 +7,7 @@ A multi-tenant notification platform for sending messages across WhatsApp, Email
 - Single API for multi-channel notifications
 - Tenant onboarding portal (signup/login/dashboard)
 - Tenant-owned template management
+- Automatic email branding footer support
 - Delivery tracking and status visibility
 - Channel capability discovery endpoint for client validation
 - Batch and multi-channel sends
@@ -24,6 +25,27 @@ A multi-tenant notification platform for sending messages across WhatsApp, Email
 | `inapp` | No | Yes | -->
 
 Rule applies to both single send and bulk send flows.
+
+## Current Scope
+
+This repo currently works best as an internal notification module for one company:
+
+- send notifications across email, SMS, WhatsApp, Slack, and voice
+- receive inbound replies through provider webhooks
+- classify reply intent and show it back in the dashboard
+- apply tenant/company-owned templates and branding
+
+The self-learning ML/agentic layer is preserved in the repo for future use, but it is not part of the active runtime path right now.
+
+## Core Runtime Flow
+
+1. Client sends a notification request to the API or SDK.
+2. Notification is stored and queued.
+3. Redis brokers the job to Celery.
+4. Celery sends through the selected channel/provider with retry and failover logic.
+5. Provider webhooks update delivery state.
+6. Inbound replies are captured through webhook endpoints.
+7. Replies are parsed, intent is detected, and live dashboard updates are pushed over WebSocket/Redis pub-sub.
 
 ## Key URLs
 
@@ -55,6 +77,8 @@ cp .env.example .env
 # Then fill in your own secrets in .env before continuing.
 ```
 
+Install Python dependencies for local non-Docker runs:
+
 ```bash
 python -m venv venv
 # Windows
@@ -64,24 +88,70 @@ venv\Scripts\activate
 
 pip install -r requirements.txt
 alembic upgrade head
-uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-For teammates pulling fresh code, the safest local restart is:
+### Run Modes
+
+#### 1. Local API via `uvicorn` + Docker for Redis/Celery/ngrok
+
+Use this for the fastest local development loop.
+
+```bash
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+docker compose up -d --build
+```
+
+This local Docker stack starts:
+
+- `redis`
+- `celery_worker`
+- `celery_beat`
+- `ngrok`
+
+#### 2. Local Full Docker Mode
+
+Use this when you want the API to run in Docker too.
+
+```bash
+docker compose -f docker-compose.aws.yml up -d --build
+```
+
+This uses:
+
+- `Dockerfile` for the API container
+- `Dockerfile.celery` for the Celery worker
+- `redis` in Docker
+
+It does not start `ngrok`, so it is better for container parity than local inbound webhook testing.
+
+#### 3. AWS / Containerized Deployment
+
+Use the AWS compose file on the server:
+
+```bash
+docker compose -f docker-compose.aws.yml up -d --build
+```
+
+This uses:
+
+- `Dockerfile` for the API container
+- `Dockerfile.celery` for the Celery worker
+
+For teammates pulling fresh code, the safest restart is:
 
 ```bash
 docker compose down
 docker compose up -d --build
 ```
 
-The local Celery worker now bind-mounts the repo, so after `git pull` it reads the latest code from the working tree instead of silently running stale baked-in worker code from an older image.
+If you are using full Docker mode or AWS compose, use the matching compose file:
 
-Local Docker now also starts:
+```bash
+docker compose -f docker-compose.aws.yml down
+docker compose -f docker-compose.aws.yml up -d --build
+```
 
-- `redis`
-- `celery_worker`
-- `celery_beat`
-- `ngrok`
+The local Celery worker bind-mounts the repo, so after `git pull` it reads the latest code from the working tree instead of silently running stale baked-in worker code from an older image.
 
 This matters for reliability:
 
@@ -97,9 +167,10 @@ After cloning on a new laptop:
 1. Copy `.env.example` to `.env`
 2. Add your own credentials and secrets
 3. If using a reserved `ngrok` URL, make sure no other laptop is currently using that same URL
-4. Start the API locally with `uvicorn`
-5. Start Docker services with `docker compose up -d --build`
-6. Run the local stack checker:
+4. Choose a run mode:
+   local `uvicorn` mode: start `uvicorn` and then `docker compose up -d --build`
+   full Docker mode: run `docker compose -f docker-compose.aws.yml up -d --build`
+5. Run the local stack checker:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\manual\check_local_stack.ps1
@@ -113,6 +184,55 @@ The checker verifies:
 - `celery_beat` is running
 - `ngrok` is running
 - API `/health` responds
+
+## Email Branding
+
+Email branding is built into the active send flow.
+
+What it does:
+
+- appends a tenant/company branding footer to outgoing emails
+- works for both template-based emails and raw-body emails
+- applies in single-send, batch, and batch-multichannel email flows
+- supports a default generated footer or custom footer HTML
+
+How it works:
+
+- branding is stored in `tenant_branding`
+- email template rendering uses [src/services/tenant_template_engine.py](</c:/Users/PRATEEK G/Desktop/Notification-orchestration-prateek-dev/Notification_orchestration_agent_code/src/services/tenant_template_engine.py:23>)
+- raw email bodies also go through branding-aware rendering
+- notification send paths call the branding-aware renderer from [src/services/notification_service.py](</c:/Users/PRATEEK G/Desktop/Notification-orchestration-prateek-dev/Notification_orchestration_agent_code/src/services/notification_service.py:435>)
+
+Branding can include:
+
+- company logo URL
+- company name
+- theme/accent color
+- contact email
+- contact phone
+- website
+- optional custom footer HTML
+
+Relevant endpoints:
+
+- `POST /api/v1/branding`
+- `POST /api/v1/branding/from-template`
+- `GET /api/v1/branding`
+- `DELETE /api/v1/branding`
+- `POST /api/v1/branding/preview`
+
+Operational notes:
+
+- branding is email-focused; it is not appended to SMS/WhatsApp/voice bodies
+- if no branding is configured, email still sends normally
+- if custom footer HTML is provided, it replaces the default footer layout
+
+Production recommendations for email branding:
+
+- set up SPF, DKIM, and DMARC properly
+- use a real Mailgun/custom sending domain instead of a sandbox domain
+- host logos on a stable public URL or CDN
+- keep logo size optimized for email clients
 
 ### Local ngrok vs AWS
 
@@ -154,14 +274,21 @@ In production, the app now only falls back to `NGROK_URL` when `APP_ENV` is `dev
 ## Core API Endpoints
 
 - `POST /api/v1/notifications/send`
-- `POST /api/v1/notifications/agentic`
 - `POST /api/v1/notifications/batch`
 - `POST /api/v1/notifications/batch-multichannel`
 - `GET /api/v1/notifications/{notification_id}`
 - `GET /api/v1/channels/capabilities`
+- `POST /webhooks/inbound/mailgun`
+- `POST /webhooks/inbound/twilio`
+- `POST /webhooks/mailgun/delivery`
+- `POST /webhooks/twilio`
 - `POST /api/v1/tenant/auth/signup`
 - `POST /api/v1/tenant/auth/login`
 - `POST /api/v1/tenant/templates/`
+
+Optional future route retained but intentionally disabled right now:
+
+- `POST /api/v1/notifications/agentic`
 
 ## Direct Python Module Usage
 
@@ -303,6 +430,13 @@ Tenant templates can be managed from:
 
 Platform can internally map tenant templates to provider-native template references where needed.
 
+Template + branding behavior:
+
+- `email` can use template or raw body
+- `sms`, `slack`, and `voice` can use template or raw body
+- `whatsapp` requires a template
+- email branding footer can be attached whether the email body came from a template or raw content
+
 ## Architecture and Plans
 
 - Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md)
@@ -312,4 +446,5 @@ Platform can internally map tenant templates to provider-native template referen
 
 - Provider-specific complexity is abstracted from tenant clients.
 - Tenant users should focus on payload correctness and delivery outcomes.
+- Redis, Celery, and webhook processing are part of the active runtime and are required for reliable asynchronous delivery and inbound reply handling.
 - For detailed onboarding/tutorial, see `/portal/how-to-use`.

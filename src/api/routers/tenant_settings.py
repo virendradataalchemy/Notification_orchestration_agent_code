@@ -24,6 +24,14 @@ router = APIRouter(prefix="/tenant/settings", tags=["tenant-settings"])
 
 SUPPORTED_CHANNELS = ["email", "sms", "whatsapp", "slack", "voice"] #, "push", "inapp"]
 SUPPORTED_DELIVERY_MODES = {"parallel_all", "sequential_failover"}
+SUPPORTED_DISPLAY_TIMEZONES = [
+    "Asia/Kolkata",
+    "UTC",
+    "Asia/Dubai",
+    "Asia/Singapore",
+    "Europe/London",
+    "America/New_York",
+]
 
 
 class TenantProfileResponse(BaseModel):
@@ -48,6 +56,8 @@ class DeveloperSettingsResponse(BaseModel):
     tenant_id: str
     api_key_prefix: str
     note: str
+    display_timezone: str
+    supported_timezones: List[str]
     updated_at: datetime | None = None
 
 
@@ -55,6 +65,10 @@ class RotateApiKeyResponse(BaseModel):
     api_key: str
     api_key_prefix: str
     message: str
+
+
+class DeveloperSettingsUpdateRequest(BaseModel):
+    display_timezone: str
 
 
 class ChannelPreferenceItem(BaseModel):
@@ -193,6 +207,40 @@ async def get_developer_settings(
         tenant_id=current.id,
         api_key_prefix=current.api_key_prefix,
         note="Full API key is only shown once at creation/rotation time.",
+        display_timezone=(current.config or {}).get("display_timezone") or "Asia/Kolkata",
+        supported_timezones=SUPPORTED_DISPLAY_TIMEZONES,
+        updated_at=current.updated_at,
+    )
+
+
+@router.put("/developer", response_model=DeveloperSettingsResponse)
+async def update_developer_settings(
+    payload: DeveloperSettingsUpdateRequest,
+    tenant: Tenant = Depends(get_authenticated_tenant),
+    db: AsyncSession = Depends(get_db)
+):
+    current = await db.get(Tenant, tenant.id)
+    if not current:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    timezone_value = (payload.display_timezone or "").strip()
+    if timezone_value not in SUPPORTED_DISPLAY_TIMEZONES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported display_timezone: {timezone_value}"
+        )
+
+    current.config = {**(current.config or {}), "display_timezone": timezone_value}
+    current.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(current)
+
+    return DeveloperSettingsResponse(
+        tenant_id=current.id,
+        api_key_prefix=current.api_key_prefix,
+        note="Full API key is only shown once at creation/rotation time.",
+        display_timezone=(current.config or {}).get("display_timezone") or "Asia/Kolkata",
+        supported_timezones=SUPPORTED_DISPLAY_TIMEZONES,
         updated_at=current.updated_at,
     )
 

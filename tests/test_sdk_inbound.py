@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 import os
 from pathlib import Path
 import sys
@@ -21,6 +21,7 @@ from src.sdk.inbound import (
     process_inbound_reply,
     process_inbound_reply_async,
 )
+from src.services.intent_engine import IntentEngineService
 
 
 class FakeSession:
@@ -61,8 +62,8 @@ async def test_process_inbound_reply_async_immediate_success(monkeypatch):
         raw_payload={"Body": "yes"},
         owner_id=None,
         retention_date=None,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     expected = {
         "status": "processed",
@@ -107,8 +108,8 @@ async def test_process_inbound_reply_async_accepts_chat_channel(monkeypatch):
         raw_payload={"message": "Need help with my order"},
         owner_id=None,
         retention_date=None,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     expected = {
         "status": "processed",
@@ -155,8 +156,8 @@ async def test_process_inbound_reply_async_coerces_owner_id_to_uuid(monkeypatch)
         raw_payload={"Body": "yes"},
         owner_id=None,
         retention_date=None,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     owner_id = "00000000-0000-0000-0000-000000000123"
 
@@ -202,8 +203,8 @@ async def test_process_inbound_reply_async_enqueue(monkeypatch):
         raw_payload={"Body": "yes"},
         owner_id=None,
         retention_date=None,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     enqueued = {}
 
@@ -286,8 +287,8 @@ async def test_get_inbound_conversation_async_success(monkeypatch):
                 raw_payload={"stripped-text": "Yes, I accept"},
                 owner_id=None,
                 retention_date=None,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
             parsed_record = SimpleNamespace(
                 id="parsed-123",
@@ -297,8 +298,8 @@ async def test_get_inbound_conversation_async_success(monkeypatch):
                 failure_reason=None,
                 metadata_json=None,
                 reference_id="notif-123",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
             intent_record = SimpleNamespace(
                 id="intent-123",
@@ -307,7 +308,7 @@ async def test_get_inbound_conversation_async_success(monkeypatch):
                 detection_method=DetectionMethod.RULES,
                 rationale="Matched Regex Pattern",
                 needs_review=False,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
             )
             return [(raw_record, parsed_record, intent_record)]
 
@@ -375,3 +376,67 @@ def test_detect_reply_intent_sync_wrapper(monkeypatch):
     )
 
     assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_intent_engine_prioritizes_query_for_negative_feedback_plus_question(monkeypatch):
+    class FakeLLM:
+        async def classify_inbound_intent(self, parsed_content):
+            return {"intent": "unknown", "confidence": 0.0, "rationale": "not used"}
+
+    monkeypatch.setattr("src.services.intent_engine.BedrockLLMService", lambda: FakeLLM())
+    service = IntentEngineService(FakeSession())
+
+    parsed_msg = SimpleNamespace(
+        id="parsed-1",
+        parsed_content="I don't like your burger. Do you have any other flavours?",
+    )
+    raw_msg = SimpleNamespace(raw_payload={})
+
+    result = await service.detect_intent(parsed_msg, raw_msg)
+
+    assert result.intent == IntentCategory.QUERY
+    assert result.detection_method == DetectionMethod.RULES
+    assert result.needs_review is False
+
+
+@pytest.mark.asyncio
+async def test_intent_engine_keeps_request_for_action_question(monkeypatch):
+    class FakeLLM:
+        async def classify_inbound_intent(self, parsed_content):
+            return {"intent": "unknown", "confidence": 0.0, "rationale": "not used"}
+
+    monkeypatch.setattr("src.services.intent_engine.BedrockLLMService", lambda: FakeLLM())
+    service = IntentEngineService(FakeSession())
+
+    parsed_msg = SimpleNamespace(
+        id="parsed-2",
+        parsed_content="Can you reschedule this for tomorrow?",
+    )
+    raw_msg = SimpleNamespace(raw_payload={})
+
+    result = await service.detect_intent(parsed_msg, raw_msg)
+
+    assert result.intent == IntentCategory.REQUEST
+    assert result.detection_method == DetectionMethod.RULES
+
+
+@pytest.mark.asyncio
+async def test_intent_engine_keeps_hard_opt_out_as_reject(monkeypatch):
+    class FakeLLM:
+        async def classify_inbound_intent(self, parsed_content):
+            return {"intent": "unknown", "confidence": 0.0, "rationale": "not used"}
+
+    monkeypatch.setattr("src.services.intent_engine.BedrockLLMService", lambda: FakeLLM())
+    service = IntentEngineService(FakeSession())
+
+    parsed_msg = SimpleNamespace(
+        id="parsed-3",
+        parsed_content="Stop messaging me. Unsubscribe me now.",
+    )
+    raw_msg = SimpleNamespace(raw_payload={})
+
+    result = await service.detect_intent(parsed_msg, raw_msg)
+
+    assert result.intent == IntentCategory.REJECT
+    assert result.detection_method == DetectionMethod.RULES

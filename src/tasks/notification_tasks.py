@@ -26,11 +26,66 @@ from src.models import (
     TenantProviderConfig,
 )
 from src.services.provider_manager import ProviderManager
-from src.services.orchestration_agent import OrchestrationAgent
 from src.services.channel_policy import get_provider_for_channel
 from src.providers.base import Message, ProviderStatus
 
 logger = logging.getLogger(__name__)
+
+
+async def _update_user_engagement(
+    db,
+    tenant_id: str,
+    user_id: str,
+    channel: str,
+    success: bool,
+    delivery_time_seconds: Optional[int] = None
+):
+    """
+    Keep simple engagement stats without depending on the removed agentic/ML
+    orchestration layer.
+    """
+    try:
+        if success:
+            query = text("""
+                INSERT INTO user_engagement
+                    (tenant_id, user_id, channel, success_count, failure_count,
+                     total_sent, avg_delivery_time_seconds, last_successful_delivery)
+                VALUES
+                    (:tenant_id, :user_id, :channel, 1, 0, 1, :delivery_time, NOW())
+                ON CONFLICT (tenant_id, user_id, channel)
+                DO UPDATE SET
+                    success_count = user_engagement.success_count + 1,
+                    total_sent = user_engagement.total_sent + 1,
+                    avg_delivery_time_seconds = (
+                        COALESCE(user_engagement.avg_delivery_time_seconds, 0) + :delivery_time
+                    ) / 2,
+                    last_successful_delivery = NOW(),
+                    updated_at = NOW()
+            """)
+        else:
+            query = text("""
+                INSERT INTO user_engagement
+                    (tenant_id, user_id, channel, success_count, failure_count, total_sent)
+                VALUES
+                    (:tenant_id, :user_id, :channel, 0, 1, 1)
+                ON CONFLICT (tenant_id, user_id, channel)
+                DO UPDATE SET
+                    failure_count = user_engagement.failure_count + 1,
+                    total_sent = user_engagement.total_sent + 1,
+                    updated_at = NOW()
+            """)
+
+        await db.execute(
+            query,
+            {
+                'tenant_id': tenant_id,
+                'user_id': user_id,
+                'channel': channel,
+                'delivery_time': delivery_time_seconds or 0,
+            }
+        )
+    except Exception as exc:
+        logger.error("Failed to update user engagement for %s/%s on %s: %s", tenant_id, user_id, channel, exc)
 
 def _is_retryable_channel_error(error_text: str) -> bool:
     """Return False for permanent/configuration errors that should not be retried."""
@@ -180,7 +235,6 @@ async def _send_notification_async(
 
             # Initialize managers
             provider_mgr = ProviderManager(db)
-            orchestration_agent = OrchestrationAgent(db)
             notif_data = notification.data or {}
             delivery_mode = notif_data.get("delivery_mode", "parallel_all")
             channel_plan = notif_data.get("channel_plan", [])
@@ -194,7 +248,6 @@ async def _send_notification_async(
                     notification=notification,
                     channel_records=notification.channels,
                     provider_mgr=provider_mgr,
-                    orchestration_agent=orchestration_agent,
                     max_attempts=max_attempts,
                     channel_plan=channel_plan
                 )
@@ -210,7 +263,6 @@ async def _send_notification_async(
                         notification=notification,
                         channel_record=channel_record,
                         provider_mgr=provider_mgr,
-                        orchestration_agent=orchestration_agent,
                         max_attempts=max_attempts
                     )
 
@@ -285,7 +337,6 @@ async def _send_via_channel(
     notification: Notification,
     channel_record: NotificationChannel,
     provider_mgr: ProviderManager,
-    orchestration_agent: OrchestrationAgent,
     max_attempts: int
 ) -> Dict[str, Any]:
     """
@@ -356,8 +407,9 @@ async def _send_via_channel(
                 # Mark provider success
                 await provider_mgr.mark_provider_success(provider, channel, elapsed_ms)
 
-                # Update user engagement (success)
-                await orchestration_agent.update_user_engagement(
+                # Update basic user engagement stats
+                await _update_user_engagement(
+                    db=db,
                     tenant_id=tenant_id,
                     user_id=user_id,
                     channel=channel,
@@ -434,8 +486,9 @@ async def _send_via_channel(
                     }
                 )
 
-                # Update user engagement (failure)
-                await orchestration_agent.update_user_engagement(
+                # Update basic user engagement stats
+                await _update_user_engagement(
+                    db=db,
                     tenant_id=tenant_id,
                     user_id=user_id,
                     channel=channel,
@@ -469,7 +522,6 @@ async def _process_channels_sequential(
     notification: Notification,
     channel_records,
     provider_mgr: ProviderManager,
-    orchestration_agent: OrchestrationAgent,
     max_attempts: int,
     channel_plan: list
 ) -> tuple[Dict[str, Any], bool]:
@@ -502,7 +554,6 @@ async def _process_channels_sequential(
             notification=notification,
             channel_record=channel_record,
             provider_mgr=provider_mgr,
-            orchestration_agent=orchestration_agent,
             max_attempts=max_attempts
         )
         results[channel] = result
@@ -659,4 +710,3 @@ def _build_message(notification: Notification, channel: str) -> Message:
     )
 
     return message
-

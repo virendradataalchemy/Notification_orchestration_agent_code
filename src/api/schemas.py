@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -155,8 +155,7 @@ class NotificationResponse(BaseModel):
     estimated_delivery: Optional[datetime] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BatchNotificationResponse(BaseModel):
@@ -190,8 +189,7 @@ class NotificationStatusResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Template Schemas
@@ -301,14 +299,14 @@ class TemplateResponse(BaseModel):
     branding: Optional[BrandingConfig] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
-    @validator("branding", pre=True, always=True)
-    def extract_branding(cls, v, values):
+    @field_validator("branding", mode="before")
+    @classmethod
+    def extract_branding(cls, v, info):
         if v is not None:
             return v
-        meta = values.get("provider_template_meta")
+        meta = info.data.get("provider_template_meta") if info.data else None
         if meta and isinstance(meta, dict) and "branding" in meta:
             return BrandingConfig(**meta["branding"])
         return None
@@ -341,8 +339,7 @@ class UserPreferenceResponse(BaseModel):
     language: Optional[str] = None
     timezone: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Webhook Schemas

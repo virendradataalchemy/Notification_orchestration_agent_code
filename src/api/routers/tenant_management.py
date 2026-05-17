@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from datetime import datetime
 import uuid
 
@@ -26,7 +26,7 @@ class CreateTenantRequest(BaseModel):
     name: str
     admin_email: EmailStr
     admin_name: Optional[str] = None
-    config: Optional[Dict[str, Any]] = {}
+    config: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class TenantResponse(BaseModel):
@@ -39,8 +39,7 @@ class TenantResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class APIKeyResponse(BaseModel):
@@ -64,8 +63,7 @@ class ProviderConfigResponse(BaseModel):
     notes: Optional[str]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UpdateTenantRequest(BaseModel):

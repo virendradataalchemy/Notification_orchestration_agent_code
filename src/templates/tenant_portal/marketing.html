@@ -442,6 +442,7 @@
     </div>
 
     <script>
+        window.APP_TIMEZONE = {{ display_timezone|tojson }};
         const pathParts = window.location.pathname.split('/');
         const tenantId = pathParts[2];
         const accessToken = localStorage.getItem('tenant_access_token');
@@ -470,7 +471,7 @@
             }
 
             const defaultOptions = {
-                timeZone: 'Asia/Kolkata',
+                timeZone: window.APP_TIMEZONE || 'Asia/Kolkata',
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',

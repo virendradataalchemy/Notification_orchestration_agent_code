@@ -1,12 +1,6 @@
+from importlib import import_module
+
 from .base import NotificationProvider, ProviderResponse
-from .email_provider import EmailProvider
-from .mailgun_provider import MailgunProvider
-from .sms_provider import SMSProvider
-from .whatsapp_provider import WhatsAppProvider
-from .slack_provider import SlackProvider
-# from .push_provider import PushProvider
-from .voice_provider import VoiceProvider
-# from .inapp_provider import InAppProvider
 from .mock_provider import (
     MockSMSProvider,
     MockEmailProvider,
@@ -17,6 +11,15 @@ from .mock_provider import (
     # MockInAppProvider,
 )
 from src.config import settings
+
+
+def _load_provider_class(module_name: str, class_name: str):
+    """
+    Lazily import provider implementations so optional channel SDKs are only
+    required when that specific channel is actually used.
+    """
+    module = import_module(f"src.providers.{module_name}")
+    return getattr(module, class_name)
 
 
 def get_provider_for_channel(channel: str, provider_name: str = None, config: dict = None):
@@ -50,34 +53,34 @@ def get_provider_for_channel(channel: str, provider_name: str = None, config: di
     # Real providers
     provider_map = {
         'email': {
-            'mailgun': MailgunProvider,
-            # 'aws_ses': EmailProvider,  # Deprecated in favor of Mailgun
-            'default': MailgunProvider
+            'mailgun': ('mailgun_provider', 'MailgunProvider'),
+            # 'aws_ses': ('email_provider', 'EmailProvider'),  # Deprecated in favor of Mailgun
+            'default': ('mailgun_provider', 'MailgunProvider')
         },
         'sms': {
-            'twilio': SMSProvider,
-            'default': SMSProvider
+            'twilio': ('sms_provider', 'SMSProvider'),
+            'default': ('sms_provider', 'SMSProvider')
         },
         'whatsapp': {
-            'twilio': WhatsAppProvider,
-            'default': WhatsAppProvider
+            'twilio': ('whatsapp_provider', 'WhatsAppProvider'),
+            'default': ('whatsapp_provider', 'WhatsAppProvider')
         },
         'slack': {
-            'slack_api': SlackProvider,
-            'default': SlackProvider
+            'slack_api': ('slack_provider', 'SlackProvider'),
+            'default': ('slack_provider', 'SlackProvider')
         },
         # 'push': {
-        #     'fcm': PushProvider,
-        #     'default': PushProvider
+        #     'fcm': ('push_provider', 'PushProvider'),
+        #     'default': ('push_provider', 'PushProvider')
         # },
         'voice': {
-            'twilio': VoiceProvider,
-            'default': VoiceProvider
+            'twilio': ('voice_provider', 'VoiceProvider'),
+            'default': ('voice_provider', 'VoiceProvider')
         },
         # 'inapp': {
-        #     'websocket': InAppProvider,
-        #     'inapp': InAppProvider,
-        #     'default': InAppProvider
+        #     'websocket': ('inapp_provider', 'InAppProvider'),
+        #     'inapp': ('inapp_provider', 'InAppProvider'),
+        #     'default': ('inapp_provider', 'InAppProvider')
         # },
     }
 
@@ -87,9 +90,11 @@ def get_provider_for_channel(channel: str, provider_name: str = None, config: di
         return None
 
     # Get specific provider or default
-    provider_class = channel_providers.get(provider_name) or channel_providers.get('default')
+    provider_target = channel_providers.get(provider_name) or channel_providers.get('default')
 
-    if provider_class:
+    if provider_target:
+        module_name, class_name = provider_target
+        provider_class = _load_provider_class(module_name, class_name)
         return provider_class(config=config)
 
     return None
@@ -98,13 +103,5 @@ def get_provider_for_channel(channel: str, provider_name: str = None, config: di
 __all__ = [
     "NotificationProvider",
     "ProviderResponse",
-    "EmailProvider",
-    "MailgunProvider",
-    "SMSProvider",
-    "WhatsAppProvider",
-    "SlackProvider",
-    # "PushProvider",
-    "VoiceProvider",
-    # "InAppProvider",
     "get_provider_for_channel",
 ]

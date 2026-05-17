@@ -15,7 +15,6 @@ from src.api.schemas import (
 from src.api.dependencies import user_rate_limiter
 from src.api.dependencies import get_authenticated_tenant
 from src.models import Tenant
-from src.agents.sync_team import get_notification_team
 from src.sdk import (
     NotificationPipelineError,
     get_notification_status_async,
@@ -46,7 +45,6 @@ async def send_notification(
     This endpoint creates and queues a notification for delivery across specified channels.
     Supports intelligent routing, priority handling, and automatic failover.
 
-    NOTE: This is the legacy endpoint. Use /notifications/agentic for self-learning routing.
     """
     owner_id = getattr(tenant, "current_user_id", None)
     try:
@@ -74,69 +72,19 @@ async def send_notification_agentic(
     tenant: Tenant = Depends(get_authenticated_tenant)
 ):
     """
-    Send notification using self-learning Strands agents (RECOMMENDED).
+    Agentic self-learning routing is disabled for the current internal-module
+    deployment.
 
-    This endpoint uses a multi-agent system with:
-    - Semantic deduplication via ChromaDB
-    - Learning from past similar notifications
-    - Intelligent channel routing using ML and memory
-    - Asynchronous outcome tracking and continuous improvement
-
-    Flow:
-    1. Analyzer Agent (Haiku) - Fast duplicate check + user analysis
-    2. Router Agent (Sonnet) - Smart channel selection using memory
-    3. Returns immediately after sending
-    4. Learning happens asynchronously via webhooks
-
-    Benefits over /send:
-    - 72% lower LLM costs (uses Haiku for analysis)
-    - Learns from past decisions (ChromaDB memory)
-    - Semantic duplicate detection (0.2 similarity threshold)
-    - Self-improving over time
+    The endpoint is intentionally kept in place so the older agentic code path
+    can be re-enabled later without rediscovering the API contract.
     """
-    try:
-        body_text = request.notification.body or ""
-        if not body_text:
-            # Keep agent pipeline usable even when only subject/template metadata is provided.
-            body_text = request.notification.subject or request.notification.type
-
-        # Get notification team
-        team = get_notification_team()
-
-        # Pass current user ID as owner if available
-        owner_id = getattr(tenant, "current_user_id", None)
-
-        # Process with agents
-        result = await team.process_notification(
-            tenant_id=tenant.id,
-            user_id=request.recipient.user_id,
-            notification_type=request.notification.type,
-            content=body_text,
-            priority=(
-                request.notification.priority.value
-                if hasattr(request.notification.priority, "value")
-                else str(request.notification.priority)
-            ),
-            owner_id=owner_id,
-            metadata={
-                **(request.notification.data or {}),
-                **(request.options.model_dump() if request.options else {}),
-                "channels": [c.value for c in request.notification.channels],
-                "recipient": request.recipient.model_dump(),
-                "template_id": request.notification.template_id,
-                "subject": request.notification.subject,
-                "body": request.notification.body,
-            }
-        )
-
-        return result
-
-    except Exception as e:
-        logger.error(f"Agentic notification failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agentic processing failed: {str(e)}"
-        )
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Agentic notification routing is disabled in this deployment. "
+            "Use /notifications/send for the active send flow."
+        ),
+    )
 
 
 @router.post(

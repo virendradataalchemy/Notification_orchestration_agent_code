@@ -19,7 +19,6 @@ import hmac
 import hashlib
 from twilio.request_validator import RequestValidator
 from src.config.settings import settings
-from src.agents.async_learner import get_async_learner
 from src.core.ws_manager import manager
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -633,88 +632,13 @@ async def notification_outcome_webhook(
     background_tasks: BackgroundTasks
 ):
     """
-    Handle notification outcome events for agentic learning.
+    Agentic/ML outcome learning is disabled for the current internal-module
+    deployment.
 
-    This endpoint triggers the async learner agent to:
-    1. Calculate reward based on outcome
-    2. Store decision in ChromaDB memory
-    3. Store experience in S3 for ML retraining
-    4. Check if retraining threshold reached
-
-    Expected payload:
-    {
-        "notification_id": "uuid",
-        "user_id": "string",
-        "channel": "email|sms|...",
-        "notification_type": "string",
-        "priority": "critical|high|medium|low",
-        "event": "delivered|opened|clicked|failed",
-        "delivery_time_seconds": 45,
-        "timestamp": "ISO8601",
-        "provider": "sendgrid|twilio|..."
-    }
-
-    Processing happens asynchronously - returns immediately.
+    This stub is intentionally preserved so the learning webhook contract can be
+    re-enabled later without rebuilding the endpoint shape.
     """
-    try:
-        payload = await request.json()
-
-        # Validate required fields
-        notification_id = payload.get("notification_id")
-        user_id = payload.get("user_id")
-        channel = payload.get("channel")
-        event = payload.get("event")
-
-        if not all([notification_id, user_id, channel, event]):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing required fields: notification_id, user_id, channel, event"
-            )
-
-        # Build outcome dict
-        outcome = {
-            "event": event,
-            "delivered": event in ["delivered", "opened", "clicked"],
-            "opened": event in ["opened", "clicked"],
-            "clicked": event == "clicked",
-            "failed": event == "failed",
-            "channel": channel,
-            "delivery_time_seconds": payload.get("delivery_time_seconds"),
-            "timestamp": payload.get("timestamp"),
-            "provider": payload.get("provider")
-        }
-
-        # Get async learner
-        learner = get_async_learner()
-
-        # Add to background tasks (non-blocking)
-        background_tasks.add_task(
-            learner.record_outcome,
-            notification_id=notification_id,
-            user_id=user_id,
-            channel=channel,
-            notification_type=payload.get("notification_type", "unknown"),
-            priority=payload.get("priority", "medium"),
-            outcome=outcome
-        )
-
-        logger.info(
-            f"Outcome accepted for async learning: "
-            f"notification={notification_id}, event={event}"
-        )
-
-        # Return immediately (learning happens in background)
-        return {
-            "status": "accepted",
-            "notification_id": notification_id,
-            "message": "Outcome will be processed asynchronously"
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Webhook processing failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Webhook processing failed: {str(e)}"
-        )
+    return {
+        "status": "disabled",
+        "message": "Notification outcome learning is disabled in this deployment."
+    }

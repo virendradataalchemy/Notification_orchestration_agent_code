@@ -33,7 +33,6 @@ from .router import MessageRouter
 from .template_engine import TemplateEngine
 from .tenant_template_engine import TenantTemplateEngine
 from .usage_tracker import usage_tracker
-from .orchestration_agent import OrchestrationAgent
 from .channel_policy import channels_requiring_templates, get_provider_for_channel
 
 
@@ -230,54 +229,11 @@ class NotificationService:
                     created_at=datetime.utcnow(),
                 )
 
-        # === NEW: Orchestration Agent Processing ===
         llm_decision = None
-        try:
-            logger.info(f"Running orchestration agent for user {request.recipient.user_id}")
-
-            agent = OrchestrationAgent(self.db)
-            
-            agent_content = request.notification.body
-            if not agent_content and request.notification.template_id:
-                agent_content = f"template:{request.notification.template_id}:{json.dumps(request.notification.data or {}, sort_keys=True)}"
-
-            orchestration_result = await agent.process_notification(
-                tenant_id=tenant_id,
-                user_id=request.recipient.user_id,
-                notification_type=request.notification.type,
-                content=agent_content,
-                priority=request.notification.priority.value,
-                requested_channels=[c.value for c in request.notification.channels],
-                metadata={
-                    'idempotency_key': idempotency_key,
-                    'tenant_id': tenant_id
-                }
-            )
-
-            # Handle duplicates
-            if orchestration_result['status'] == 'duplicate':
-                logger.info(
-                    f"Duplicate notification detected: {orchestration_result['reason']}"
-                )
-                return NotificationResponse(
-                    notification_id="already_sent",
-                    status=NotificationStatus.QUEUED,
-                    channels={},
-                    estimated_delivery=datetime.utcnow(),
-                    created_at=datetime.utcnow(),
-                )
-
-            # Store LLM decision for analytics
-            llm_decision = orchestration_result.get('llm_decision')
-
-            logger.info(
-                f"Orchestration complete: channel={llm_decision.get('channel')}, "
-                f"reasoning={llm_decision.get('reasoning')}"
-            )
-
-        except Exception as e:
-            logger.error(f"Orchestration agent failed, using fallback: {e}")
-            llm_decision = None
+        logger.info(
+            "Using direct internal send flow for user %s without agentic routing",
+            request.recipient.user_id,
+        )
 
         # Map priority
         priority_map = {

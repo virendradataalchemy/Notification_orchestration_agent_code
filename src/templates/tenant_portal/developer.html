@@ -56,6 +56,23 @@
     </div>
 
     <div class="card">
+        <h2 style="font-size: 18px; margin-bottom: 10px;">Display Timezone</h2>
+        <p style="font-size:13px; color:#666; margin-bottom:12px;">
+            Portal dashboards default to IST. You can keep IST or choose a different display timezone here.
+        </p>
+        <div style="display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:end;">
+            <div>
+                <label for="displayTimezone">Timezone</label>
+                <select id="displayTimezone"></select>
+            </div>
+            <div>
+                <button id="saveTimezoneBtn">Save Timezone</button>
+            </div>
+        </div>
+        <div id="timezoneStatus" class="status"></div>
+    </div>
+
+    <div class="card">
         <button class="danger" id="rotateBtn">Rotate API Key</button>
         <div id="newKeyBox" class="new-key" style="display:none;"></div>
     </div>
@@ -112,6 +129,42 @@
         if (!res.ok) throw new Error(data.detail || 'Failed to load developer settings');
         document.getElementById('apiPrefix').textContent = data.api_key_prefix || '-';
         document.getElementById('updatedAt').textContent = data.updated_at || '-';
+        const timezoneSelect = document.getElementById('displayTimezone');
+        timezoneSelect.innerHTML = '';
+        (data.supported_timezones || []).forEach((tz) => {
+            const option = document.createElement('option');
+            option.value = tz;
+            option.textContent = tz;
+            timezoneSelect.appendChild(option);
+        });
+        timezoneSelect.value = data.display_timezone || 'Asia/Kolkata';
+    }
+
+    async function saveTimezone() {
+        const msg = document.getElementById('timezoneStatus');
+        msg.textContent = '';
+        msg.className = 'status';
+
+        const res = await fetch('/api/v1/tenant/settings/developer', {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                display_timezone: document.getElementById('displayTimezone').value
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            msg.textContent = data.detail || 'Failed to save timezone';
+            msg.className = 'status error';
+            return;
+        }
+
+        msg.textContent = 'Display timezone saved successfully.';
+        document.getElementById('updatedAt').textContent = data.updated_at || new Date().toISOString();
+        localStorage.setItem('tenant_display_timezone', data.display_timezone || 'Asia/Kolkata');
     }
 
     async function rotateApiKey() {
@@ -209,6 +262,7 @@
     // setTenantIdentity();
     document.getElementById('rotateBtn').addEventListener('click', rotateApiKey);
     document.getElementById('saveSenderBtn').addEventListener('click', saveSenderSettings);
+    document.getElementById('saveTimezoneBtn').addEventListener('click', saveTimezone);
     loadDeveloper().catch((e) => {
         const msg = document.getElementById('statusMsg');
         msg.textContent = e.message;
