@@ -224,14 +224,24 @@ async def process_inbound_record_with_session(
     await session.flush()
 
     if broadcast:
-        await manager.broadcast_to_tenant(
+        await manager.publish_to_tenant(
             inbound_msg.tenant_id,
             {
                 "event": "inbound_intent_detected",
                 "tenant_id": inbound_msg.tenant_id,
                 "owner_id": str(inbound_msg.owner_id) if inbound_msg.owner_id else None,
                 "message_id": str(inbound_msg.id),
-                "intent": intent_record.intent.value if intent_record else "unknown",
+                "message": {
+                    "id": str(inbound_msg.id),
+                    "timestamp": inbound_msg.created_at.isoformat() if inbound_msg.created_at else None,
+                    "sender_address": inbound_msg.sender_address,
+                    "channel": inbound_msg.channel.value if hasattr(inbound_msg.channel, "value") else str(inbound_msg.channel),
+                    "content": parsed_msg.parsed_content,
+                    "status": parsed_msg.status.value if hasattr(parsed_msg.status, "value") else str(parsed_msg.status),
+                    "ai_intent": intent_record.intent.value if intent_record else "unknown",
+                    "ai_confidence": float(intent_record.confidence) if intent_record else 0.0,
+                    "ai_rationale": intent_record.rationale if intent_record else None,
+                },
             },
         )
 

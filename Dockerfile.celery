@@ -18,12 +18,21 @@ COPY requirements-docker.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements-docker.txt
 
+# Create a dedicated runtime user for Celery so the containers do not run as root.
+RUN useradd --create-home --shell /bin/bash celeryuser && \
+    mkdir -p /app /tmp/celery && \
+    chown -R celeryuser:celeryuser /app /tmp/celery
+
 # Copy application code
 COPY . .
 
 # Entrypoint validates /app/src before Celery starts (clear error on bad volume mounts)
 COPY docker/celery-entrypoint.sh /usr/local/bin/celery-entrypoint.sh
-RUN sed -i 's/\r$//' /usr/local/bin/celery-entrypoint.sh && chmod +x /usr/local/bin/celery-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/celery-entrypoint.sh && \
+    chmod +x /usr/local/bin/celery-entrypoint.sh && \
+    chown celeryuser:celeryuser /usr/local/bin/celery-entrypoint.sh
+
+USER celeryuser
 
 ENTRYPOINT ["/usr/local/bin/celery-entrypoint.sh"]
 

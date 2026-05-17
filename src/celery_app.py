@@ -2,7 +2,7 @@
 
 import logging
 from celery import Celery
-from celery.signals import worker_process_init
+from celery.signals import worker_process_init, worker_ready
 from src.config import settings
 from src.utils.logger import configure_logging
 
@@ -95,3 +95,21 @@ def init_celery_worker(**kwargs):
         
     loop.run_until_complete(engine.dispose())
     logger.info("Celery worker process initialized")
+
+
+@worker_ready.connect
+def recover_stuck_inbound_on_worker_start(**kwargs):
+    """
+    Kick off a stuck-message recovery sweep whenever the worker boots so laptop
+    restarts or Docker restarts do not leave inbound messages stranded until
+    the next periodic beat tick.
+    """
+    try:
+        from src.tasks.inbound_tasks import find_and_retry_stuck_messages
+
+        loop = get_shared_task_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(find_and_retry_stuck_messages())
+        logger.info("Inbound recovery sweep completed on worker startup")
+    except Exception as exc:
+        logger.error("Inbound recovery sweep failed on worker startup: %s", exc, exc_info=True)

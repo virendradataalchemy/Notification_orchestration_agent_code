@@ -594,6 +594,7 @@
                         const replyPreview = thread.inbound.content ? (thread.inbound.content.substring(0, 50) + (thread.inbound.content.length > 50 ? '...' : '')) : '(Media/Attachment)';
                         replyHtml = `<div style="margin-top: 8px; font-size: 12px; color: #166534; background: #f0fdf4; padding: 8px 12px; border-radius: 8px; border-left: 3px solid #16a34a;">
                                         <strong>Reply:</strong> ${replyPreview}
+                                        <div style="margin-top: 6px; font-size: 11px; font-weight: 700; color: #2563eb; text-transform: uppercase;">AI detecting...</div>
                                      </div>`;
                     }
                 } else {
@@ -699,7 +700,9 @@
                     intentBadge.innerHTML = `<span style="padding: 3px 10px; border-radius: 4px; background: ${color}15; color: ${color}; font-weight: 700; font-size: 12px; text-transform: uppercase; border: 1px solid ${color}30;">${intent}</span>`;
                     intentRationale.textContent = thread.inbound.ai_rationale || '';
                 } else {
-                    intentSection.style.display = 'none';
+                    intentSection.style.display = 'block';
+                    intentBadge.innerHTML = `<span style="padding: 3px 10px; border-radius: 4px; background: #2563eb15; color: #2563eb; font-weight: 700; font-size: 12px; text-transform: uppercase; border: 1px solid #2563eb30;">AI detecting...</span>`;
+                    intentRationale.textContent = 'Inbound reply received. AI intent detection is running.';
                 }
 
                 const isInboundEmail = String(thread.channel).toLowerCase() === 'email';
@@ -770,7 +773,7 @@
 
             socket.onmessage = function(event) {
                 const data = JSON.parse(event.data);
-                if (data.event === 'inbound_message') {
+                if (data.event === 'inbound_message' || data.event === 'inbound_intent_detected') {
                     console.log('New message received! Refreshing activity...');
                     loadDeliveryActivity();
                 }
@@ -784,4 +787,3 @@
     </script>
 </body>
 </html>
-

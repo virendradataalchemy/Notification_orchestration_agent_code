@@ -312,6 +312,9 @@
         const tenantId = pathParts[2];
         const accessToken = localStorage.getItem('tenant_access_token');
         let currentThreads = [];
+        let refreshTimer = null;
+        let fallbackRefreshInterval = null;
+        let wsConnected = false;
 
         function escapeHtml(text) {
             if (!text) return '';
@@ -350,6 +353,107 @@
                 timeZoneName: 'short'
             };
             return date.toLocaleString('en-IN', { ...defaultOptions, ...options });
+        }
+
+        function normalizeAddress(value) {
+            if (!value) return '';
+            return String(value)
+                .toLowerCase()
+                .replace(/.*<([^>]+)>.*/, '$1')
+                .replace(/^whatsapp:/, '')
+                .trim();
+        }
+
+        function buildIntentBadge(intent, prefix = 'AI: ') {
+            const intentColors = {
+                accept: '#16a34a',
+                reject: '#dc2626',
+                request: '#2563eb',
+                query: '#ca8a04'
+            };
+            const normalizedIntent = String(intent || '').toLowerCase();
+            const color = intentColors[normalizedIntent] || '#64748b';
+            return `<span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: ${color}15; color: ${color}; font-weight: 700; font-size: 11px; text-transform: uppercase; border: 1px solid ${color}30; width: fit-content;">${escapeHtml(prefix + intent)}</span>`;
+        }
+
+        function buildDetectingBadge() {
+            return `<span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: #2563eb15; color: #2563eb; font-weight: 700; font-size: 11px; text-transform: uppercase; border: 1px solid #2563eb30; width: fit-content;">AI detecting...</span>`;
+        }
+
+        function scheduleThreadRefresh(immediate = false) {
+            if (refreshTimer) {
+                clearTimeout(refreshTimer);
+            }
+            refreshTimer = setTimeout(() => {
+                loadStats();
+                loadThreadedActivity();
+            }, immediate ? 0 : 400);
+        }
+
+        function syncFallbackRefresh() {
+            if (fallbackRefreshInterval) {
+                clearInterval(fallbackRefreshInterval);
+                fallbackRefreshInterval = null;
+            }
+
+            if (!wsConnected) {
+                fallbackRefreshInterval = setInterval(() => {
+                    loadStats();
+                    loadThreadedActivity();
+                }, 15000);
+            }
+        }
+
+        function findThreadForInboundEvent(message) {
+            if (!message) return null;
+
+            const inboundId = String(message.id || '');
+            if (inboundId) {
+                const existingByInbound = currentThreads.find((thread) => thread.inbound && String(thread.inbound.id) === inboundId);
+                if (existingByInbound) return existingByInbound;
+            }
+
+            const sender = normalizeAddress(message.sender_address);
+            const channel = String(message.channel || '').toLowerCase();
+            const inboundTime = message.timestamp ? new Date(message.timestamp).getTime() : 0;
+
+            const candidates = currentThreads.filter((thread) => {
+                const threadChannel = String(thread.channel || '').toLowerCase();
+                const recipient = normalizeAddress(thread.recipient);
+                const outboundTime = thread.outbound && thread.outbound.timestamp ? new Date(thread.outbound.timestamp).getTime() : 0;
+                return threadChannel === channel && recipient === sender && outboundTime <= inboundTime;
+            });
+
+            if (!candidates.length) return null;
+
+            candidates.sort((a, b) => {
+                const aTime = a.outbound && a.outbound.timestamp ? new Date(a.outbound.timestamp).getTime() : 0;
+                const bTime = b.outbound && b.outbound.timestamp ? new Date(b.outbound.timestamp).getTime() : 0;
+                return bTime - aTime;
+            });
+            return candidates[0];
+        }
+
+        function applyRealtimeEvent(data) {
+            const message = data.message;
+            if (!message) return false;
+
+            const thread = findThreadForInboundEvent(message);
+            if (!thread) return false;
+
+            thread.inbound = {
+                ...(thread.inbound || {}),
+                id: message.id || (thread.inbound && thread.inbound.id),
+                timestamp: message.timestamp || (thread.inbound && thread.inbound.timestamp),
+                content: message.content ?? (thread.inbound && thread.inbound.content) ?? '',
+                status: message.status || (thread.inbound && thread.inbound.status) || 'received',
+                ai_intent: message.ai_intent ?? (thread.inbound && thread.inbound.ai_intent) ?? null,
+                ai_confidence: message.ai_confidence ?? (thread.inbound && thread.inbound.ai_confidence) ?? null,
+                ai_rationale: message.ai_rationale ?? (thread.inbound && thread.inbound.ai_rationale) ?? null
+            };
+
+            renderActivity(currentThreads);
+            return true;
         }
 
         async function loadStats() {
@@ -434,21 +538,15 @@
                         : '(Media/Empty)';
                     const intent = thread.inbound.ai_intent;
                     if (intent) {
-                        const intentColors = {
-                            'accept': '#16a34a',
-                            'reject': '#dc2626',
-                            'request': '#2563eb',
-                            'query': '#ca8a04'
-                        };
-                        const color = intentColors[intent.toLowerCase()] || '#64748b';
                         replyCell = `<div style="display:flex; flex-direction:column; gap:4px;">
                             <span style="color: #166534; font-weight: 600;">${escapeHtml(replyPreview)}</span>
-                            <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: ${color}15; color: ${color}; font-weight: 700; font-size: 11px; text-transform: uppercase; border: 1px solid ${color}30; width: fit-content;">
-                                AI: ${escapeHtml(intent)}
-                            </span>
+                            ${buildIntentBadge(intent)}
                         </div>`;
                     } else {
-                        replyCell = `<span style="color: #166534; font-weight: 600;">${escapeHtml(replyPreview)}</span>`;
+                        replyCell = `<div style="display:flex; flex-direction:column; gap:4px;">
+                            <span style="color: #166534; font-weight: 600;">${escapeHtml(replyPreview)}</span>
+                            ${buildDetectingBadge()}
+                        </div>`;
                     }
                 } else {
                     if (String(thread.outbound.status).toLowerCase().includes('failed') || String(thread.outbound.status).toLowerCase().includes('bounced')) {
@@ -531,17 +629,12 @@
                 if (thread.inbound.ai_intent) {
                     intentSection.style.display = 'block';
                     const intent = thread.inbound.ai_intent;
-                    const intentColors = {
-                        'accept': '#16a34a',
-                        'reject': '#dc2626',
-                        'request': '#2563eb',
-                        'query': '#ca8a04'
-                    };
-                    const color = intentColors[intent.toLowerCase()] || '#64748b';
-                    intentBadge.innerHTML = `<span style="padding: 3px 10px; border-radius: 4px; background: ${color}15; color: ${color}; font-weight: 700; font-size: 12px; text-transform: uppercase; border: 1px solid ${color}30;">${intent}</span>`;
+                    intentBadge.innerHTML = buildIntentBadge(intent, '');
                     intentRationale.textContent = thread.inbound.ai_rationale || '';
                 } else {
-                    intentSection.style.display = 'none';
+                    intentSection.style.display = 'block';
+                    intentBadge.innerHTML = buildDetectingBadge();
+                    intentRationale.textContent = 'Inbound reply received. AI intent detection is running.';
                 }
 
                 const isInboundEmail = String(thread.channel).toLowerCase() === 'email';
@@ -607,39 +700,38 @@
         // Initialize
         loadStats();
         loadThreadedActivity();
-        
-        // Auto-refresh every 5 seconds
-        setInterval(() => {
-            loadStats();
-            loadThreadedActivity();
-        }, 5000);
+        syncFallbackRefresh();
 
         function setupWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws/${tenantId}`;
             const socket = new WebSocket(wsUrl);
 
+            socket.onopen = function() {
+                wsConnected = true;
+                syncFallbackRefresh();
+            };
+
             socket.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 console.log('WS message:', data);
                 if (data.event === 'inbound_message' || data.event === 'inbound_intent_detected') {
-                    // Refresh data instantly on new message or new intent detection
-                    console.log(`Event ${data.event} received! Refreshing dashboard...`);
-                    loadStats();
-                    loadThreadedActivity();
-                    
-                    // If a modal is currently open and it matches the message that got the intent, we could ideally update the modal too.
-                    // But reloading the activity feed is the most robust way to ensure everything is in sync.
+                    applyRealtimeEvent(data);
+                    scheduleThreadRefresh(data.event === 'inbound_message');
                 }
             };
 
             socket.onclose = function() {
                 console.log('WS connection closed. Retrying in 5s...');
+                wsConnected = false;
+                syncFallbackRefresh();
                 setTimeout(setupWebSocket, 5000);
             };
 
             socket.onerror = function(err) {
                 console.error('WS error:', err);
+                wsConnected = false;
+                syncFallbackRefresh();
                 socket.close();
             };
         }

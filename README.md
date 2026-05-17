@@ -48,6 +48,14 @@ Rule applies to both single send and bulk send flows.
 ### Local Setup
 
 ```bash
+cp .env.example .env
+# Windows PowerShell:
+# Copy-Item .env.example .env
+#
+# Then fill in your own secrets in .env before continuing.
+```
+
+```bash
 python -m venv venv
 # Windows
 venv\Scripts\activate
@@ -57,17 +65,54 @@ venv\Scripts\activate
 pip install -r requirements.txt
 alembic upgrade head
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-docker compose up --build -d
 ```
 
 For teammates pulling fresh code, the safest local restart is:
 
 ```bash
 docker compose down
-docker compose up -d
+docker compose up -d --build
 ```
 
 The local Celery worker now bind-mounts the repo, so after `git pull` it reads the latest code from the working tree instead of silently running stale baked-in worker code from an older image.
+
+Local Docker now also starts:
+
+- `redis`
+- `celery_worker`
+- `celery_beat`
+- `ngrok`
+
+This matters for reliability:
+
+- `celery_beat` runs the stuck-message recovery schedule automatically
+- the worker performs a recovery sweep on startup after laptop or Docker restarts
+- Celery containers now run as a non-root user
+- beat stores its schedule file under `/tmp/celery` instead of writing into the repo mount
+
+### Clone Checklist
+
+After cloning on a new laptop:
+
+1. Copy `.env.example` to `.env`
+2. Add your own credentials and secrets
+3. If using a reserved `ngrok` URL, make sure no other laptop is currently using that same URL
+4. Start the API locally with `uvicorn`
+5. Start Docker services with `docker compose up -d --build`
+6. Run the local stack checker:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\manual\check_local_stack.ps1
+```
+
+The checker verifies:
+
+- Docker is available
+- `redis` is running
+- `celery_worker` is running
+- `celery_beat` is running
+- `ngrok` is running
+- API `/health` responds
 
 ### Local ngrok vs AWS
 

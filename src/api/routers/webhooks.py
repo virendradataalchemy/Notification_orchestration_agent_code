@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException, status, Backgrou
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
+from sqlalchemy.exc import IntegrityError
 import uuid
 import logging
 from pathlib import Path
@@ -76,6 +77,47 @@ def _normalize_sender_address(sender: str) -> str:
     if angle_match:
         return angle_match.group(1).strip()
     return sender
+
+
+def _extract_inbound_preview(payload: dict) -> str:
+    """Best-effort preview text for immediate dashboard rendering."""
+    if not payload:
+        return ""
+    for key in ("stripped-text", "body-plain", "Body", "body", "text"):
+        value = payload.get(key)
+        if value:
+            return str(value).strip()
+    return ""
+
+
+async def _persist_inbound_message(
+    db: AsyncSession,
+    inbound_msg: InboundMessageRaw,
+) -> tuple[InboundMessageRaw, bool]:
+    """
+    Insert the inbound message, tolerating provider retries by reusing the
+    existing record if the provider message id already exists for the tenant.
+    """
+    existing_query = select(InboundMessageRaw).where(
+        InboundMessageRaw.tenant_id == inbound_msg.tenant_id,
+        InboundMessageRaw.provider_message_id == inbound_msg.provider_message_id,
+    )
+    existing = (await db.execute(existing_query)).scalar_one_or_none()
+    if existing:
+        return existing, False
+
+    db.add(inbound_msg)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        existing = (await db.execute(existing_query)).scalar_one_or_none()
+        if existing:
+            return existing, False
+        raise
+
+    await db.refresh(inbound_msg)
+    return inbound_msg, True
 
 
 async def _save_mailgun_attachments(form_data):
@@ -389,39 +431,49 @@ async def mailgun_inbound_webhook(
         raw_payload=canonical.raw_payload,
         owner_id=canonical.owner_id
     )
-    db.add(inbound_msg)
-    await db.commit()
-    await db.refresh(inbound_msg)
+    inbound_msg, created = await _persist_inbound_message(db, inbound_msg)
 
     logger.info(
-        "Stored inbound email id=%s tenant=%s sender=%s",
+        "Stored inbound email id=%s tenant=%s sender=%s created=%s",
         inbound_msg.id,
         tenant_id,
         sender,
+        created,
     )
 
     # Queue parsing & intent detection (fall back to inline if Celery is down)
-    try:
-        process_inbound_message.delay(str(inbound_msg.id))
-    except Exception as celery_err:
-        logger.warning("Celery unavailable (%s), processing inbound inline", celery_err)
-        from src.tasks.inbound_tasks import run_inbound_pipeline
-        background_tasks.add_task(run_inbound_pipeline, str(inbound_msg.id))
+    if created:
+        try:
+            process_inbound_message.delay(str(inbound_msg.id))
+        except Exception as celery_err:
+            logger.warning("Celery unavailable (%s), processing inbound inline", celery_err)
+            from src.tasks.inbound_tasks import run_inbound_pipeline
+            background_tasks.add_task(run_inbound_pipeline, str(inbound_msg.id))
 
     # Notify dashboard via WebSocket
-    await manager.broadcast_to_tenant(tenant_id, {
+    await manager.publish_to_tenant(tenant_id, {
         "event": "inbound_message",
         "tenant_id": tenant_id,
         "owner_id": str(owner_id) if owner_id else None,
-        "message_id": str(inbound_msg.id)
+        "message_id": str(inbound_msg.id),
+        "message": {
+            "id": str(inbound_msg.id),
+            "timestamp": inbound_msg.created_at.isoformat() if inbound_msg.created_at else None,
+            "sender_address": sender,
+            "channel": canonical.channel.value,
+            "content": _extract_inbound_preview(raw_payload),
+            "status": "received",
+            "ai_status": "detecting",
+        }
     })
 
-    return {"status": "processed", "id": str(inbound_msg.id)}
+    return {"status": "processed", "id": str(inbound_msg.id), "created": created}
 
 
 @router.post("/inbound/twilio")
 async def twilio_inbound_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -506,22 +558,35 @@ async def twilio_inbound_webhook(
         raw_payload=canonical.raw_payload,
         owner_id=canonical.owner_id
     )
-    db.add(inbound_msg)
-    await db.commit()
-    await db.refresh(inbound_msg)
+    inbound_msg, created = await _persist_inbound_message(db, inbound_msg)
 
     # Queue parsing & intent detection
-    process_inbound_message.delay(str(inbound_msg.id))
+    if created:
+        try:
+            process_inbound_message.delay(str(inbound_msg.id))
+        except Exception as celery_err:
+            logger.warning("Celery unavailable (%s), processing inbound inline", celery_err)
+            from src.tasks.inbound_tasks import run_inbound_pipeline
+            background_tasks.add_task(run_inbound_pipeline, str(inbound_msg.id))
 
     # Notify dashboard via WebSocket
-    await manager.broadcast_to_tenant(tenant_id, {
+    await manager.publish_to_tenant(tenant_id, {
         "event": "inbound_message",
         "tenant_id": tenant_id,
         "owner_id": str(owner_id) if owner_id else None,
-        "message_id": str(inbound_msg.id)
+        "message_id": str(inbound_msg.id),
+        "message": {
+            "id": str(inbound_msg.id),
+            "timestamp": inbound_msg.created_at.isoformat() if inbound_msg.created_at else None,
+            "sender_address": sender,
+            "channel": canonical.channel.value,
+            "content": _extract_inbound_preview(raw_payload),
+            "status": "received",
+            "ai_status": "detecting",
+        }
     })
 
-    return {"status": "processed", "id": str(inbound_msg.id)}
+    return {"status": "processed", "id": str(inbound_msg.id), "created": created}
 
 
 @router.post("/slack")

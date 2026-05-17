@@ -7,6 +7,7 @@ from datetime import datetime
 
 from src.config import settings
 from src.core import init_db, init_redis, close_redis
+from src.core.ws_manager import manager
 from src.middleware import TenantAuthMiddleware
 from src.services.usage_tracker import initialize_usage_tracker
 from src.utils.logger import configure_logging
@@ -62,6 +63,8 @@ async def lifespan(app: FastAPI):
     try:
         await init_redis()
         logger.info("Redis initialized successfully")
+        await manager.start_pubsub_listener()
+        logger.info("WebSocket pubsub listener started")
     except Exception as e:
         logger.error(f"Failed to initialize Redis: {e}")
 
@@ -76,6 +79,7 @@ async def lifespan(app: FastAPI):
 
     # Cleanup
     logger.info("Shutting down notification orchestration application...")
+    await manager.stop_pubsub_listener()
     await close_redis()
 
 

@@ -77,6 +77,18 @@ password.txt
 notify-app.zip
 test_db_output.json
 test_query_output.json
+celerybeat-schedule*
+add_save_branding_button.html
+example_branding_output.html
+debug_branding.py
+debug_replies.py
+debug_replies_issue.py
+debug_reply_matching.sql
+test_api.py
+test_db.py
+test_limit.py
+test_query.py
+test_query2.py
 
 # OS
 Thumbs.db

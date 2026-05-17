@@ -5,7 +5,7 @@ from src.celery_app import get_shared_task_loop
 
 logger = logging.getLogger(__name__)
 
-@shared_task(name="inbound.process_inbound_message", bind=True, max_retries=3, default_retry_delay=10)
+@shared_task(name="inbound.process_inbound_message", bind=True, max_retries=5, default_retry_delay=10)
 def process_inbound_message(self, inbound_message_id: str):
     """
     Celery task to orchestrate parsing and intent detection for an inbound message.
@@ -19,9 +19,10 @@ def process_inbound_message(self, inbound_message_id: str):
         loop.run_until_complete(run_inbound_pipeline(inbound_message_id))
     except Exception as e:
         logger.error(f"Failed to run inbound pipeline for {inbound_message_id}: {e}")
-        # Retry the task
+        retry_count = getattr(self.request, "retries", 0)
+        countdown = min(120, 5 * (2 ** retry_count))
         try:
-            raise self.retry(exc=e, countdown=10)
+            raise self.retry(exc=e, countdown=countdown)
         except self.MaxRetriesExceededError:
             logger.error(f"Max retries exceeded for message {inbound_message_id}")
             asyncio.set_event_loop(loop)
@@ -57,6 +58,7 @@ async def run_inbound_pipeline(inbound_message_id: str):
             async with AsyncSessionLocal() as db_fail:
                 await _mark_inbound_failure(db_fail, inbound_message_id, str(e))
                 await db_fail.commit()
+            raise
 
 
 @shared_task(name="inbound.retry_stuck_messages")
@@ -92,9 +94,12 @@ async def find_and_retry_stuck_messages():
             SELECT r.id::text 
             FROM inbound_messages_raw r
             LEFT JOIN inbound_messages_parsed p ON p.raw_message_id = r.id
-            WHERE (p.id IS NULL OR p.status = 'FAILED')
-            AND r.created_at < :cutoff
-            ORDER BY r.created_at ASC
+            WHERE (
+                p.id IS NULL
+                OR p.status IN ('RECEIVED', 'PARSED', 'FAILED')
+            )
+            AND COALESCE(p.updated_at, r.updated_at, r.created_at) < :cutoff
+            ORDER BY COALESCE(p.updated_at, r.updated_at, r.created_at) ASC
             LIMIT 50
         """), {"cutoff": cutoff_time})
         
