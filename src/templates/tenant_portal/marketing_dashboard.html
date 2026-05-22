@@ -457,6 +457,32 @@
             return true;
         }
 
+        function applyOutboundEvent(data) {
+            const message = data.message;
+            if (!message) return false;
+
+            const notificationId = String(message.notification_id || data.notification_id || '');
+            const channel = String(message.channel || '').toLowerCase();
+            if (!notificationId || !channel) return false;
+
+            const thread = currentThreads.find((item) =>
+                item &&
+                item.outbound &&
+                String(item.outbound.id) === notificationId &&
+                String(item.channel || '').toLowerCase() === channel
+            );
+
+            if (!thread) return false;
+
+            thread.outbound = {
+                ...(thread.outbound || {}),
+                status: message.status || thread.outbound.status,
+            };
+
+            renderActivity(currentThreads);
+            return true;
+        }
+
         async function loadStats() {
             try {
                 const res = await fetch(`/api/tenant-dashboard/tenant/${tenantId}/overview`, {
@@ -716,7 +742,10 @@
             socket.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 console.log('WS message:', data);
-                if (data.event === 'inbound_message' || data.event === 'inbound_intent_detected') {
+                if (data.event === 'notification_channel_updated') {
+                    const updated = applyOutboundEvent(data);
+                    scheduleThreadRefresh(!updated);
+                } else if (data.event === 'inbound_message' || data.event === 'inbound_intent_detected') {
                     applyRealtimeEvent(data);
                     scheduleThreadRefresh(data.event === 'inbound_message');
                 }

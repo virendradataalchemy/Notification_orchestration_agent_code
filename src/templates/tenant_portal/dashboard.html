@@ -774,7 +774,11 @@
 
             socket.onmessage = function(event) {
                 const data = JSON.parse(event.data);
-                if (data.event === 'inbound_message' || data.event === 'inbound_intent_detected') {
+                if (
+                    data.event === 'inbound_message' ||
+                    data.event === 'inbound_intent_detected' ||
+                    data.event === 'notification_channel_updated'
+                ) {
                     console.log('New message received! Refreshing activity...');
                     loadDeliveryActivity();
                 }

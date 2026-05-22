@@ -1,0 +1,14 @@
+[Unit]
+Description=ngrok tunnel for notification app
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/notify-app
+ExecStart=/usr/local/bin/ngrok http --url=https://rely-fossilisable-lukas.ngrok-free.dev 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

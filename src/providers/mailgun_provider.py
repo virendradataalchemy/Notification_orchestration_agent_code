@@ -5,11 +5,33 @@ import aiohttp
 from typing import Optional, List
 import re
 import json
+from html import unescape
 
 import requests
 
 from .base import NotificationProvider, Message, ProviderResponse, ProviderStatus
 from src.config import settings
+
+
+def _looks_like_html(content: str) -> bool:
+    lowered = (content or "").lower()
+    return "<html" in lowered or "<body" in lowered or "<p" in lowered or "<div" in lowered or "<table" in lowered
+
+
+def _html_to_plain_text(content: str) -> str:
+    if not content:
+        return ""
+    text = re.sub(r"(?is)<(script|style).*?>.*?</\\1>", " ", content)
+    text = re.sub(r"(?i)<br\\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</p\\s*>", "\n\n", text)
+    text = re.sub(r"(?i)</div\\s*>", "\n", text)
+    text = re.sub(r"(?i)</li\\s*>", "\n", text)
+    text = re.sub(r"(?is)<[^>]+>", " ", text)
+    text = unescape(text)
+    text = re.sub(r"\r\n?", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text.strip()
 
 
 class MailgunProvider(NotificationProvider):
@@ -76,11 +98,12 @@ class MailgunProvider(NotificationProvider):
                     body_text = message.subject or "Notification"
 
                 data["subject"] = message.subject or "Notification"
-                data["text"] = body_text
+                html_body = message.body if _looks_like_html(message.body or "") else ""
+                explicit_text = message.data.get("text") or ""
+                data["text"] = explicit_text or _html_to_plain_text(html_body or body_text) or "Notification"
 
-                # Add HTML if body contains HTML tags
-                if message.body and ('<html' in message.body.lower() or '<p>' in message.body.lower()):
-                    data["html"] = message.body
+                if html_body:
+                    data["html"] = html_body
 
             # Add CC recipients if provided
             if message.metadata and message.metadata.get('cc'):
@@ -95,6 +118,14 @@ class MailgunProvider(NotificationProvider):
                 for key, value in message.metadata.items():
                     if key.startswith('v:'):
                         data[key] = value
+
+            reply_to = (
+                (message.metadata or {}).get("reply_to")
+                or message.data.get("reply_to")
+                or self.config.get("reply_to")
+            )
+            if reply_to:
+                data["h:Reply-To"] = reply_to
 
             # Make API request using aiohttp
             async with aiohttp.ClientSession() as session:

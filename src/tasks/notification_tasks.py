@@ -18,6 +18,7 @@ init(autoreset=True)
 
 from src.celery_app import celery_app, get_shared_task_loop
 from src.core.database import AsyncSessionLocal
+from src.core.ws_manager import manager
 from src.models import (
     Notification,
     NotificationChannel,
@@ -30,6 +31,53 @@ from src.services.channel_policy import get_provider_for_channel
 from src.providers.base import Message, ProviderStatus
 
 logger = logging.getLogger(__name__)
+
+
+def _get_notification_recipient(notification: Notification, channel: str) -> str:
+    data = notification.data or {}
+    if channel == "email":
+        return data.get("email") or notification.user_id
+    if channel in {"sms", "whatsapp", "voice"}:
+        return data.get("phone") or notification.user_id
+    if channel == "slack":
+        return data.get("slack_id") or notification.user_id
+    return data.get("email") or data.get("phone") or notification.user_id
+
+
+async def _publish_channel_status_event(
+    notification: Notification,
+    channel_record: NotificationChannel,
+    *,
+    status: str,
+    provider: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    try:
+        await manager.publish_to_tenant(
+            notification.tenant_id,
+            {
+                "event": "notification_channel_updated",
+                "tenant_id": notification.tenant_id,
+                "owner_id": str(notification.owner_id) if notification.owner_id else None,
+                "notification_id": str(notification.id),
+                "message": {
+                    "notification_id": str(notification.id),
+                    "channel": str(channel_record.channel),
+                    "recipient": _get_notification_recipient(notification, str(channel_record.channel)),
+                    "status": status,
+                    "provider": provider or channel_record.provider,
+                    "message_id": channel_record.message_id,
+                    "error_message": error_message or channel_record.error_message,
+                },
+            },
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to publish outbound channel update for %s/%s: %s",
+            notification.id,
+            channel_record.channel,
+            exc,
+        )
 
 
 async def _update_user_engagement(
@@ -418,6 +466,12 @@ async def _send_via_channel(
                 )
 
                 await db.commit()
+                await _publish_channel_status_event(
+                    notification,
+                    channel_record,
+                    status=ChannelStatus.SENT.value,
+                    provider=provider,
+                )
 
                 logger.info(f"{Fore.GREEN}✓ Notification {notification_id} sent via {provider}/{channel} in {elapsed_ms}ms (attempt {attempt + 1})")
 
@@ -496,6 +550,13 @@ async def _send_via_channel(
                 )
 
                 await db.commit()
+                await _publish_channel_status_event(
+                    notification,
+                    channel_record,
+                    status=ChannelStatus.FAILED.value,
+                    provider=provider,
+                    error_message=str(e),
+                )
 
                 logger.error(
                     f"{Fore.RED}{Style.BRIGHT}✗ Notification {notification_id} permanently failed on {channel} "

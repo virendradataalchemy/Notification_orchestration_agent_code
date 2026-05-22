@@ -6,9 +6,10 @@ from sqlalchemy.exc import IntegrityError
 import uuid
 import logging
 from pathlib import Path
+from html import unescape
 
 from src.core import get_db
-from src.models import Notification, NotificationChannel, ChannelStatus, Tenant
+from src.models import Notification, NotificationChannel, ChannelStatus, Tenant, TenantProviderConfig, NotificationStatus
 from src.models.inbound import InboundMessageRaw, InboundChannel
 from src.api.schemas import WebhookEvent, InboundMessageCanonical
 from src.tasks.inbound_tasks import process_inbound_message
@@ -20,10 +21,18 @@ import hashlib
 from twilio.request_validator import RequestValidator
 from src.config.settings import settings
 from src.core.ws_manager import manager
+from src.providers import get_provider_for_channel
+from src.providers.base import Message, ProviderStatus
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
 INBOUND_UPLOAD_DIR = Path("inbound_uploads")
+UNSOLICITED_MAIL_PATTERNS = (
+    "unsolicited mail",
+    "5.7.1",
+    "spam",
+    "likely unsolicited",
+)
 
 
 def _serialize_form_value(value):
@@ -87,6 +96,172 @@ def _extract_inbound_preview(payload: dict) -> str:
         if value:
             return str(value).strip()
     return ""
+
+
+def _extract_outbound_recipient(notification: Notification, channel_name: str) -> str:
+    data = notification.data or {}
+    if channel_name == "email":
+        return data.get("email") or notification.user_id
+    if channel_name in {"sms", "whatsapp", "voice"}:
+        return data.get("phone") or notification.user_id
+    if channel_name == "slack":
+        return data.get("slack_id") or notification.user_id
+    return data.get("email") or data.get("phone") or notification.user_id
+
+
+def _looks_like_html(content: str) -> bool:
+    lowered = (content or "").lower()
+    return any(tag in lowered for tag in ("<html", "<body", "<p", "<div", "<table", "<br"))
+
+
+def _html_to_plain_text(content: str) -> str:
+    if not content:
+        return ""
+    text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", content)
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</p\s*>", "\n\n", text)
+    text = re.sub(r"(?i)</div\s*>", "\n", text)
+    text = re.sub(r"(?i)</li\s*>", "\n", text)
+    text = re.sub(r"(?is)<[^>]+>", " ", text)
+    text = unescape(text)
+    text = re.sub(r"\r\n?", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text.strip()
+
+
+def _strip_subject_for_rescue(subject: str) -> str:
+    cleaned = re.sub(r"[^\x20-\x7E]+", " ", subject or "")
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" -")
+    return cleaned or "Notification"
+
+
+def _is_unsolicited_delivery_failure(error_message: str) -> bool:
+    msg = (error_message or "").lower()
+    return any(pattern in msg for pattern in UNSOLICITED_MAIL_PATTERNS)
+
+
+async def _get_tenant_channel_config(db: AsyncSession, tenant_id: str, channel: str) -> dict:
+    query = select(TenantProviderConfig).where(
+        TenantProviderConfig.tenant_id == tenant_id,
+        TenantProviderConfig.provider == channel,
+        TenantProviderConfig.is_active == True,
+    )
+    result = await db.execute(query)
+    row = result.scalar_one_or_none()
+    return (row.config or {}) if row else {}
+
+
+def _build_email_rescue_message(notification: Notification) -> Message:
+    data = notification.data or {}
+    channel_specific = (data.get("channel_content_map") or {}).get("email", {})
+    subject = _strip_subject_for_rescue(channel_specific.get("subject") or data.get("subject") or "Notification")
+    body = channel_specific.get("body") or data.get("body") or ""
+    if _looks_like_html(body):
+        body = _html_to_plain_text(body)
+    if not body:
+        body = data.get("text") or subject
+
+    rescue_data = dict(data)
+    rescue_data["text"] = body
+    rescue_data["body"] = body
+    rescue_data["delivery_rescue"] = True
+    rescue_data["delivery_rescue_reason"] = "mailbox_unsolicited_mail_retry"
+
+    return Message(
+        recipient=data.get("email") or notification.user_id,
+        subject=subject,
+        body=body,
+        data=rescue_data,
+        metadata={
+            "notification_id": str(notification.id),
+            "tenant_id": notification.tenant_id,
+            "user_id": notification.user_id,
+            "priority": notification.priority.value if notification.priority else None,
+            "channel": "email",
+            "v:delivery_rescue": "1",
+        },
+    )
+
+
+async def _attempt_mailgun_delivery_rescue(
+    db: AsyncSession,
+    channel: NotificationChannel,
+    error_message: str,
+) -> bool:
+    if channel.channel != "email":
+        return False
+    if channel.attempts and channel.attempts >= 2:
+        return False
+    if not _is_unsolicited_delivery_failure(error_message):
+        return False
+
+    notification = await db.get(Notification, channel.notification_id)
+    if not notification:
+        return False
+
+    tenant_provider_config = await _get_tenant_channel_config(db, notification.tenant_id, "email")
+    provider = get_provider_for_channel("email", channel.provider or "mailgun", config=tenant_provider_config)
+    if not provider:
+        logger.warning("Delivery rescue skipped: provider %s unavailable", channel.provider)
+        return False
+
+    rescue_message = _build_email_rescue_message(notification)
+    response = await provider.send(rescue_message)
+    if response.status != ProviderStatus.SUCCESS:
+        logger.warning(
+            "Delivery rescue failed for notification %s recipient %s: %s",
+            notification.id,
+            rescue_message.recipient,
+            response.error_message or response.error_code,
+        )
+        return False
+
+    channel.status = ChannelStatus.SENT
+    channel.message_id = response.message_id
+    channel.attempts = (channel.attempts or 0) + 1
+    channel.error_code = "DELIVERY_RESCUE_SENT"
+    channel.error_message = "Automatic plain-text retry sent after mailbox spam rejection"
+    notification.status = NotificationStatus.SENT
+    notification.failed_at = None
+    await db.commit()
+    await _publish_outbound_status_update(db, channel, status=channel.status.value)
+    logger.info(
+        "Triggered one-time Mailgun delivery rescue for notification %s recipient %s",
+        notification.id,
+        rescue_message.recipient,
+    )
+    return True
+
+
+async def _publish_outbound_status_update(
+    db: AsyncSession,
+    channel: NotificationChannel,
+    *,
+    status: str,
+) -> None:
+    notification = await db.get(Notification, channel.notification_id)
+    if not notification:
+        return
+
+    await manager.publish_to_tenant(
+        notification.tenant_id,
+        {
+            "event": "notification_channel_updated",
+            "tenant_id": notification.tenant_id,
+            "owner_id": str(notification.owner_id) if notification.owner_id else None,
+            "notification_id": str(notification.id),
+            "message": {
+                "notification_id": str(notification.id),
+                "channel": str(channel.channel),
+                "recipient": _extract_outbound_recipient(notification, str(channel.channel)),
+                "status": status,
+                "provider": channel.provider,
+                "message_id": channel.message_id,
+                "error_message": channel.error_message,
+            },
+        },
+    )
 
 
 async def _persist_inbound_message(
@@ -209,6 +384,8 @@ async def mailgun_delivery_webhook(
         
     event_type = event_data.get("event")
     
+    rescue_triggered = False
+
     if event_type == "delivered":
         channel.status = ChannelStatus.DELIVERED
         channel.delivered_at = datetime.utcnow()
@@ -222,8 +399,16 @@ async def mailgun_delivery_webhook(
         channel.status = ChannelStatus.FAILED
         channel.error_code = event_data.get("severity") or event_type
         channel.error_message = event_data.get("delivery-status", {}).get("description") or event_data.get("delivery-status", {}).get("message") or event_type
-        
-    await db.commit()
+
+        rescue_triggered = await _attempt_mailgun_delivery_rescue(
+            db,
+            channel,
+            channel.error_message,
+        )
+
+    if not rescue_triggered:
+        await db.commit()
+        await _publish_outbound_status_update(db, channel, status=channel.status.value)
     return {"status": "processed"}
 
 @router.post("/ses")
@@ -272,6 +457,7 @@ async def ses_webhook(
         channel.error_code = "COMPLAINT"
 
     await db.commit()
+    await _publish_outbound_status_update(db, channel, status=channel.status.value)
 
     return {"status": "processed"}
 
@@ -317,6 +503,8 @@ async def twilio_webhook(
             channel.delivered_at = datetime.utcnow()
 
     await db.commit()
+    if channel_status:
+        await _publish_outbound_status_update(db, channel, status=channel.status.value)
 
     return {"status": "processed"}
 
