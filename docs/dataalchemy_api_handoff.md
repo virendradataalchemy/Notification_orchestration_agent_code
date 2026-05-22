@@ -276,9 +276,9 @@ GET /api/v1/tenant/templates/{template_id}
 
 Purpose:
 
-- Fetch one saved template by its ID
+- Fetch one saved template by its ID or template name
 
-## 7. Send Single Notification Using Template
+## 7A. Send Single Notification Using Template
 
 Endpoint:
 
@@ -311,6 +311,46 @@ Sample payload:
   }
 }
 ```
+
+## 7B. Send Single Notification Using Raw Subject and Body
+
+Endpoint:
+
+```http
+POST /api/v1/notifications/send
+```
+
+Purpose:
+
+- Send one notification to one recipient without using a saved template
+
+Sample payload:
+
+```json
+{
+  "recipient": {
+    "user_id": "candidate_001",
+    "email": "arjun.rao@example.com"
+  },
+  "notification": {
+    "type": "interview_email",
+    "priority": "high",
+    "channels": ["email"],
+    "subject": "Interview Reminder for {{name}}",
+    "body": "Hi {{name}}, your interview is on {{interview_date}} at {{interview_time}}.",
+    "data": {
+      "name": "Arjun",
+      "interview_date": "2026-05-21",
+      "interview_time": "11:00 AM"
+    }
+  }
+}
+```
+
+Note:
+
+- For `email`, `sms`, `slack`, and `voice`, raw subject/body or raw body is allowed
+- `whatsapp` requires template-based sending
 
 ## 8. Send Bulk Single-Channel Using Template
 
